@@ -34,7 +34,6 @@ import qualified Data.Aeson as JSON
 import qualified Data.SafeCopy as SafeCopy
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Local as Acid
-import qualified Data.Acid.Advanced as Acid
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Types as HTTP
 import Text.Cassius (cassiusFile)
@@ -103,8 +102,8 @@ wrapUpdate :: (LDClasses -> LDClasses) -> Acid.Update LDStorage ()
 wrapUpdate theUpdate = get >>= put . LDStorage . theUpdate . getClasses
 
 -- | Lists available classes.
-opGetClasses :: LDClasses -> [LDClassName]
-opGetClasses = Map.keys
+opGetClasses :: LDClasses -> Maybe [LDClassName]
+opGetClasses = Just . Map.keys
 
 -- | Lists all students in a particular class.
 opGetAllStudentsInClass :: LDClassName -> LDClasses -> Maybe [(LDIndexNumber, LDStudent)]
@@ -150,9 +149,9 @@ opAddStudent className indexNumber student = updateClasses
 queryGetClasses = wrapQuery opGetClasses
 queryGetAllStudentsInClass = wrapQuery . opGetAllStudentsInClass
 queryGetStudentsWithoutSubmissionInClass = wrapQuery . opGetStudentsWithoutSubmissionInClass
-queryGetStudentInfo = ((.).(.)) wrapQuery opGetStudentInfo
-updateDoSubmission = ((.).(.).(.)) wrapUpdate opDoSubmission
-updateAddStudent = ((.).(.).(.)) wrapUpdate opAddStudent
+queryGetStudentInfo = (wrapQuery .) . opGetStudentInfo
+updateDoSubmission = ((wrapUpdate .) .) . opDoSubmission
+updateAddStudent = ((wrapUpdate .) .) . opAddStudent
 
 -- | Control structures for making transactions acidic.
 $(Acid.makeAcidic ''LDStorage ['queryGetClasses,
@@ -184,31 +183,23 @@ instance Yesod LabDeclarationApp where
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
 
-query :: (Acid.QueryEvent ev, Acid.MethodState ev ~ LDStorage) => ev -> Handler (Acid.EventResult ev)
-query theQuery = do
+queryHandler makeJSONConvertible query = do
   acid <- getAcid <$> ask
-  lift $ Acid.query acid theQuery
+  result <- lift $ Acid.query acid query
+  let responseEnvelope status = [ "meta" .= object [ "code" .= HTTP.statusCode status ] ]
+  case result of
+   Nothing -> sendResponseStatus HTTP.status400 $ object $ responseEnvelope HTTP.status400
+   Just successResult -> return $ object $ responseEnvelope HTTP.status200 ++ [ "data" .= makeJSONConvertible successResult ]
 
 getClassesR :: Handler Value
-getClassesR = do
-  classes <- query QueryGetClasses
-  return $ object [ "classes" .= classes ]
+getClassesR = queryHandler id QueryGetClasses
 
 getStudentsR :: LDClassName -> Handler Value
-getStudentsR className = do
-  let request = [ "class" .= className ]
-  result <- query $ QueryGetStudentsWithoutSubmissionInClass className
-  case result of
-   Nothing -> sendResponseStatus HTTP.status404 $ object request
-   Just students -> return . object $ request ++ [ "students" .= map (second getName) students ]
+getStudentsR = queryHandler (map (second getName)) . QueryGetStudentsWithoutSubmissionInClass
 
 getStudentInfoR :: LDClassName -> LDIndexNumber -> Handler Value
-getStudentInfoR className indexNumber = do
-  let request = [ "class" .= className, "indexNumber" .= indexNumber ]
-  result <- query $ QueryGetStudentInfo className indexNumber
-  case result of
-   Nothing -> sendResponseStatus HTTP.status404 $ object request
-   Just student -> return . object $ request ++ [ "student" .= student ]
+getStudentInfoR = (queryHandler id .) . QueryGetStudentInfo
+
 
 main = bracket acidBegin acidFinally run
   where acidBegin = Acid.openLocalState $ LDStorage ldClassesTestData
