@@ -1,0 +1,21 @@
+"use strict";
+$(function () {
+    $.getJSON("/api/classes")
+        .done(function (classes) {
+            var items = [];
+            $.each(classes.data, function (_, className) {
+                items.push("<li id='" + className + "'>" + className + "</li>");
+            });
+            $("<ul/>", {
+                html: items.join("")
+            }).appendTo("#interactive-content");
+            $("#main-title").html("Choose Your Class");
+            $("#explanation").html("Choose your class from the list below.");
+            $("#interactive-content ul").on("tap", "li", function (e) {
+                $.getJSON("/api/classes/" + $(this).attr("id"))
+                    .done(function (students) {
+                        console.log(students);
+                    });
+            });
+        });
+});

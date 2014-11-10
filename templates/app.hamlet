@@ -1,0 +1,6 @@
+<div #navbar>
+     <button #back-button .donotpresent>
+<div #main-content>
+     <h1 #main-title>
+     <p #explanation>
+     <div #interactive-content>

@@ -175,6 +175,7 @@ mkYesod "LabDeclarationApp" [parseRoutes|
 /api/classes ClassesR GET
 /api/classes/#LDClassName StudentsR GET
 /api/classes/#LDClassName/#LDIndexNumber StudentInfoR GET
+/ HomepageR GET
 |]
 
 instance Yesod LabDeclarationApp where
@@ -182,6 +183,15 @@ instance Yesod LabDeclarationApp where
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
+
+-- |
+-- = Handlers
+-- The actual handlers that handle requests.
+
+-- |
+-- == API Handlers
+-- These handlers may receive www-urlencoded data and return JSON
+-- response.
 
 queryHandler makeJSONConvertible query = do
   acid <- getAcid <$> ask
@@ -200,6 +210,20 @@ getStudentsR = queryHandler (map (second getName)) . QueryGetStudentsWithoutSubm
 getStudentInfoR :: LDClassName -> LDIndexNumber -> Handler Value
 getStudentInfoR = (queryHandler id .) . QueryGetStudentInfo
 
+-- |
+-- == HTML Handlers
+-- These handlers return HTML responses.
+
+-- | The user-facing frontend.
+getHomepageR :: Handler Html
+getHomepageR = defaultLayout $ do
+  setTitle "River Valley High School Science Lab Declaration"
+  toWidgetHead $(hamletFile "templates/app.head.hamlet")
+  addScript $ StaticR jquery_js
+  addScript $ StaticR jquery_mobile_custom_js
+  toWidget $(juliusFile "templates/app.julius")
+  toWidget $(hamletFile "templates/app.hamlet")
+  toWidget $(cassiusFile "templates/app.cassius")
 
 main = bracket acidBegin acidFinally run
   where acidBegin = Acid.openLocalState $ LDStorage ldClassesTestData
