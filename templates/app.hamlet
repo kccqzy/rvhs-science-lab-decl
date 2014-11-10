@@ -1,6 +1,11 @@
 <div #navbar>
      <button #back-button .donotpresent>
 <div #main-content>
-     <h1 #main-title>
-     <p #explanation>
-     <div #interactive-content>
+     <div #page1 .page .active>
+         <h1 .main-title>Choose Your Class
+         <p .explanation>Choose your class from the list below. If you couldn’t find your class, please ask your teacher for assistance.
+         <div .interactive-content>
+     <div #page2 .page .next>
+         <h1 .main-title>Choose Your Name
+         <p .explanation>Choose your name from the list below. If you couldn’t find your name, please ask your teacher for assistance.
+         <div .interactive-content>
