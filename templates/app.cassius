@@ -49,102 +49,112 @@ body
         display: inline-block
         content: "Back"
 
-  div#main-content
-    padding: 80px 0 300px
+  div#main-content-overflow-wrapper
     width: 538px
     margin: 0 auto
-    position: relative
+    height: 900px
+    overflow: hidden
 
-    div.page
-      display: none
-      position: absolute
-      width: 100%
-      -webkit-transition: all 0.4s ease-in-out
+    div#main-content
+      padding: 80px 0 0
+      position: relative
 
-      &.active
-        opacity: 1
-        display: block
-        left: 0
+      div.page
+        display: none
+        position: absolute
+        width: 100%
+        -webkit-transition: all 0.4s ease-in-out
 
-      &.next
-        opacity: 0
-        display: block
-        left: 100%
-
-      &.prev
-        opacity: 0
-        display: block
-        left: -100%
-
-      h1.main-title
-        text-align: center
-        font-weight: 200
-        font-size: 50px
-        padding-bottom: 20px
-
-      p.explanation
-        text-align: center
-        font-size: 20px
-        padding-bottom: 20px
-
-      div.interactive-content
-        height: 600px
-        overflow-y: scroll
-
-        button.continue-button
+        &.active
+          opacity: 1
           display: block
-          margin: 40px auto
+          left: 0
 
-          &::after
-            content: "Continue"
+        &.next
+          opacity: 0
+          display: block
+          left: 100%
 
-        input[type="text"], input[type="email"], input[type="tel"]
-          -webkit-appearance: none
-          border: none
-          width: 20em
-          font-family: 'Helvetica Neue'
-          font-size: 16px
-          text-align: right
+        &.prev
+          opacity: 0
+          display: block
+          left: -100%
 
-          &.invalid
-            color: #fe1818
+        h1.main-title
+          text-align: center
+          font-weight: 200
+          font-size: 50px
+          padding-bottom: 20px
 
-        table
-          width: 100%
-          -webkit-border-horizontal-spacing: 0
-          padding: 0 1em
+        p.explanation
+          text-align: center
+          font-size: 20px
+          padding-bottom: 20px
 
-          th, td
-            padding: 1em 0
-            border-bottom: solid 1px #cccbcf
+        div.interactive-content
+          height: 600px
+          overflow-y: scroll
 
-          th
-            text-align: left
+          canvas
+            width: 500px
+            height: 310px
+            margin: 1em auto
+            background-color: #e6f1fe
 
-          td
+          button.continue-button
+            display: block
+            margin: 40px auto
+
+            &::after
+              content: "Continue"
+
+          input[type="text"], input[type="email"], input[type="tel"]
+            -webkit-appearance: none
+            border: none
+            width: 20em
+            font-family: 'Helvetica Neue'
+            font-size: 16px
             text-align: right
 
-        ul
-          li
-            font-weight: 700
-            list-style-type: none
-            padding: 1em 0
-            margin: 0 1em
-            border-bottom: solid 1px #cccbcf
-            white-space: nowrap
-            overflow: hidden
-            text-overflow: ellipsis
+            &.invalid
+              color: #fe1818
 
-            &::before
-              content: "\203a"
-              font-size: 1.3em
-              font-family: Times
-              color: #cccbcf
-              display: block
-              float: right
-              position: relative
-              top: -4px
+          table
+            width: 100%
+            -webkit-border-horizontal-spacing: 0
+            padding: 0 1em
 
-            &:last-child
-              margin: 0
-              padding: 1em
+            th, td
+              padding: 1em 0
+              border-bottom: solid 1px #cccbcf
+
+            th
+              text-align: left
+
+            td
+              text-align: right
+
+          ul
+            li
+              font-weight: 700
+              list-style-type: none
+              padding: 1em 0
+              margin: 0 1em
+              border-bottom: solid 1px #cccbcf
+              white-space: nowrap
+              overflow: hidden
+              text-overflow: ellipsis
+
+              &::before
+                content: "\203a"
+                font-size: 1.3em
+                font-family: Times
+                color: #cccbcf
+                display: block
+                float: right
+                position: relative
+                top: -4px
+
+              &:last-child
+                margin: 0
+                padding: 1em

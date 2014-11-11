@@ -1,7 +1,7 @@
 "use strict";
 $(function () {
     var submitClassName, submitIndexNumber;
-    var submissionObject = {};
+    var payload = {};
 
     var PageController = function () {
         var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
@@ -113,14 +113,75 @@ $(function () {
                     $("#personal-info-form").off("submit").on("submit", function (e) {
                         var okay = true;
                         $.each(canonicalisers, function (sel, func) {
-                            submissionObject[sel] = func($(sel).val());
-                            return okay = okay && !!submissionObject[sel];
+                            payload[sel] = func($(sel).val());
+                            return okay = okay && !!payload[sel];
                         });
                         okay ? pageController.forward() : alert("The email address or phone number is incorrect. Please correct this before continuing.");
                         return false; // stopPropagation, preventDefault
                     });
                 });
-            }
-        )
+            })
+
+        .register(
+            4, function () {
+                if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
+                if (!(payload && payload["#submit-email"] && payload["#submit-phone"])) throw 'No payload';
+                $("#page4 .interactive-content").empty();
+            }, function () {
+                $(document).on("scrollstart", false);
+                var scaleFactor = window.devicePixelRatio || 1;
+                $("#page4 .interactive-content")
+                    .append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor))
+                    .append($("<button/>").addClass("continue-button").attr("type", "submit"));
+                var canvas = $("#page4 .interactive-content canvas").get(0);
+                var ctx = canvas.getContext("2d");
+                ctx.lineCap = "round";
+                ctx.lineWidth = 2 * scaleFactor;
+                var currentStroke = [];
+
+                var drawZigzag = function(stroke) {
+                    ctx.moveTo.apply(ctx, stroke[0]);
+                    $.each(stroke.slice(1), function (_, a) {ctx.lineTo.apply(ctx, a);});
+                    ctx.stroke();
+                };
+
+                var makeBSpline = function (currentStroke, ipps) {
+                    ipps = ipps || 20;
+                    var interpStroke = [];
+                    currentStroke.unshift(currentStroke[0]);
+                    currentStroke.concat(currentStroke.slice(-1));
+                    for (var i = 0; i < currentStroke.length - 4 + 1; ++i) {
+                        var seg = currentStroke.slice(i, i + 4);
+                        interpStroke.push(seg[1]);
+                        for (var j = 1; j < ipps; ++j) {
+                            var t = j / ipps;
+                            interpStroke.push($.map([0, 1], function (k) { return 0.5 * (2 * seg[1][k] + (-seg[0][k] + seg[2][k]) * t + (2 * seg[0][k] - 5 * seg[1][k] + 4 * seg[2][k] - seg[3][k]) * t * t + (-seg[0][k] + 3 * seg[1][k] - 3 * seg[2][k] + seg[3][k]) * t * t * t); }));
+                        }
+                        interpStroke.push(seg[2]);
+                    }
+                    return interpStroke;
+                };
+
+                $("#page4").on("webkitTransitionEnd", function() {
+                    var offsetX = +$(canvas).offset().left,
+                        offsetY = +$(canvas).offset().top;
+
+                    $(canvas).on("touchmove", function (e) {
+                        var pageX = +e.originalEvent.touches[0].pageX,
+                            pageY = +e.originalEvent.touches[0].pageY;
+                        var ctxX = (pageX - offsetX) * scaleFactor,
+                            ctxY = (pageY - offsetY) * scaleFactor;
+                        var last = currentStroke.slice(-1)[0] || [-1, -1];
+                        last[0] !== ctxX && last[1] !== ctxY && currentStroke.push([ctxX, ctxY]);
+                        return false;
+                    });
+
+                    $(canvas).on("touchend", function () {
+                        // TODO handle cases when currentStroke.length === 1
+                        currentStroke.length && drawZigzag(currentStroke.length > 2 ? makeBSpline(currentStroke) : currentStroke);
+                        currentStroke = [];
+                    });
+                });
+            })
         .run();
 });
