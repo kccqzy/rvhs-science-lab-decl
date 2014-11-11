@@ -3,106 +3,124 @@ $(function () {
     var submitClassName, submitIndexNumber;
     var submissionObject = {};
 
-    var pageAnimateFromTo = function (currentPage, newPage) {
-        var impl = function (page, prop) {
-            var left = $("#page" + (page - 1));
-            left && left[prop]("prev");
-            var active = $("#page" + page);
-            active && active[prop]("active");
-            var right = $("#page" + (page + 1));
-            right && right[prop]("next");
-        };
-        currentPage && impl(currentPage, "removeClass");
-        newPage && impl(newPage, "addClass");
-    };
-    var pageAnimateTo = function (newPage) { pageAnimateFromTo(null, newPage); },
-        pageAnimateFrom = function (currentPage) { pageAnimateFromTo(currentPage, null); };
+    var PageController = function () {
+        var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
 
-    var moveToPage1 = function () {
-        $("#page1 .interactive-content ul").empty(); // TODO show a spinning progress indicator perhaps?
-        pageAnimateTo(1);
-        $("#back-button").addClass("donotpresent").off("tap");
-        $.getJSON("/api/classes").done(function (classes) {
-            $.each(classes.data, function (_, className) {
-                $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).html(className));
-            });
-            $("#page1 .interactive-content ul").off("tap").on("tap", "li", function () {
-                submitClassName = $(this).attr("id");
-                pageAnimateFrom(1);
-                moveToPage2();
-            });
-        });
-    };
-
-    var moveToPage2 = function () {
-        if (!submitClassName) throw 'No class name';
-        $("#page2 .interactive-content ul").empty(); // TODO show a spinning progress indicator perhaps?
-        pageAnimateTo(2);
-        $("#back-button").removeClass("donotpresent").off("tap").on("tap", function () {
-            pageAnimateFrom(2);
-            moveToPage1();
-        });
-        $.getJSON("/api/classes/" + submitClassName).done(function (students) {
-            $.each(students.data, function(_, studentInfo) {
-                $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).html(studentInfo[1]));
-            });
-            $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
-                submitIndexNumber = $(this).attr("id").slice(7);
-                pageAnimateFrom(2);
-                moveToPage3();
-            });
-        });
-    };
-
-    var moveToPage3 = function () {
-        if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
-        pageAnimateTo(3);
-        $("#back-button").removeClass("donotpresent").off("tap").on("tap", function () {
-            pageAnimateFrom(3);
-            moveToPage2();
-        });
-        $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber).done (function (student) {
-            $("#table-name").html(student.data.getName);
-            $("#table-class").html(submitClassName);
-            $("#table-subj-combi").html(student.data.getSubjectCombination.join(", "));
-            var canonicalisers = {
-                "#submit-email": function (s) {
-                    var match = s.trim().match(/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/);
-                    // https://html.spec.whatwg.org/multipage/forms.html#e-mail-state-(type=email)
-                    return match && match[0];
-                },
-                "#submit-phone": function (s) {
-                    var match = s.trim().match(/^(?:\+65)? *([0-9]{4}) *([0-9]{4})$/);
-                    return match && "+65 " + match.slice(1).join(" ");
-                }
+        var pageAnimateFromTo = function (currentPage, newPage) {
+            var impl = function (page, prop) {
+                var left = $("#page" + (page - 1));
+                left && left[prop]("prev");
+                var active = $("#page" + page);
+                active && active[prop]("active");
+                var right = $("#page" + (page + 1));
+                right && right[prop]("next");
             };
-            $.each(canonicalisers, function (sel, func) {
-                $(sel).off("change").on("change", function () {
-                    var cano = func($(this).val());
-                    $(this)[cano ? "removeClass" : "addClass"]("invalid");
-                    cano && $(this).val(cano);
-                });
-            });
-            $("#personal-info-form").off("submit").on("submit", function (e) {
-                var okay = true;
-                $.each(canonicalisers, function (sel, func) {
-                    submissionObject[sel] = func($(sel).val());
-                    return okay = okay && !!submissionObject[sel];
-                });
-                if (okay) {
-                    pageAnimateFrom(3);
-                    moveToPage4();
-                } else {
-                    alert("The email address or phone number is incorrect. Please correct this before continuing.");
-                }
-                return false;
-            });
-        });
+            currentPage && impl(currentPage, "removeClass");
+            newPage && impl(newPage, "addClass");
+        };
+
+        return {
+            register: function (page, preAnimate, postAnimate) {
+                preAnimateHandlers[page] = preAnimate;
+                postAnimateHandlers[page] = postAnimate;
+                return this;
+            },
+
+            forward: function () {
+                ++currentPage > 1 && $("#back-button").removeClass("donotpresent").off("tap").on("tap", this.backward);
+                preAnimateHandlers[currentPage] && preAnimateHandlers[currentPage]();
+                pageAnimateFromTo(currentPage - 1, currentPage);
+                postAnimateHandlers[currentPage] && postAnimateHandlers[currentPage]();
+            },
+
+            backward: function () {
+                --currentPage === 1 && $("#back-button").addClass("donotpresent").off("tap");
+                preAnimateHandlers[currentPage] && preAnimateHandlers[currentPage]();
+                pageAnimateFromTo(currentPage + 1, currentPage);
+                postAnimateHandlers[currentPage] && postAnimateHandlers[currentPage]();
+            },
+
+            run: function () {
+                currentPage = 0;
+                this.forward();
+            }
+        };
     };
 
-    var moveToPage4 = function () {
-        console.log("unimplemented");
-    };
+    var pageController = PageController();
 
-    moveToPage1();
+    pageController
+        .register(
+            1, function () {
+                $("#page1 .interactive-content ul").empty();
+            }, function () {
+                $.getJSON("/api/classes").done(function (classes) {
+                    $.each(classes.data, function (_, className) {
+                        $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).html(className));
+                    });
+                    $("#page1 .interactive-content ul").off("tap").on("tap", "li", function () {
+                        submitClassName = $(this).attr("id");
+                        pageController.forward();
+                    });
+                });
+            })
+
+        .register(
+            2, function () {
+                if (!submitClassName) throw 'No class name';
+                $("#page2 .interactive-content ul").empty();
+            }, function () {
+                $.getJSON("/api/classes/" + submitClassName).done(function (students) {
+                    $.each(students.data, function(_, studentInfo) {
+                        $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).html(studentInfo[1]));
+                    });
+                    $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
+                        submitIndexNumber = $(this).attr("id").slice(7);
+                        pageController.forward();
+                    });
+                });
+            })
+
+        .register(
+            3, function () {
+                if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
+            }, function () {
+                $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber).done (function (student) {
+                    $("#table-name").html(student.data.getName);
+                    $("#table-class").html(submitClassName);
+                    $("#table-subj-combi").html(student.data.getSubjectCombination.join(", "));
+
+                    var canonicalisers = {
+                        "#submit-email": function (s) {
+                            var match = s.trim().match(/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/);
+                            // https://html.spec.whatwg.org/multipage/forms.html#e-mail-state-(type=email)
+                            return match && match[0];
+                        },
+                        "#submit-phone": function (s) {
+                            var match = s.trim().match(/^(?:\+65)? *([0-9]{4}) *([0-9]{4})$/);
+                            return match && "+65 " + match.slice(1).join(" ");
+                        }
+                    };
+
+                    $.each(canonicalisers, function (sel, func) {
+                        $(sel).off("change").on("change", function () {
+                            var cano = func($(this).val());
+                            $(this)[cano ? "removeClass" : "addClass"]("invalid");
+                            cano && $(this).val(cano);
+                        });
+                    });
+
+                    $("#personal-info-form").off("submit").on("submit", function (e) {
+                        var okay = true;
+                        $.each(canonicalisers, function (sel, func) {
+                            submissionObject[sel] = func($(sel).val());
+                            return okay = okay && !!submissionObject[sel];
+                        });
+                        okay ? pageController.forward() : alert("The email address or phone number is incorrect. Please correct this before continuing.");
+                        return false; // stopPropagation, preventDefault
+                    });
+                });
+            }
+        )
+        .run();
 });
