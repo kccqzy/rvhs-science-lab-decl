@@ -1,11 +1,37 @@
 <div #navbar>
      <button #back-button .donotpresent>
 <div #main-content>
-     <div #page1 .page .active>
+     <div #page1 .page>
          <h1 .main-title>Choose Your Class
          <p .explanation>Choose your class from the list below. If you couldn’t find your class, please ask your teacher for assistance.
          <div .interactive-content>
-     <div #page2 .page .next>
+             <ul>
+     <div #page2 .page>
          <h1 .main-title>Choose Your Name
          <p .explanation>Choose your name from the list below. If you couldn’t find your name, please ask your teacher for assistance.
          <div .interactive-content>
+             <ul>
+     <div #page3 .page>
+         <h1 .main-title>Personal Info
+         <p .explanation>Verify that the subject combination show below is correct, and then fill in your email address and phone number.
+         <div .interactive-content>
+             <form #personal-info-form>
+                 <table>
+                     <tr>
+                         <th>Name
+                         <td #table-name>&nbsp;
+                     <tr>
+                         <th>Class
+                         <td #table-class>&nbsp;
+                     <tr>
+                         <th>Science Subjects
+                         <td #table-subj-combi>&nbsp;
+                     <tr>
+                         <th>Email Address
+                         <td>
+                             <input type=email #submit-email autocomplete=email placeholder="Tap to enter email">
+                     <tr>
+                         <th>Phone Number
+                         <td>
+                             <input type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter phone number">
+                 <button .continue-button type=submit>

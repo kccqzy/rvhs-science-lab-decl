@@ -1,35 +1,32 @@
 "use strict";
 $(function () {
     var submitClassName, submitIndexNumber;
+    var submissionObject = {};
 
     var pageAnimateFromTo = function (currentPage, newPage) {
         var impl = function (page, prop) {
             var left = $("#page" + (page - 1));
-            if (left) left[prop]("prev");
+            left && left[prop]("prev");
             var active = $("#page" + page);
-            if (active) active[prop]("active");
+            active && active[prop]("active");
             var right = $("#page" + (page + 1));
-            if (right) right[prop]("next");
+            right && right[prop]("next");
         };
-        if (currentPage !== null) impl(currentPage, "removeClass");
-        if (newPage !== null) impl(newPage, "addClass");
+        currentPage && impl(currentPage, "removeClass");
+        newPage && impl(newPage, "addClass");
     };
     var pageAnimateTo = function (newPage) { pageAnimateFromTo(null, newPage); },
         pageAnimateFrom = function (currentPage) { pageAnimateFromTo(currentPage, null); };
 
     var moveToPage1 = function () {
-        $("#page1 .interactive-content").empty(); // TODO show a spinning progress indicator perhaps?
+        $("#page1 .interactive-content ul").empty(); // TODO show a spinning progress indicator perhaps?
         pageAnimateTo(1);
         $("#back-button").addClass("donotpresent").off("tap");
         $.getJSON("/api/classes").done(function (classes) {
-            var items = [];
             $.each(classes.data, function (_, className) {
-                items.push("<li id='" + className + "'>" + className + "</li>");
+                $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).html(className));
             });
-            $("<ul/>", {
-                html: items.join("")
-            }).appendTo("#page1 .interactive-content");
-            $("#page1 .interactive-content ul").on("tap", "li", function () {
+            $("#page1 .interactive-content ul").off("tap").on("tap", "li", function () {
                 submitClassName = $(this).attr("id");
                 pageAnimateFrom(1);
                 moveToPage2();
@@ -39,21 +36,17 @@ $(function () {
 
     var moveToPage2 = function () {
         if (!submitClassName) throw 'No class name';
-        $("#page2 .interactive-content").empty(); // TODO show a spinning progress indicator perhaps?
+        $("#page2 .interactive-content ul").empty(); // TODO show a spinning progress indicator perhaps?
         pageAnimateTo(2);
         $("#back-button").removeClass("donotpresent").off("tap").on("tap", function () {
             pageAnimateFrom(2);
             moveToPage1();
         });
         $.getJSON("/api/classes/" + submitClassName).done(function (students) {
-            var items = [];
             $.each(students.data, function(_, studentInfo) {
-                items.push("<li id='student" + studentInfo[0] + "'>" + studentInfo[1] + "</li>");
+                $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).html(studentInfo[1]));
             });
-            $("<ul/>", {
-                html: items.join("")
-            }).appendTo("#page2 .interactive-content");
-            $("#page2 .interactive-content ul").on("tap", "li", function () {
+            $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
                 submitIndexNumber = $(this).attr("id").slice(7);
                 pageAnimateFrom(2);
                 moveToPage3();
@@ -62,6 +55,52 @@ $(function () {
     };
 
     var moveToPage3 = function () {
+        if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
+        pageAnimateTo(3);
+        $("#back-button").removeClass("donotpresent").off("tap").on("tap", function () {
+            pageAnimateFrom(3);
+            moveToPage2();
+        });
+        $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber).done (function (student) {
+            $("#table-name").html(student.data.getName);
+            $("#table-class").html(submitClassName);
+            $("#table-subj-combi").html(student.data.getSubjectCombination.join(", "));
+            var canonicalisers = {
+                "#submit-email": function (s) {
+                    var match = s.trim().match(/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/);
+                    // https://html.spec.whatwg.org/multipage/forms.html#e-mail-state-(type=email)
+                    return match && match[0];
+                },
+                "#submit-phone": function (s) {
+                    var match = s.trim().match(/^(?:\+65)? *([0-9]{4}) *([0-9]{4})$/);
+                    return match && "+65 " + match.slice(1).join(" ");
+                }
+            };
+            $.each(canonicalisers, function (sel, func) {
+                $(sel).off("change").on("change", function () {
+                    var cano = func($(this).val());
+                    $(this)[cano ? "removeClass" : "addClass"]("invalid");
+                    cano && $(this).val(cano);
+                });
+            });
+            $("#personal-info-form").off("submit").on("submit", function (e) {
+                var okay = true;
+                $.each(canonicalisers, function (sel, func) {
+                    submissionObject[sel] = func($(sel).val());
+                    return okay = okay && !!submissionObject[sel];
+                });
+                if (okay) {
+                    pageAnimateFrom(3);
+                    moveToPage4();
+                } else {
+                    alert("The email address or phone number is incorrect. Please correct this before continuing.");
+                }
+                return false;
+            });
+        });
+    };
+
+    var moveToPage4 = function () {
         console.log("unimplemented");
     };
 

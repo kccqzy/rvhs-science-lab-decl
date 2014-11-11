@@ -54,13 +54,33 @@ import Yesod.EmbeddedStatic
 type LDClassName = T.Text
 
 -- | The science subject, combined science (Y1-2), physics, chemistry
--- or biology a.k.a. biomedical science.
+-- or bio. Implementatio note: we could have made a newtype instead:
+-- > newtype LDScienceSubject = LDScienceSubject { describeSubject :: T.Text }
+-- but this means set operations would require traversing the text
+-- instead of just the symbol.
 data LDScienceSubject = LDScience
+                      | LDDnT
                       | LDPhysics
                       | LDChemistry
-                      | LDBiology
+                      | LDBiomedicalScience
+                      | LDH2Physics
+                      | LDH2Chemistry
+                      | LDH2Biology
                       deriving (Show, Eq, Ord, Data, Typeable, Generic)
-instance ToJSON LDScienceSubject
+
+-- | Give a human readable name for a science subject.
+describeSubject :: LDScienceSubject -> T.Text
+describeSubject LDScience = "Combined Science"
+describeSubject LDDnT = "Design & Technology"
+describeSubject LDPhysics = "Physics"
+describeSubject LDChemistry = "Chemistry"
+describeSubject LDBiomedicalScience = "Biomedical Science"
+describeSubject LDH2Physics = "H2 Physics"
+describeSubject LDH2Chemistry = "H2 Chemistry"
+describeSubject LDH2Biology = "H2 Biology"
+
+instance ToJSON LDScienceSubject where
+  toJSON = toJSON . describeSubject
 $(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''LDScienceSubject)
 
 -- | All the information submitted through the UI: phone, email and
