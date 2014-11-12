@@ -56,7 +56,7 @@ $(function () {
             }, function () {
                 $.getJSON("/api/classes").done(function (classes) {
                     $.each(classes.data, function (_, className) {
-                        $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).html(className));
+                        $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).text(className));
                     });
                     $("#page1 .interactive-content ul").off("tap").on("tap", "li", function () {
                         submitClassName = $(this).attr("id");
@@ -72,7 +72,7 @@ $(function () {
             }, function () {
                 $.getJSON("/api/classes/" + submitClassName).done(function (students) {
                     $.each(students.data, function(_, studentInfo) {
-                        $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).html(studentInfo[1]));
+                        $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).text(studentInfo[1]));
                     });
                     $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
                         submitIndexNumber = $(this).attr("id").slice(7);
@@ -86,9 +86,9 @@ $(function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
             }, function () {
                 $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber).done (function (student) {
-                    $("#table-name").html(student.data.getName);
-                    $("#table-class").html(submitClassName);
-                    $("#table-subj-combi").html(student.data.getSubjectCombination.join(", "));
+                    $("#table-name").text(student.data.getName);
+                    $("#table-class").text(submitClassName);
+                    $("#table-subj-combi").text(student.data.getSubjectCombination.join(", "));
 
                     var canonicalisers = {
                         "#submit-email": function (s) {
