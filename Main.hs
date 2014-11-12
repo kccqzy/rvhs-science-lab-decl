@@ -17,13 +17,18 @@ import Control.Monad
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put)
-import Control.Exception (bracket)
+import Control.Exception (bracket, SomeException)
 import Control.Arrow (first, second)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.Async (async, waitCatch)
+import Control.Concurrent.STM.TQueue
+import Control.Monad.STM (atomically)
 import Data.Either
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import Data.Set (Set)
@@ -42,6 +47,12 @@ import qualified Data.Acid.Local as Acid
 import qualified Data.Acid.Advanced as Acid
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Types as HTTP
+import qualified Network.HTTP.Client as HTTP
+import qualified Network.HTTP.Client.TLS as HTTP
+import qualified Network.Mail.Mime as MIME
+import qualified Network.Mail.Mime.SES as SES
+import System.Environment (lookupEnv)
+import System.Log.Logger (Priority(..), logM) -- TODO use System.Log.FastLogger instead
 import Text.Cassius (cassiusFile)
 import Text.Hamlet (hamletFile)
 import Text.Julius (juliusFile)
@@ -116,6 +127,14 @@ type LDClasses = Map LDClassName LDClass
 
 newtype LDStorage = LDStorage { getClasses :: LDClasses } deriving (Show, Data, Typeable, ToJSON)
 $(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''LDStorage)
+
+data GenericMail = GenericMail {
+  mailFrom :: MIME.Address,
+  mailTo :: MIME.Address,
+  mailSubject :: T.Text,
+  mailBody :: TL.Text,
+  mailAttachents :: [(T.Text, T.Text, CL.ByteString)]
+  }
 
 -- |
 -- == Permitted Operations
@@ -197,7 +216,8 @@ mkEmbeddedStatic False "eStatic" [embedDir "static"]
 -- | The main webapp.
 data LabDeclarationApp = LabDeclarationApp
                          { getStatic :: EmbeddedStatic,
-                           getAcid :: Acid.AcidState LDStorage
+                           getAcid :: Acid.AcidState LDStorage,
+                           getRenderQueue :: TQueue LDStudent
                          }
 
 mkYesod "LabDeclarationApp" [parseRoutes|
@@ -255,7 +275,12 @@ postStudentInfoR className indexNumber = do
              <$> ireq sgPhoneField "phone"
              <*> ireq whatWgEmailField "email"
              <*> ireq sigPngField "signature"
-  acidHandler Acid.update id $ UpdateDoSubmission request className indexNumber
+  response <- acidHandler Acid.update id $ UpdateDoSubmission request className indexNumber
+  renderQueue <- getRenderQueue <$> ask
+  acid <- getAcid <$> ask
+  Just newStudent <- lift $ Acid.query acid $ QueryGetStudentInfo className indexNumber -- TODO refactor
+  liftIO . atomically $ writeTQueue renderQueue newStudent
+  return response
   where sgPhoneField = checkBool isValidSgPhone ("Invalid phone number" :: T.Text) textField
         whatWgEmailField = checkBool isValidWhatWgEmail ("Invalid email" :: T.Text) textField
         sigPngField = checkBool isValidPngDataUrl ("Invalid signature" :: T.Text) textField
@@ -309,11 +334,69 @@ getHomepageR = defaultLayout $ do
   toWidget $(hamletFile "templates/app.hamlet")
   toWidget $(cassiusFile "templates/app.cassius")
 
-main = bracket acidBegin acidFinally run
+-- |
+-- = Asynchronous Services
+-- The LaTeX renderer and the email sender.
+
+-- TODO this entire function is a joke, because, well it is unimplemented
+renderMail :: LDStudent -> IO GenericMail
+renderMail student = return GenericMail {
+  mailFrom = MIME.Address (Just "Chow Ban Hoe") "chow_ban_hoe@qzy.st",
+  mailTo = MIME.Address (Just . getName $ student) "lab-decl-test@qzy.st",
+  mailSubject = "Science Lab Undertaking Form",
+  mailBody = "This is a test email. Nothing interesting here.",
+  mailAttachents = [("image/png", "signature.png", signature)]
+  }
+  where signature = case getSubmissionStatus student of
+                     LDNotSubmittedYet -> error "impossible"
+                     LDSubmitted _ _ s -> forceDecode s
+        forceDecode s = CL.fromChunks $ rights [ getPngBase64 (encodeUtf8 s) >>= Base64.decode ]
+        getPngBase64 = PC.parseOnly $ do
+          PC.string "data:image/png;base64,"
+          PC.takeByteString
+
+-- | Sends an email from SES.
+sendMail :: GenericMail -> IO ()
+sendMail mail = HTTP.withManager HTTP.tlsManagerSettings $ \manager -> do
+  -- TODO reuse http connection to ses
+  credentials <- (liftM2 . liftM2) (,) (lookupEnv "AWSAccessKeyId") (lookupEnv "AWSSecretKey")
+  case credentials of
+   Nothing -> error "Cannot send email because no credentials found"
+   Just (key, secret) -> SES.renderSendMailSES manager (ses (C.pack key) (C.pack secret) SES.usEast1) mailFinal
+  where mailNoAttachments = liftM4 MIME.simpleMail' mailTo mailFrom mailSubject mailBody mail
+        addAttachment (ct, fn, content) = MIME.addPart [MIME.Part ct MIME.Base64 (Just fn) [] content]
+        mailFinal = foldr addAttachment mailNoAttachments . mailAttachents $ mail
+        ses = SES.SES (getAddrBS mailFrom) [getAddrBS mailTo]
+        getAddrBS which = encodeUtf8 . MIME.addressEmail . which $ mail
+
+-- | A worker thread that consumes values from a TQueue.
+queuedThread :: (a -> IO ()) -> (SomeException -> a -> IO ()) -> TQueue a -> IO ()
+queuedThread op onError queue = forever $ do
+  input <- atomically $ readTQueue queue
+  asyncOp <- async $ op input
+  result <- waitCatch asyncOp
+  case result of
+   Left exc -> onError exc input
+   Right _ -> return ()
+
+-- | A thread that renders emails asynchronously (but not concurrently).
+renderMailThread :: (GenericMail -> IO ()) -> TQueue LDStudent -> IO ()
+renderMailThread next = queuedThread (renderMail >=> next) $ \exc student -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+
+-- | A thread that sends emails asynchronously (but not concurrently).
+sendMailThread :: (() -> IO ()) -> TQueue GenericMail -> IO ()
+sendMailThread next = queuedThread (sendMail >=> next) $ \exc mail -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
+
+main = do
+  mailQueue <- atomically newTQueue
+  forkIO $ sendMailThread (const $ return ()) mailQueue
+  renderQueue <- atomically newTQueue
+  forkIO $ renderMailThread (atomically . writeTQueue mailQueue) renderQueue
+  bracket acidBegin acidFinally $ \acid -> do
+    toWaiApp (LabDeclarationApp eStatic acid renderQueue) >>= runLocalhost
   where acidBegin = Acid.openLocalState $ LDStorage ldClassesTestData
         acidFinally = Acid.createCheckpointAndClose
-        run acid = toWaiApp (LabDeclarationApp eStatic acid) >>= runLocalhost
         runLocalhost = Warp.runSettings
                        $ Warp.setPort 8080
-                       $ Warp.setHost "127.0.0.1"
+                       -- $ Warp.setHost "127.0.0.1"
                        Warp.defaultSettings
