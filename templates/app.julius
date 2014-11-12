@@ -1,7 +1,6 @@
 "use strict";
 $(function () {
     var submitClassName, submitIndexNumber;
-    var payload = {};
 
     var PageController = function () {
         var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
@@ -110,11 +109,10 @@ $(function () {
                         });
                     });
 
-                    $("#personal-info-form").off("submit").on("submit", function (e) {
+                    $("#form").off("submit").on("submit", function () {
                         var okay = true;
                         $.each(canonicalisers, function (sel, func) {
-                            payload[sel] = func($(sel).val());
-                            return okay = okay && !!payload[sel];
+                            return okay = okay && !!func($(sel).val());
                         });
                         okay ? pageController.forward() : alert("The email address or phone number is incorrect. Please correct this before continuing.");
                         return false; // stopPropagation, preventDefault
@@ -125,14 +123,11 @@ $(function () {
         .register(
             4, function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
-                if (!(payload && payload["#submit-email"] && payload["#submit-phone"])) throw 'No payload';
-                $("#page4 .interactive-content").empty();
+                $("#page4 .interactive-content .canvas").empty();
             }, function () {
                 $(document).on("scrollstart", false);
                 var scaleFactor = window.devicePixelRatio || 1;
-                $("#page4 .interactive-content")
-                    .append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor))
-                    .append($("<button/>").addClass("continue-button").attr("type", "submit"));
+                $("#page4 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
                 var canvas = $("#page4 .interactive-content canvas").get(0);
                 var ctx = canvas.getContext("2d");
                 ctx.lineCap = "round";
@@ -182,6 +177,17 @@ $(function () {
                         currentStroke = [];
                     });
                 });
+
+                $("#form").off("submit").on("submit", function () {
+                    $("#submit-signature").val(canvas.toDataURL("image/png"));
+                    $.post("/api/classes/" + submitClassName + "/" + submitIndexNumber, $(this).serialize(), function () {
+                        pageController.forward();
+                    });
+                    return false;
+                });
             })
+        .register(5, function () {
+            $("#back-button").addClass("donotpresent").off("tap");
+        })
         .run();
 });

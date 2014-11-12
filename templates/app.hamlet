@@ -2,6 +2,7 @@
      <button #back-button .donotpresent>
 <div #main-content-overflow-wrapper>
     <div #main-content>
+       <form #form>
          <div #page1 .page>
              <h1 .main-title>Choose Your Class
              <p .explanation>Choose your class from the list below. If you couldn’t find your class, please ask your teacher for assistance.
@@ -16,7 +17,6 @@
              <h1 .main-title>Personal Info
              <p .explanation>Verify that the subject combination show below is correct, and then fill in your email address and phone number.
              <div .interactive-content>
-                 <form #personal-info-form>
                      <table>
                          <tr>
                              <th>Name
@@ -30,13 +30,19 @@
                          <tr>
                              <th>Email Address
                              <td>
-                                 <input type=email #submit-email autocomplete=email placeholder="Tap to enter email">
+                                 <input name=email type=email #submit-email autocomplete=email placeholder="Tap to enter email">
                          <tr>
                              <th>Phone Number
                              <td>
-                                 <input type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter phone number">
+                                 <input name=phone type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter phone number">
                      <button .continue-button type=submit>
         <div #page4 .page>
             <h1 .main-title>Declaration
             <p .explanation>By signing in the box below, you agree that a) you have attended the Laboratory Briefing by your science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser; b) you hereby undertake and agree to abide by these rules at all times and you will conduct yourself in a responsible manner when using the laboratory.
             <div .interactive-content>
+                <div .canvas>
+                <input type=hidden name=signature #submit-signature>
+                <button .continue-button type=submit>
+        <div #page5 .page>
+            <h1 .main-title>Completed
+            <p .explanation>You have completed the exercise. You will receive an email with your declaration in a few minutes’ time. You can close this tab now.

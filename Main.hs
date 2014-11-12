@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -18,9 +19,13 @@ import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put)
 import Control.Exception (bracket)
 import Control.Arrow (first, second)
+import Data.Either
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
+import qualified Data.ByteString.Base64 as Base64
 import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import qualified Data.Attoparsec.ByteString.Char8 as PC
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
@@ -34,12 +39,14 @@ import qualified Data.Aeson as JSON
 import qualified Data.SafeCopy as SafeCopy
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Local as Acid
+import qualified Data.Acid.Advanced as Acid
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Types as HTTP
 import Text.Cassius (cassiusFile)
 import Text.Hamlet (hamletFile)
 import Text.Julius (juliusFile)
 import Text.Jasmine (minifym)
+import qualified Codec.Picture.Png as Png
 import Yesod.Core
 import Yesod.Form
 import Yesod.EmbeddedStatic
@@ -87,9 +94,9 @@ $(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''LDScienceSubject)
 -- the submitted signature.
 data LDSubmissionStatus = LDNotSubmittedYet
                         | LDSubmitted
-                          { getSubmittedPhone :: Int,
+                          { getSubmittedPhone :: T.Text,
                             getSubmittedEmail :: T.Text,
-                            getSubmittedSignature :: T.Text
+                            getSubmittedSignature :: T.Text -- TODO store raw data, not base64
                           } deriving (Show, Eq, Data, Typeable, Generic)
 instance ToJSON LDSubmissionStatus
 $(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''LDSubmissionStatus)
@@ -118,12 +125,15 @@ wrapQuery :: (LDClasses -> a) -> Acid.Query LDStorage a
 wrapQuery theQuery = liftM (theQuery . getClasses) ask
 
 -- | A wrapper that makes a simple function into an Update monad.
-wrapUpdate :: (LDClasses -> LDClasses) -> Acid.Update LDStorage ()
-wrapUpdate theUpdate = get >>= put . LDStorage . theUpdate . getClasses
+wrapUpdate :: (LDClasses -> (LDClasses, a)) -> Acid.Update LDStorage a
+wrapUpdate theUpdate = liftM2 (>>) (put . LDStorage . fst) (return . snd) . theUpdate . getClasses =<< get
+
+-- TODO make all the Maybe in the op* functions Either T.Text
 
 -- | Lists available classes.
 opGetClasses :: LDClasses -> Maybe [LDClassName]
 opGetClasses = Just . Map.keys
+-- TODO should filter out classes without students? without students who haven't completed submission?
 
 -- | Lists all students in a particular class.
 opGetAllStudentsInClass :: LDClassName -> LDClasses -> Maybe [(LDIndexNumber, LDStudent)]
@@ -147,16 +157,16 @@ opGetStudentInfo className indexNumber s = do
   IntMap.lookup indexNumber klass
 
 -- | Submit information for a student.
-opDoSubmission :: LDSubmissionStatus -> LDClassName -> LDIndexNumber -> LDClasses -> LDClasses
-opDoSubmission submission className indexNumber = updateClasses
+opDoSubmission :: LDSubmissionStatus -> LDClassName -> LDIndexNumber -> LDClasses -> (LDClasses, Maybe ())
+opDoSubmission submission className indexNumber = (, Just ()) . updateClasses
   where updateClasses = Map.adjust updateClass className
         updateClass = IntMap.adjust updateStudent indexNumber
         updateStudent student = student { getSubmissionStatus = submission }
         -- TODO consider using updateLookupWithKey to determine whether it has indeed been changed; don't fail silently
 
 -- | Add a new student.
-opAddStudent :: LDClassName -> LDIndexNumber -> LDStudent -> LDClasses -> LDClasses
-opAddStudent className indexNumber student = updateClasses
+opAddStudent :: LDClassName -> LDIndexNumber -> LDStudent -> LDClasses -> (LDClasses, Maybe ())
+opAddStudent className indexNumber student = (, Just ()) . updateClasses
   where updateClasses = Map.insertWith (const updateClass) className defaultClass
         defaultClass = IntMap.singleton indexNumber student
         updateClass = IntMap.insert indexNumber student
@@ -194,12 +204,14 @@ mkYesod "LabDeclarationApp" [parseRoutes|
 /static StaticR EmbeddedStatic getStatic
 /api/classes ClassesR GET
 /api/classes/#LDClassName StudentsR GET
-/api/classes/#LDClassName/#LDIndexNumber StudentInfoR GET
+/api/classes/#LDClassName/#LDIndexNumber StudentInfoR GET POST
 / HomepageR GET
 |]
 
 instance Yesod LabDeclarationApp where
   addStaticContent = embedStaticContent getStatic StaticR minifym
+  errorHandler (InvalidArgs ia) = return . toTypedContent $ object [ "meta" .= object [ "code" .= (400 :: Int), "details" .= ia ] ]
+  errorHandler other = defaultErrorHandler other
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
@@ -213,23 +225,75 @@ instance RenderMessage LabDeclarationApp FormMessage where
 -- These handlers may receive www-urlencoded data and return JSON
 -- response.
 
-queryHandler makeJSONConvertible query = do
+-- | A generic handler that interfaces with Acid queries and updates.
+acidHandler
+  :: (Acid.Method ev, ToJSON a, Acid.MethodResult ev ~ Maybe t,
+      Acid.MethodState ev ~ LDStorage) =>
+     (Acid.AcidState (Acid.EventState ev) -> ev -> IO (Acid.EventResult ev))
+     -> (t -> a) -> ev -> Handler Value
+acidHandler action f theAction = do
   acid <- getAcid <$> ask
-  result <- lift $ Acid.query acid query
+  result <- lift $ action acid theAction
   let responseEnvelope status = [ "meta" .= object [ "code" .= HTTP.statusCode status ] ]
   case result of
    Nothing -> sendResponseStatus HTTP.status400 $ object $ responseEnvelope HTTP.status400
-   Just successResult -> return $ object $ responseEnvelope HTTP.status200 ++ [ "data" .= makeJSONConvertible successResult ]
+   Just successResult -> return $ object $ responseEnvelope HTTP.status200 ++ [ "data" .= f successResult ]
 
 getClassesR :: Handler Value
-getClassesR = queryHandler id QueryGetClasses
+getClassesR = acidHandler Acid.query id QueryGetClasses
 
 getStudentsR :: LDClassName -> Handler Value
-getStudentsR = queryHandler (map (second getName)) . QueryGetStudentsWithoutSubmissionInClass
+getStudentsR = acidHandler Acid.query (map (second getName)) . QueryGetStudentsWithoutSubmissionInClass
 
 getStudentInfoR :: LDClassName -> LDIndexNumber -> Handler Value
-getStudentInfoR = (queryHandler id .) . QueryGetStudentInfo
+getStudentInfoR = (acidHandler Acid.query id .) . QueryGetStudentInfo
+-- TODO this is insecure; should filter out submission status based on auth result
 
+postStudentInfoR :: LDClassName -> LDIndexNumber -> Handler Value
+postStudentInfoR className indexNumber = do
+  request <- runInputPost $ LDSubmitted
+             <$> ireq sgPhoneField "phone"
+             <*> ireq whatWgEmailField "email"
+             <*> ireq sigPngField "signature"
+  acidHandler Acid.update id $ UpdateDoSubmission request className indexNumber
+  where sgPhoneField = checkBool isValidSgPhone ("Invalid phone number" :: T.Text) textField
+        whatWgEmailField = checkBool isValidWhatWgEmail ("Invalid email" :: T.Text) textField
+        sigPngField = checkBool isValidPngDataUrl ("Invalid signature" :: T.Text) textField
+
+-- |
+-- === Data validation
+
+-- | Tests whether a given text string is a valid email. This uses the
+-- validation found in WHATWG HTML standard, not RFC 5322.
+isValidWhatWgEmail :: T.Text -> Bool
+isValidWhatWgEmail = isValidWhatWgEmail' . encodeUtf8
+  where isValidWhatWgEmail' = (isRight .) . PC.parseOnly $ do
+          username
+          PC.char '@'
+          domainPart `PC.sepBy1` PC.char '.'
+          PC.endOfInput
+        username = PC.takeWhile1 $ PC.inClass "a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-"
+        domainPart = do
+          r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
+          guard $ C.length (C.intercalate "-" r) <= 63
+
+-- | Tests whether a given text is a Singaporean phone number, with
+-- stringent format requirements.
+isValidSgPhone :: T.Text -> Bool
+isValidSgPhone = isValidSgPhone' . encodeUtf8
+  where isValidSgPhone' = (isRight .) . PC.parseOnly $ do
+          PC.string "+65 "
+          PC.count 4 PC.digit
+          PC.char ' '
+          PC.count 4 PC.digit
+          PC.endOfInput
+
+-- | Tests whether the submitted data URL is a valid PNG image.
+isValidPngDataUrl :: T.Text -> Bool
+isValidPngDataUrl t = isRight $ getPngBase64 (encodeUtf8 t) >>= Base64.decode >>= Png.decodePng
+  where getPngBase64 = PC.parseOnly $ do
+          PC.string "data:image/png;base64,"
+          PC.takeByteString
 -- |
 -- == HTML Handlers
 -- These handlers return HTML responses.
