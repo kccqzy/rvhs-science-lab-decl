@@ -3,19 +3,24 @@
 <div #main-content-overflow-wrapper>
     <div #main-content>
        <form #form>
+         <div #page0 .page>
+             <h1 .main-title>Science Lab Undertaking Exercise
+             <p .explanation>In this exercise, you will verify and provide some personal information, declare that you agree to the stipulated rules for science labs and sign the declaration.
+             <div .interactive-content>
+                 <button .continue-button type=submit>
          <div #page1 .page>
              <h1 .main-title>Choose Your Class
-             <p .explanation>Choose your class from the list below. If you couldn’t find your class, please ask your teacher for assistance.
+             <p .explanation>Choose your class from the list below. If you cannot find your class, please ask your science teacher for assistance.
              <div .interactive-content>
                  <ul>
          <div #page2 .page>
              <h1 .main-title>Choose Your Name
-             <p .explanation>Choose your name from the list below. If you couldn’t find your name, please ask your teacher for assistance.
+             <p .explanation>Choose your name from this class list below to access your personal information. If you cannot find your name, please ask your science teacher for assistance.
              <div .interactive-content>
-                 <ul>
+                 <ol>
          <div #page3 .page>
-             <h1 .main-title>Personal Info
-             <p .explanation>Verify that the subject combination show below is correct, and then fill in your email address and phone number.
+             <h1 .main-title>Personal Information
+             <p .explanation>Please check that the details shown below are correct, and then fill in your email address and mobile phone number.
              <div .interactive-content>
                      <table>
                          <tr>
@@ -38,7 +43,7 @@
                      <button .continue-button type=submit>
         <div #page4 .page>
             <h1 .main-title>Declaration
-            <p .explanation>By signing in the box below, you agree that a) you have attended the Laboratory Briefing by your science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser; b) you hereby undertake and agree to abide by these rules at all times and you will conduct yourself in a responsible manner when using the laboratory.
+            <p .explanation>By signing in the box below, I agree that a) I have attended the Laboratory Briefing by your science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser; b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
             <div .interactive-content>
                 <div .canvas>
                 <input type=hidden name=signature #submit-signature>

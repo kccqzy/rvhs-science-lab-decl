@@ -6,16 +6,14 @@ $(function () {
         var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
 
         var pageAnimateFromTo = function (currentPage, newPage) {
-            var impl = function (page, prop) {
+            $.each({removeClass: currentPage, addClass: newPage}, function (prop, page) {
                 var left = $("#page" + (page - 1));
                 left && left[prop]("prev");
                 var active = $("#page" + page);
                 active && active[prop]("active");
                 var right = $("#page" + (page + 1));
                 right && right[prop]("next");
-            };
-            currentPage && impl(currentPage, "removeClass");
-            newPage && impl(newPage, "addClass");
+            });
         };
 
         return {
@@ -26,21 +24,21 @@ $(function () {
             },
 
             forward: function () {
-                ++currentPage > 1 && $("#back-button").removeClass("donotpresent").off("tap").on("tap", this.backward);
+                ++currentPage && $("#back-button").removeClass("donotpresent").off("tap").on("tap", this.backward);
                 preAnimateHandlers[currentPage] && preAnimateHandlers[currentPage]();
                 pageAnimateFromTo(currentPage - 1, currentPage);
                 postAnimateHandlers[currentPage] && postAnimateHandlers[currentPage]();
             },
 
             backward: function () {
-                --currentPage === 1 && $("#back-button").addClass("donotpresent").off("tap");
+                --currentPage || $("#back-button").addClass("donotpresent").off("tap");
                 preAnimateHandlers[currentPage] && preAnimateHandlers[currentPage]();
                 pageAnimateFromTo(currentPage + 1, currentPage);
                 postAnimateHandlers[currentPage] && postAnimateHandlers[currentPage]();
             },
 
             run: function () {
-                currentPage = 0;
+                currentPage = -1;
                 this.forward();
             }
         };
@@ -49,6 +47,20 @@ $(function () {
     var pageController = PageController();
 
     pageController
+        .register(
+            0, function () {
+                if (document.ontouchmove === undefined) {
+                    $("#page0 .main-title").text("Device Unsupported");
+                    $("#page0 .explanation").text("To use this website, you need a touchscreen. Your device and/or your browser does not support touch.");
+                    $("#page0 .interactive-content").empty();
+                }
+            }, function () {
+                $("#form").off("submit").on("submit", function () {
+                    pageController.forward();
+                    return false;
+                });
+            })
+
         .register(
             1, function () {
                 $("#page1 .interactive-content ul").empty();
@@ -67,13 +79,13 @@ $(function () {
         .register(
             2, function () {
                 if (!submitClassName) throw 'No class name';
-                $("#page2 .interactive-content ul").empty();
+                $("#page2 .interactive-content ol").empty();
             }, function () {
                 $.getJSON("/api/classes/" + submitClassName).done(function (students) {
                     $.each(students.data, function(_, studentInfo) {
-                        $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).text(studentInfo[1]));
+                        $("#page2 .interactive-content ol").append($("<li/>").attr("id", "student" + studentInfo[0]).text(studentInfo[1]));
                     });
-                    $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
+                    $("#page2 .interactive-content ol").off("tap").on("tap", "li", function () {
                         submitIndexNumber = $(this).attr("id").slice(7);
                         pageController.forward();
                     });
