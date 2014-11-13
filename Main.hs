@@ -23,7 +23,9 @@ import Control.Concurrent (forkIO)
 import Control.Concurrent.Async (async, waitCatch)
 import Control.Concurrent.STM.TQueue
 import Control.Monad.STM (atomically)
+import Data.Maybe
 import Data.Either
+import Data.String (fromString)
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as Base64
@@ -388,15 +390,19 @@ sendMailThread :: (() -> IO ()) -> TQueue GenericMail -> IO ()
 sendMailThread next = queuedThread (sendMail >=> next) $ \exc mail -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
 
 main = do
+  -- configuration from environment variables
+  host <- liftM fromString <$> lookupEnv "HOST"
+  port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
+  let setSettings = foldr (.) id $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
+
+  -- queues
   mailQueue <- atomically newTQueue
   forkIO $ sendMailThread (const $ return ()) mailQueue
   renderQueue <- atomically newTQueue
   forkIO $ renderMailThread (atomically . writeTQueue mailQueue) renderQueue
-  bracket acidBegin acidFinally $ \acid -> do
-    toWaiApp (LabDeclarationApp eStatic acid renderQueue) >>= runLocalhost
+
+  -- acid state
+  bracket acidBegin acidFinally $ \acid ->
+    toWaiApp (LabDeclarationApp eStatic acid renderQueue) >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState $ LDStorage ldClassesTestData
         acidFinally = Acid.createCheckpointAndClose
-        runLocalhost = Warp.runSettings
-                       $ Warp.setPort 8080
-                       -- $ Warp.setHost "127.0.0.1"
-                       Warp.defaultSettings
