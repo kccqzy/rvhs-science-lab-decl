@@ -371,22 +371,20 @@ sendMail manager mail = do
         getAddrBS which = encodeUtf8 . MIME.addressEmail . which $ mail
 
 -- | A worker thread that consumes values from a TQueue.
-queuedThread :: (a -> IO ()) -> (SomeException -> a -> IO ()) -> TQueue a -> IO ()
+queuedThread :: (a -> IO ()) -> (a -> SomeException -> IO ()) -> TQueue a -> IO ()
 queuedThread op onError queue = forever $ do
   input <- atomically $ readTQueue queue
   asyncOp <- async $ op input
   result <- waitCatch asyncOp
-  case result of
-   Left exc -> onError exc input
-   Right _ -> return ()
+  either (onError input) return result
 
 -- | A thread that renders emails asynchronously (but not concurrently).
 renderMailThread :: (GenericMail -> IO ()) -> TQueue LDStudent -> IO ()
-renderMailThread next = queuedThread (renderMail >=> next) $ \exc student -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+renderMailThread next = queuedThread (renderMail >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
 
 -- | A thread that sends emails asynchronously (but not concurrently).
 sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GenericMail -> IO ()
-sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \exc mail -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
+sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \mail exc -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
 
 main = do
   -- configuration from environment variables
