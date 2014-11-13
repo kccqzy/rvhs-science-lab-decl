@@ -358,9 +358,8 @@ renderMail student = return GenericMail {
           PC.takeByteString
 
 -- | Sends an email from SES.
-sendMail :: GenericMail -> IO ()
-sendMail mail = HTTP.withManager HTTP.tlsManagerSettings $ \manager -> do
-  -- TODO reuse http connection to ses
+sendMail :: HTTP.Manager -> GenericMail -> IO ()
+sendMail manager mail = do
   credentials <- (liftM2 . liftM2) (,) (lookupEnv "AWSAccessKeyId") (lookupEnv "AWSSecretKey")
   case credentials of
    Nothing -> error "Cannot send email because no credentials found"
@@ -386,8 +385,8 @@ renderMailThread :: (GenericMail -> IO ()) -> TQueue LDStudent -> IO ()
 renderMailThread next = queuedThread (renderMail >=> next) $ \exc student -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
 
 -- | A thread that sends emails asynchronously (but not concurrently).
-sendMailThread :: (() -> IO ()) -> TQueue GenericMail -> IO ()
-sendMailThread next = queuedThread (sendMail >=> next) $ \exc mail -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
+sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GenericMail -> IO ()
+sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \exc mail -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
 
 main = do
   -- configuration from environment variables
@@ -396,8 +395,9 @@ main = do
   let setSettings = foldr (.) id $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
 
   -- queues
+  httpManager <- HTTP.newManager HTTP.tlsManagerSettings
   mailQueue <- atomically newTQueue
-  forkIO $ sendMailThread (const $ return ()) mailQueue
+  forkIO $ sendMailThread httpManager return mailQueue
   renderQueue <- atomically newTQueue
   forkIO $ renderMailThread (atomically . writeTQueue mailQueue) renderQueue
 
