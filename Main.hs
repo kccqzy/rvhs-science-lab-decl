@@ -31,7 +31,9 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.Builder as TLB (toLazyText)
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -55,14 +57,24 @@ import qualified Network.Mail.Mime as MIME
 import qualified Network.Mail.Mime.SES as SES
 import System.Environment (lookupEnv)
 import System.Log.Logger (Priority(..), logM) -- TODO use System.Log.FastLogger instead
+import System.Posix.Files (setFileMode, ownerExecuteMode)
+import System.IO (openFile, hClose, IOMode(..))
+import System.IO.Temp (withTempDirectory, withSystemTempDirectory, createTempDirectory)
+import qualified System.Process as Process
+import System.Exit (ExitCode(..))
+import Text.Shakespeare.Text (textFile)
 import Text.Cassius (cassiusFile)
 import Text.Hamlet (hamletFile)
 import Text.Julius (juliusFile)
 import Text.Jasmine (minifym)
 import qualified Codec.Picture.Png as Png
+import qualified Codec.Archive.Tar as Tar
+import qualified Codec.Compression.GZip as GZip
 import Yesod.Core
 import Yesod.Form
 import Yesod.EmbeddedStatic
+
+import TeXRenderAssets
 
 -- |
 -- = Basic Data Structures & Operations
@@ -219,7 +231,7 @@ mkEmbeddedStatic False "eStatic" [embedDir "static"]
 data LabDeclarationApp = LabDeclarationApp
                          { getStatic :: EmbeddedStatic,
                            getAcid :: Acid.AcidState LDStorage,
-                           getRenderQueue :: TQueue LDStudent
+                           getRenderQueue :: TQueue (LDClassName, LDIndexNumber, LDStudent)
                          }
 
 mkYesod "LabDeclarationApp" [parseRoutes|
@@ -281,7 +293,7 @@ postStudentInfoR className indexNumber = do
   renderQueue <- getRenderQueue <$> ask
   acid <- getAcid <$> ask
   Just newStudent <- lift $ Acid.query acid $ QueryGetStudentInfo className indexNumber -- TODO refactor
-  liftIO . atomically $ writeTQueue renderQueue newStudent
+  liftIO . atomically $ writeTQueue renderQueue (className, indexNumber, newStudent)
   return response
   where sgPhoneField = checkBool isValidSgPhone ("Invalid phone number" :: T.Text) textField
         whatWgEmailField = checkBool isValidWhatWgEmail ("Invalid email" :: T.Text) textField
@@ -293,7 +305,7 @@ postStudentInfoR className indexNumber = do
 -- | Tests whether a given text string is a valid email. This uses the
 -- validation found in WHATWG HTML standard, not RFC 5322.
 isValidWhatWgEmail :: T.Text -> Bool
-isValidWhatWgEmail = isValidWhatWgEmail' . encodeUtf8
+isValidWhatWgEmail = isValidWhatWgEmail' . T.encodeUtf8
   where isValidWhatWgEmail' = (isRight .) . PC.parseOnly $ do
           username
           PC.char '@'
@@ -307,7 +319,7 @@ isValidWhatWgEmail = isValidWhatWgEmail' . encodeUtf8
 -- | Tests whether a given text is a Singaporean phone number, with
 -- stringent format requirements.
 isValidSgPhone :: T.Text -> Bool
-isValidSgPhone = isValidSgPhone' . encodeUtf8
+isValidSgPhone = isValidSgPhone' . T.encodeUtf8
   where isValidSgPhone' = (isRight .) . PC.parseOnly $ do
           PC.string "+65 "
           PC.count 4 PC.digit
@@ -315,12 +327,18 @@ isValidSgPhone = isValidSgPhone' . encodeUtf8
           PC.count 4 PC.digit
           PC.endOfInput
 
--- | Tests whether the submitted data URL is a valid PNG image.
-isValidPngDataUrl :: T.Text -> Bool
-isValidPngDataUrl t = isRight $ getPngBase64 (encodeUtf8 t) >>= Base64.decode >>= Png.decodePng
+-- | Decode a base64-encoded data URL containing a PNG image to a
+-- bytestring containing the PNG image.
+decodePngDataUrl :: T.Text -> Either String C.ByteString
+decodePngDataUrl = (Base64.decode =<<) .  getPngBase64 . T.encodeUtf8
   where getPngBase64 = PC.parseOnly $ do
           PC.string "data:image/png;base64,"
           PC.takeByteString
+
+-- | Tests whether the submitted data URL is a valid PNG image.
+isValidPngDataUrl :: T.Text -> Bool
+isValidPngDataUrl = isRight . (Png.decodePng =<<) . decodePngDataUrl
+
 -- |
 -- == HTML Handlers
 -- These handlers return HTML responses.
@@ -340,22 +358,62 @@ getHomepageR = defaultLayout $ do
 -- = Asynchronous Services
 -- The LaTeX renderer and the email sender.
 
--- TODO this entire function is a joke, because, well it is unimplemented
-renderMail :: LDStudent -> IO GenericMail
-renderMail student = return GenericMail {
-  mailFrom = MIME.Address (Just "Chow Ban Hoe") "chow_ban_hoe@qzy.st",
-  mailTo = MIME.Address (Just . getName $ student) "lab-decl-test@qzy.st",
-  mailSubject = "Science Lab Undertaking Form",
-  mailBody = "This is a test email. Nothing interesting here.",
-  mailAttachents = [("image/png", "signature.png", signature)]
+-- | The TeX Render environment is an environment that can take a job
+-- name, a list of files and render into a PDF bytestring. It is
+-- caller's responsibility to ensure jobname.tex exists.
+newtype PDFRenderer = PDFRenderer {
+  getPDFRenderer :: String -> [(FilePath, CL.ByteString)] -> IO CL.ByteString
   }
+
+-- | Prepare a small TeX Live 2014 distribution and the templates.
+-- Takes a directory to place the TeX distribution, the templates
+-- files and returns a TeXRenderEnv.
+makePDFRenderer :: FilePath -> IO PDFRenderer
+makePDFRenderer dir = do
+  Tar.unpack dir  . Tar.read . GZip.decompress $ texliveTarGz
+  let lualatex = dir ++ "/texlive-2014-portable/bin/x86_64-linux/lualatex"
+  setFileMode lualatex ownerExecuteMode
+  return . PDFRenderer $ \jobname files -> withTempDirectory dir "latexjob" $ \dir -> do
+    Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
+    let reportDir = dir ++ "/report/"
+    mapM_ (uncurry CL.writeFile . first (reportDir++)) $ files
+    runTeX lualatex "report" reportDir
+    ec <- runTeX lualatex "report" reportDir
+    case ec of
+     ExitFailure e -> error $ "lualatex returned nonzero exit code " ++ show e
+     ExitSuccess -> CL.readFile $ reportDir ++ "/" ++ jobname ++ ".pdf"
+  where runTeX tex jobname cwd = do
+          devNull <- openFile "/dev/null" ReadWriteMode
+          let texProcess = (Process.proc tex ["-interaction=batchmode", jobname]) {
+                Process.cwd = Just cwd,
+                Process.env = Just [("PATH", ":")], -- used by luaotfload to detect system type
+                Process.std_in = Process.UseHandle devNull,
+                Process.std_out = Process.UseHandle devNull,
+                Process.std_err = Process.UseHandle devNull }
+          (_, _, _, ph) <- Process.createProcess texProcess
+          ec <- Process.waitForProcess ph
+          hClose devNull
+          return ec
+
+-- | Generate a TeX file to render into PDF.
+generateTeX :: LDStudent -> LDClassName -> LDIndexNumber -> CL.ByteString
+generateTeX (LDStudent name subj _) className indexNumber = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/report.tex") id
+
+renderMail :: PDFRenderer -> (LDClassName, LDIndexNumber, LDStudent) -> IO GenericMail
+renderMail renderer (className, indexNumber, student) = do
+  let tex = generateTeX student className indexNumber
+  pdf <- (getPDFRenderer renderer) "report" [("sig.png", signature), ("report.tex", tex)]
+  return GenericMail {
+    mailFrom = MIME.Address (Just "Chow Ban Hoe") "chow_ban_hoe@qzy.st",
+    mailTo = MIME.Address (Just . getName $ student) "lab-decl-test@qzy.st",
+    mailSubject = "Science Lab Undertaking Form",
+    mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed declaration form is in the attachment.",
+    mailAttachents = [("application/pdf", "Completed_Declaration_Form.pdf", pdf)]
+    }
   where signature = case getSubmissionStatus student of
-                     LDNotSubmittedYet -> error "impossible"
+                     LDNotSubmittedYet -> error "renderMail: Cannot render for a student who has not completed submission"
                      LDSubmitted _ _ s -> forceDecode s
-        forceDecode s = CL.fromChunks $ rights [ getPngBase64 (encodeUtf8 s) >>= Base64.decode ]
-        getPngBase64 = PC.parseOnly $ do
-          PC.string "data:image/png;base64,"
-          PC.takeByteString
+        forceDecode s = CL.fromChunks $ rights [ decodePngDataUrl s ]
 
 -- | Sends an email from SES.
 sendMail :: HTTP.Manager -> GenericMail -> IO ()
@@ -368,7 +426,7 @@ sendMail manager mail = do
         addAttachment (ct, fn, content) = MIME.addPart [MIME.Part ct MIME.Base64 (Just fn) [] content]
         mailFinal = foldr addAttachment mailNoAttachments . mailAttachents $ mail
         ses = SES.SES (getAddrBS mailFrom) [getAddrBS mailTo]
-        getAddrBS which = encodeUtf8 . MIME.addressEmail . which $ mail
+        getAddrBS which = T.encodeUtf8 . MIME.addressEmail . which $ mail
 
 -- | A worker thread that consumes values from a TQueue.
 queuedThread :: (a -> IO ()) -> (a -> SomeException -> IO ()) -> TQueue a -> IO ()
@@ -379,14 +437,14 @@ queuedThread op onError queue = forever $ do
   either (onError input) return result
 
 -- | A thread that renders emails asynchronously (but not concurrently).
-renderMailThread :: (GenericMail -> IO ()) -> TQueue LDStudent -> IO ()
-renderMailThread next = queuedThread (renderMail >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+renderMailThread :: PDFRenderer -> (GenericMail -> IO ()) -> TQueue (LDClassName, LDIndexNumber, LDStudent) -> IO ()
+renderMailThread renderer next = queuedThread (renderMail renderer >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
 
 -- | A thread that sends emails asynchronously (but not concurrently).
 sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GenericMail -> IO ()
 sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \mail exc -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
 
-main = do
+main = withSystemTempDirectory "labdecld" $ \dir -> do
   -- configuration from environment variables
   host <- liftM fromString <$> lookupEnv "HOST"
   port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
@@ -396,8 +454,11 @@ main = do
   httpManager <- HTTP.newManager HTTP.tlsManagerSettings
   mailQueue <- atomically newTQueue
   forkIO $ sendMailThread httpManager return mailQueue
+
+  rendererTempDir <- createTempDirectory dir "renderer"
+  renderer <- makePDFRenderer rendererTempDir
   renderQueue <- atomically newTQueue
-  forkIO $ renderMailThread (atomically . writeTQueue mailQueue) renderQueue
+  forkIO $ renderMailThread renderer (atomically . writeTQueue mailQueue) renderQueue
 
   -- acid state
   bracket acidBegin acidFinally $ \acid ->

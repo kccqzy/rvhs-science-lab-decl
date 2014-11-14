@@ -1,0 +1,55 @@
+\documentclass[12pt,a4paper,oneside,openany,extrafontsizes,article]{memoir}
+
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont[Extension=.otf, BoldFont=MP-Bold, ItalicFont=MP-It]{MP-Regular}
+\usepackage{microtype}
+
+\usepackage[inline,shortlabels]{enumitem}
+
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, matrix}
+
+\pagestyle{empty}
+
+\begin{document}
+\begin{tikzpicture}[remember picture, overlay]
+  \coordinate (begin) at (current page.north west);
+  \node (logo) at ($(begin)+(\foremargin, -5em)$) [anchor=north west] {\includegraphics[width=8em]{rv.pdf} };
+  \coordinate (sep begin) at ($(logo.east)+(1em, -1mm)$);
+  \coordinate (sep end) at ($(logo.west)+(\textwidth, -1mm)$);
+  \draw [thick] (sep begin) -- (sep end);
+  \node (school name) at (sep begin) [inner sep=.2em, matrix, matrix of nodes, anchor=south west, font={\fontspec[Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}]{MP-MediumCapt.otf}}] {River Valley\\ High School\\};
+  \node (dept name) at (sep end) [anchor=south east, font=\footnotesize\itshape] {Science \& Technology Department};
+  \node (title) at ($(sep begin)!.5!(sep end)$) [anchor=north, font=\Large\fontspec{MP-Subh.otf}] {Science Laboratory Undertaking Form};
+\end{tikzpicture}
+
+All students are to comply with the rules concerning the use of all science laboratories, including the Design and Technology workshops. The term ``laboratory'' refers to all science laboratories and workshops.
+
+\begin{enumerate}[(a)]
+\item I have attended the \emph{Laboratory Briefing} by my science subject teacher(s). I have also read and understood the \emph{Science Laboratory Rules} in the \emph{River Valley High School Student Organiser}.
+\item I hereby undertake and agree to abide by these rules \emph{at all times}. I will conduct myself in a \emph{responsible} manner when using the laboratory.
+\end{enumerate}
+
+\begin{center}
+  \begin{tikzpicture}[font=\small]
+    \matrix (form one) [matrix of nodes, column 1/.style={text width=8em, align=center, font=\bfseries}, column 2/.style={text width=21em, align=center}, row sep=1em, column sep=1em, nodes={anchor=base}] {
+      Name of Student & |(student name) | {#{name} (#{indexNumber})} \\
+      Subject(s) & |(subjects) | {#{T.intercalate ", " (map describeSubject (Set.elems subj))}} \\
+    };
+
+    \matrix [column sep=.5em, matrix of nodes, every odd column/.style={font=\bfseries}] at (form one.south west) [anchor=north west] {
+      |[text width=8em, align=center]| Signature &[.5em] |(signature)| \includegraphics[width=7em]{./sig.png}
+      & Class & |(class)| {#{className}}
+      & Date & |(date)| {\today} \\
+    };
+
+    \foreach \x in {student name, subjects, signature, class, date}
+    \draw [densely dotted] (\x.south west) -- (\x.south east);
+  \end{tikzpicture}
+\end{center}
+
+
+
+\end{document}
