@@ -17,6 +17,7 @@ import Control.Monad
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put)
+import Control.Monad.Cont (ContT(..), runContT)
 import Control.Exception (bracket, SomeException)
 import Control.Arrow (first, second)
 import Control.Concurrent (forkIO)
@@ -429,20 +430,22 @@ sendMail manager mail = do
         getAddrBS which = T.encodeUtf8 . MIME.addressEmail . which $ mail
 
 -- | A worker thread that consumes values from a TQueue.
-queuedThread :: (a -> IO ()) -> (a -> SomeException -> IO ()) -> TQueue a -> IO ()
-queuedThread op onError queue = forever $ do
+queuedThread :: TQueue a -> ContT () IO (Either (a, SomeException) a)
+queuedThread queue = ContT $ \continue -> forever $ do
   input <- atomically $ readTQueue queue
-  asyncOp <- async $ op input
+  asyncOp <- async . continue . Right $ input
   result <- waitCatch asyncOp
-  either (onError input) return result
+  either (continue . Left . (input,)) return result
 
 -- | A thread that renders emails asynchronously (but not concurrently).
-renderMailThread :: PDFRenderer -> (GenericMail -> IO ()) -> TQueue (LDClassName, LDIndexNumber, LDStudent) -> IO ()
-renderMailThread renderer next = queuedThread (renderMail renderer >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+renderMailThread :: PDFRenderer -> TQueue (LDClassName, LDIndexNumber, LDStudent) -> ContT () IO GenericMail
+renderMailThread renderer = queuedThread >=> ContT . flip (either logError . (renderMail renderer >=>))
+  where logError (student, exc) = logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
 
 -- | A thread that sends emails asynchronously (but not concurrently).
-sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GenericMail -> IO ()
-sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \mail exc -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
+sendMailThread :: HTTP.Manager -> TQueue GenericMail -> ContT () IO ()
+sendMailThread httpManager = queuedThread >=> ContT . flip (either logError . (sendMail httpManager >=>))
+  where logError (mail, exc) = logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack . MIME.addressEmail $ mailTo mail)
 
 main = withSystemTempDirectory "labdecld" $ \dir -> do
   -- configuration from environment variables
@@ -453,12 +456,12 @@ main = withSystemTempDirectory "labdecld" $ \dir -> do
   -- queues
   httpManager <- HTTP.newManager HTTP.tlsManagerSettings
   mailQueue <- atomically newTQueue
-  forkIO $ sendMailThread httpManager return mailQueue
+  forkIO $ runContT (sendMailThread httpManager mailQueue) return
 
   rendererTempDir <- createTempDirectory dir "renderer"
   renderer <- makePDFRenderer rendererTempDir
   renderQueue <- atomically newTQueue
-  forkIO $ renderMailThread renderer (atomically . writeTQueue mailQueue) renderQueue
+  forkIO $ runContT (renderMailThread renderer renderQueue) (atomically . writeTQueue mailQueue)
 
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
