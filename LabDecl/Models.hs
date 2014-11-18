@@ -1,10 +1,21 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module LabDecl.Models where
 
+import Control.Applicative ((<$>))
 import Control.Monad
+import Control.Monad.Error (runErrorT, throwError, Error, ErrorT)
+import Control.Monad.Trans (lift)
+import Control.Monad.Reader (ask)
+import Control.Lens.Type (Lens')
+import Control.Lens.Getter
+import Control.Lens.Setter
+import Control.Lens.Tuple
+import Control.Lens.Fold
 import Data.List
 import Data.Maybe
 import Data.Char
@@ -16,124 +27,67 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
-import Data.IxSet
-import Data.IxSet.Ix
+import Data.IxSet as IxSet
+import Data.IxSet.Ix (Ix)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.Default
-import Data.Data (Data)
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
-import Data.Aeson
-import Data.Aeson.TH
-import Data.SafeCopy (SafeCopy, base, deriveSafeCopy)
 import qualified Data.Acid as Acid
 
+import LabDecl.Types
 import LabDecl.Utilities
 
-newtype ByteString64 = ByteString64 C.ByteString deriving (Show, Eq, Ord, Data, Typeable, Generic)
-instance ToJSON ByteString64 where
-    toJSON (ByteString64 bs) = toJSON (T.decodeUtf8 $ C64.encode bs)
-instance FromJSON ByteString64 where
-    parseJSON o = parseJSON o >>= either fail (return . ByteString64) . C64.decode . T.encodeUtf8
+-- |
+-- = Queries
 
-newtype Email     = Email T.Text      deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype Nric      = Nric T.Text       deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype Class     = Class (Int, Char) deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype CcaId     = CcaId Int         deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype SubjectId = SubjectId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype TeacherId = TeacherId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
-newtype StudentId = StudentId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON)
+-- | List entities in a table.
+listEntities :: (Ord a) => Lens' Database (IxSetCtr a) -> Acid.Query Database (Set a)
+listEntities db = searchEntities db []
 
-ixLitField :: (Typeable i, Ord i) => (a -> i) -> Ix a
-ixLitField = ixFun . ((:[]) .)
+-- | Lookup an entity in a table by its key.
+lookupEntity :: (Indexable a, Typeable k, Typeable a, Ord a) => Lens' Database (IxSetCtr a) -> k -> Acid.Query Database (Maybe a)
+lookupEntity db recId = unique <$> searchEntities db [(@= recId)]
 
-data Cca = Cca {
-  ccaId :: CcaId,
-  ccaName :: T.Text,
-  ccaCategory :: T.Text
-  } deriving (Show, Eq, Ord, Data, Typeable, Generic)
+-- | Generically search for entities fulfilling some criteria.
+searchEntities :: (Ord a) => Lens' Database (IxSetCtr a) -> [IxSet a -> IxSet a] -> Acid.Query Database (Set a)
+searchEntities db crits = toSet . foldr (.) id crits . snd . (^.db) <$> ask
 
-instance Indexable Cca where
-  empty = ixSet [ ixLitField ccaId ]
+-- | Search for entities that fulfil an equality criterion.
+searchEntitiesEq :: (Indexable a, Typeable k, Typeable a, Ord a) => Lens' Database (IxSetCtr a) -> k -> Acid.Query Database (Set a)
+searchEntitiesEq db prop = searchEntities db [(@= prop)]
 
 
-data Subject = Subject {
-  subjectId :: SubjectId,
-  subjectCode :: Maybe T.Text, -- when a subject has no subject code, it will not appear on subject combination list and is thus a compulsory subject
-  subjectName :: T.Text,
-  subjectIsScience :: Bool,
-  subjectLevel :: IntSet -- this subject is for which level
-  } deriving (Show, Eq, Ord, Data, Typeable, Generic)
+listCcas     = listEntities ccaDb
+listSubjects = listEntities subjectDb
+listTeachers = listEntities teacherDb
+listStudents = listEntities studentDb
 
-instance Indexable Subject where
-  empty = ixSet $ $(mapQ 'ixLitField [ 'subjectId, 'subjectCode, 'subjectIsScience ]) ++ [
-    ixFun $ IntSet.toList . subjectLevel
-    ]
+lookupCcaById                   :: CcaId     -> Acid.Query Database (Maybe Cca)
+lookupSubjectById               :: SubjectId -> Acid.Query Database (Maybe Subject)
+lookupTeacherByEmail            :: Email     -> Acid.Query Database (Maybe Teacher)
+lookupTeacherByWitnessName      :: T.Text     -> Acid.Query Database (Maybe Teacher)
+lookupTeacherById               :: TeacherId -> Acid.Query Database (Maybe Teacher)
+lookupSubjectByCodeLevel        :: T.Text -> Int -> Acid.Query Database (Maybe Subject)
+lookupStudentByClassIndexNumber :: Class -> Int -> Acid.Query Database (Maybe Student)
+lookupCcaById                                     = fmap unique . searchEntitiesEq ccaDb
+lookupSubjectById                                 = fmap unique . searchEntitiesEq subjectDb
+lookupTeacherByEmail                              = fmap unique . searchEntitiesEq teacherDb
+lookupTeacherByWitnessName                        = fmap unique . searchEntitiesEq teacherDb
+lookupTeacherById                                 = fmap unique . searchEntitiesEq teacherDb
+lookupSubjectByCodeLevel code level               = unique <$> searchEntities subjectDb [(@= code), (@= level)]
+lookupStudentByClassIndexNumber klass indexNumber = unique <$> searchEntities studentDb [(@= klass), (@= indexNumber)]
 
-data Teacher = Teacher {
-  teacherId :: TeacherId,
-  teacherIsAdmin :: Bool,
-  teacherUnit :: T.Text,
-  teacherName :: T.Text,
-  teacherWitnessName :: T.Text,
-  teacherEmail :: Email
-  } deriving (Show, Eq, Ord, Data, Typeable, Generic)
-
-instance Indexable Teacher where
-  empty = ixSet $ $(mapQ 'ixLitField [ 'teacherId, 'teacherEmail, 'teacherWitnessName ])
-
-
-data Student = Student {
-  studentId :: StudentId,
-  studentName :: T.Text,
-  studentChineseName :: Maybe T.Text,
-  studentPhone :: Maybe T.Text,
-  studentEmail :: Maybe Email,
-  studentWitnesser :: Maybe (TeacherId),
-  studentClass :: Class,
-  studentIndexNumber :: Int,
-  studentCca :: Maybe (Set CcaId), -- we sacrifice some performance here by not using IntSet
-  studentSubjectCombi :: Maybe (Set SubjectId), -- ditto
-  studentNric :: T.Text,
-  studentSignaturePng :: Maybe ByteString64
-  } deriving (Show, Eq, Ord, Data, Typeable, Generic)
-
-instance Indexable Student where
-  empty = ixSet $ $(mapQ 'ixLitField [ 'studentId, 'studentClass ]) ++ [
-    ixFun $ maybe [] Set.toList . studentCca,
-    ixFun $ maybe [] Set.toList . studentSubjectCombi,
-    ixFun $ (:[]) . isJust . studentSignaturePng,
-    ixFun $ maybeToList . studentWitnesser
-    ]
-
-
-type IxSetCtr a = (Int, IxSet a)
-
-instance Indexable a => Default (IxSet a) where
-  def = empty
-
-type CcaDatabase     = IxSetCtr Cca
-type SubjectDatabase = IxSetCtr Subject
-type TeacherDatabase = IxSetCtr Teacher
-type StudentDatabase = IxSetCtr Student
-
-data Database = Database {
-  ccaDb :: CcaDatabase,
-  subjectDb :: SubjectDatabase,
-  teacherDb :: TeacherDatabase,
-  studentDb :: StudentDatabase
-  } deriving (Data, Typeable)
-
-instance Default Database where
-  def = Database def def def def
-
-type DatabaseGetter a = Database -> IxSetCtr a
-
-$(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''Student, ''Database])
-
-$(liftM concat . mapM (deriveJSON defaultOptions {
-  fieldLabelModifier = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
-  }) $ [''Cca, ''Subject, ''Teacher, ''Student])
+listSubjectsByLevel       :: Int       -> Acid.Query Database (Set Subject)
+listStudentsFromClass     :: Class     -> Acid.Query Database (Set Student)
+listStudentsFromCca       :: CcaId     -> Acid.Query Database (Set Student)
+listStudentsWithSubject   :: SubjectId -> Acid.Query Database (Set Student)
+listStudentsWithWitnesser :: TeacherId -> Acid.Query Database (Set Student)
+listStudentsByStatus      :: Bool      -> Acid.Query Database (Set Student)
+listSubjectsByLevel       = searchEntitiesEq subjectDb
+listStudentsFromClass     = searchEntitiesEq studentDb
+listStudentsFromCca       = searchEntitiesEq studentDb
+listStudentsWithSubject   = searchEntitiesEq studentDb
+listStudentsWithWitnesser = searchEntitiesEq studentDb
+listStudentsByStatus      = searchEntitiesEq studentDb
