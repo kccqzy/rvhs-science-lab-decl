@@ -1,23 +1,19 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module LabDecl.Models where
 
 import Control.Applicative ((<$>))
 import Control.Monad
-import Control.Monad.Error (runErrorT, throwError, Error, ErrorT)
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ask)
+import Control.Monad.State (get, put, StateT, execStateT)
+import Control.Error
 import Control.Lens.Type (Lens')
 import Control.Lens.Getter
 import Control.Lens.Setter
 import Control.Lens.Tuple
 import Control.Lens.Fold
 import Data.List
-import Data.Maybe
 import Data.Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -29,6 +25,8 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import Data.IxSet as IxSet
 import Data.IxSet.Ix (Ix)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
@@ -38,6 +36,7 @@ import qualified Data.Acid as Acid
 
 import LabDecl.Types
 import LabDecl.Utilities
+import LabDecl.ErrMsg
 
 -- |
 -- = Queries
@@ -91,3 +90,86 @@ listStudentsFromCca       = searchEntitiesEq studentDb
 listStudentsWithSubject   = searchEntitiesEq studentDb
 listStudentsWithWitnesser = searchEntitiesEq studentDb
 listStudentsByStatus      = searchEntitiesEq studentDb
+
+
+-- |
+-- = Updates
+
+-- | Add an entity to a table, incrementing the counter. This is a
+-- primitive operation that never fails.
+addEntity :: (RecordId a i) => Lens' Database (IxSetCtr a) -> a -> EitherT TL.Text (Acid.Update Database) ()
+addEntity db a = db %= \(ctr, ixset) ->
+  (succ ctr, IxSet.insert (set idField (idConstructor (succ ctr)) a) ixset)
+
+-- | Remove an entity from a table. It is not an error to delete
+-- nonexistent entities. This is a primitive operation that never
+-- fails.
+removeEntity :: (RecordId a i) => Lens' Database (IxSetCtr a) -> a -> EitherT TL.Text (Acid.Update Database) ()
+removeEntity db a = db._2 %= deleteIx (a ^. idField)
+
+-- | Replace an entity with a new one in a table. It is not an error
+-- if the specified entity did not exist. This is a primitive
+-- operation that never fails.
+replaceEntity :: (RecordId a i) =>
+                 Lens' Database (IxSetCtr a) -> a -> EitherT TL.Text (Acid.Update Database) ()
+replaceEntity db a = db._2 %= updateIx (a ^. idField) a
+
+-- | Convert a set of subjects to a mapping between the subject code
+-- and subject.
+subjectsToMap :: Set Subject -> Map T.Text Subject
+subjectsToMap = Set.foldr (\v m -> maybe m (\c -> Map.insert c v m) (v ^. subjectCode)) Map.empty
+
+-- | Add a new CCA to the database. No uniqueness checks necessary
+-- because CCAs are looked up only through auto-incremented IDs.
+addCca :: Cca -> Acid.Update Database (Either TL.Text ())
+addCca = runEitherT . addEntity ccaDb
+
+-- | Add a new subject to the database. Subjects are also looked up
+-- through subject code, so they must be unique among each
+-- level. Subject *names* are *intentionally* not checked for
+-- uniqueness. A variant of Sardinas-Patterson algorithm will check
+-- all subjects in the level are uniquely decodable, unless the
+-- subject is force added.
+addSubject :: Bool -> Subject -> Acid.Update Database (Either TL.Text ())
+addSubject force subj = runEitherT $ do
+  case subj ^. subjectCode of
+   Nothing -> return () -- no need to check anything
+   Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
+     subjects <- lift $ Acid.liftQuery $ listSubjectsByLevel level
+     check level code (subj ^. subjectName) (subjectsToMap subjects)
+  addEntity subjectDb subj
+
+  where check level code name subjects = do
+          -- first check for uniqueness of subject code
+          maybe (return ()) (left . errSubjectAlreadyExists code name) . Map.lookup code $ subjects
+          -- then check for decodability
+          unless (uniquelyDecodable . Set.insert code . Map.keysSet $ subjects) $
+            left $ errSubjectsNotUniquelyDecodable name level
+
+-- | Add a new teacher to the database. Check for uniqueness of email
+-- and witnesser name unless forced.
+addTeacher :: Bool -> Teacher -> Acid.Update Database (Either TL.Text ())
+addTeacher force teacher = runEitherT $ do
+  unless force $ do
+    tryLookup lookupTeacherByEmail teacherEmail teacher errTeacherEmailAlreadyExists
+    tryLookup lookupTeacherByWitnessName teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
+  addEntity teacherDb teacher
+  where tryLookup query field entity errMsg = do
+          existing <- lift . Acid.liftQuery . query $ entity ^. field
+          maybe (return ()) (left . errMsg entity) existing
+
+-- | Add a new student to the database. Check for uniqueness of class
+-- and index number. This is expected to be called when a teacher adds
+-- a student, not when the student does submission.
+addStudent :: Bool -> Student -> EitherT TL.Text (Acid.Update Database) ()
+addStudent force student = do
+  unless force $ do
+    existing <- lift . Acid.liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
+    maybe (return ()) (left . errStudentAlreadyExists student) existing
+  addEntity studentDb student
+
+-- | Add a single student through the admin console. The UI will
+-- prevent many possible errors and ambiguities so a student object
+-- can be constructed.
+addOneStudent :: Bool -> Student -> Acid.Update Database (Either TL.Text ())
+addOneStudent = (runEitherT .) . addStudent

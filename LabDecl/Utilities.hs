@@ -33,3 +33,16 @@ camelCaseToUnderScore :: String -> String
 camelCaseToUnderScore = concatMap go
   where go c | isUpper c = '_' : [toLower c]
              | otherwise = [c]
+
+uniquelyDecodable :: Set T.Text -> Bool
+uniquelyDecodable codes = head $ catMaybes $ zipWith test danglingSuffixes danglingSuffixEq
+  where codeList = Set.toList codes
+        quotientF n d = sort . catMaybes $ [ T.stripPrefix a b | a <- n, b <- d ]
+        initialDanglingSuffix = delete T.empty $ nub (quotientF codeList codeList)
+        genDanglingSuffix a = sort $ quotientF codeList a `union` quotientF a codeList
+        danglingSuffixes = iterate genDanglingSuffix initialDanglingSuffix
+        danglingSuffixEq = False : zipWith (==) danglingSuffixes (tail danglingSuffixes)
+        test ssi ssEi
+          | T.empty `elem` ssi || any (`elem` codeList) ssi = Just False
+          | ssEi = Just True
+          | otherwise = Nothing

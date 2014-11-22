@@ -35,6 +35,7 @@ import Data.Aeson
 import Data.Aeson.TH
 import Data.SafeCopy (SafeCopy, base, deriveSafeCopy)
 import qualified Data.Acid as Acid
+import Text.Shakespeare.Text (ToText)
 
 import LabDecl.Utilities
 
