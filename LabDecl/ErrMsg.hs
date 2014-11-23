@@ -46,3 +46,27 @@ errStudentAlreadyExists new old = [stext| Cannot add new student
   number. You can override this check by choosing Force, in which case
   the student will still be added, but will cause errors when looking
   up the student by class and index number. |]
+
+errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV file. You
+  may wish to open the CSV file in Notepad, TextEdit or another
+  plain-text editing utility to visually inspect the structure of the
+  file.  |]
+
+errCSVTextDecodeFailed = [stext| Cannot decode the uploaded CSV file
+  using available text encodings. A list of common text encodings
+  (including UTF-8, both endianness of UTF-16 and UTF-32, GB18030 and
+  others) are tried but none of them successfully decoded the
+  file. Did you accidentally upload an Excel file instead?  |]
+
+errCSVHeaderNotFound headers = [stext| Cannot find the required table
+  columns in the uploaded CSV file. The CSV file must contain the
+  following required columns: #{headers}, preceded by a header row.  |]
+
+errCSVCellNotFound i j = [stext| Cannot find the cell #{j}#{i} while
+  processing the uploaded CSV file. Perhaps the CSV file is truncated
+  or damaged during uploading.  |]
+
+errCSVDuplicateColumnHeader cells = [stext| Cannot understand the
+  table column headers because there seem to exist multiple columns
+  with the same meaning. Please check the cells #{cells} of the
+  uploaded CSV file. |]

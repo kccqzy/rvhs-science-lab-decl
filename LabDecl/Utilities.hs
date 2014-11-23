@@ -46,3 +46,6 @@ uniquelyDecodable codes = head $ catMaybes $ zipWith test danglingSuffixes dangl
           | T.empty `elem` ssi || any (`elem` codeList) ssi = Just False
           | ssEi = Just True
           | otherwise = Nothing
+
+fromSndMaybe :: (a, Maybe b) -> Maybe (a, b)
+fromSndMaybe = liftM2 (<$>) ((,) . fst) snd
