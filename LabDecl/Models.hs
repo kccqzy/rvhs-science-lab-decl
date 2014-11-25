@@ -217,6 +217,35 @@ addStudents :: Bool -> Vector Student -> IUpdate
 addStudents = V.mapM_ . addStudent
 -- TODO add an extra argument to identify the row of the CSV file.
 
+-- | Ensure an entity exists in the database and then do something
+-- about it.
+ensureExistThen :: forall a i. (RecordId a i) => (a -> IUpdate) -> a -> IUpdate
+ensureExistThen = liftM2 (>>) ensureExist
+  where ensureExist entity = do
+          existing <- liftQuery $ query entity
+          lift $ note (errEntityNotExist existing) existing
+          return ()
+        query :: a -> IQuery (Maybe a)
+        query entity = unique <$> searchEntitiesEq (entity ^. idField)
+
+replaceCca     :: Cca     -> IUpdate
+replaceSubject :: Subject -> IUpdate
+replaceTeacher :: Teacher -> IUpdate
+replaceStudent :: Student -> IUpdate
+removeCca      :: Cca     -> IUpdate
+removeSubject  :: Subject -> IUpdate
+removeTeacher  :: Teacher -> IUpdate
+removeStudent  :: Student -> IUpdate
+replaceCca     = ensureExistThen replaceEntity
+replaceSubject = ensureExistThen replaceEntity
+replaceTeacher = ensureExistThen replaceEntity
+replaceStudent = ensureExistThen replaceEntity
+removeCca      = ensureExistThen removeEntity
+removeSubject  = ensureExistThen removeEntity
+removeTeacher  = ensureExistThen removeEntity
+removeStudent  = ensureExistThen removeEntity
+
+
 -- ============================================================
 
 -- | The exported update/query event names. These events will be made
@@ -244,5 +273,13 @@ eventNames = [
     'addSubject,
     'addTeacher,
     'addStudent,
-    'addStudents
+    'addStudents,
+    'replaceCca,
+    'replaceSubject,
+    'replaceTeacher,
+    'replaceStudent,
+    'removeCca,
+    'removeSubject,
+    'removeTeacher,
+    'removeStudent
     ]

@@ -3,6 +3,8 @@
 module LabDecl.ErrMsg where
 
 import Control.Lens
+import qualified Data.Text as T
+import Data.Typeable (typeOf)
 import Text.Shakespeare.Text (stext)
 
 import LabDecl.Types
@@ -46,6 +48,11 @@ errStudentAlreadyExists new old = [stext| Cannot add new student
   number. You can override this check by choosing Force, in which case
   the student will still be added, but will cause errors when looking
   up the student by class and index number. |]
+
+errEntityNotExist what = [stext| The #{whatName} referenced in the
+  request does not exist. If you’re using the GUI, this is an internal
+  error. If you’re using the JSON REST API, check the id again. |]
+  where whatName = T.toLower . T.pack . show . typeOf $ what
 
 errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV file. You
   may wish to open the CSV file in Notepad, TextEdit or another
