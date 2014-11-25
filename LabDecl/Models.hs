@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Rank2Types #-}
 module LabDecl.Models where
 
@@ -8,6 +9,7 @@ import Control.Monad
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Error
 import Control.Lens.Type (Lens')
 import Control.Lens.Getter
 import Control.Lens.Setter
@@ -56,37 +58,46 @@ makeAcidQuery query = runReader query <$> ask
 type IQuery a = Reader Database a
 
 -- | List entities in a table.
-listEntities :: (Ord a) => Lens' Database (IxSetCtr a) -> IQuery (Set a)
-listEntities db = searchEntities db []
+listEntities :: (RecordId a i) => IQuery (Set a)
+listEntities = searchEntities []
 
 -- | Generically search for entities fulfilling some criteria.
-searchEntities :: (Ord a) => Lens' Database (IxSetCtr a) -> [IxSet a -> IxSet a] -> IQuery (Set a)
-searchEntities db crits = toSet . foldr (.) id crits . snd . (^.db) <$> ask
+searchEntities :: (RecordId a i) => [IxSet a -> IxSet a] -> IQuery (Set a)
+searchEntities crits = toSet . foldr (.) id crits . snd . (^.dbField) <$> ask
 
 -- | Search for entities that fulfil an equality criterion.
-searchEntitiesEq :: (Indexable a, Typeable k, Typeable a, Ord a) => Lens' Database (IxSetCtr a) -> k -> IQuery (Set a)
-searchEntitiesEq db prop = searchEntities db [(@= prop)]
+searchEntitiesEq :: (RecordId a i, Typeable k) => k -> IQuery (Set a)
+searchEntitiesEq prop = searchEntities [(@= prop)]
 
+-- | Search for a unique entity that fulfils an equality criterion.
+searchUniqueEntityEq :: (RecordId a i, Typeable k) => k -> IQuery (Maybe a)
+searchUniqueEntityEq = fmap unique . searchEntitiesEq
 
-listCcas     = listEntities ccaDb
-listSubjects = listEntities subjectDb
-listTeachers = listEntities teacherDb
-listStudents = listEntities studentDb
+listCcas     :: IQuery (Set Cca)
+listSubjects :: IQuery (Set Subject)
+listTeachers :: IQuery (Set Teacher)
+listStudents :: IQuery (Set Student)
+listCcas     = listEntities
+listSubjects = listEntities
+listTeachers = listEntities
+listStudents = listEntities
 
-lookupCcaById                   :: CcaId          -> IQuery (Maybe Cca)
-lookupSubjectById               :: SubjectId      -> IQuery (Maybe Subject)
-lookupTeacherByEmail            :: Email          -> IQuery (Maybe Teacher)
-lookupTeacherByWitnessName      :: T.Text         -> IQuery (Maybe Teacher)
-lookupTeacherById               :: TeacherId      -> IQuery (Maybe Teacher)
-lookupSubjectByCodeLevel        :: T.Text -> Int  -> IQuery (Maybe Subject)
-lookupStudentByClassIndexNumber :: Class -> Int   -> IQuery (Maybe Student)
-lookupCcaById                                     = fmap unique . searchEntitiesEq ccaDb
-lookupSubjectById                                 = fmap unique . searchEntitiesEq subjectDb
-lookupTeacherByEmail                              = fmap unique . searchEntitiesEq teacherDb
-lookupTeacherByWitnessName                        = fmap unique . searchEntitiesEq teacherDb
-lookupTeacherById                                 = fmap unique . searchEntitiesEq teacherDb
-lookupSubjectByCodeLevel code level               = unique <$> searchEntities subjectDb [(@= code), (@= level)]
-lookupStudentByClassIndexNumber klass indexNumber = unique <$> searchEntities studentDb [(@= klass), (@= indexNumber)]
+lookupCcaById                   :: CcaId         -> IQuery (Maybe Cca)
+lookupSubjectById               :: SubjectId     -> IQuery (Maybe Subject)
+lookupTeacherByEmail            :: Email         -> IQuery (Maybe Teacher)
+lookupTeacherByWitnessName      :: T.Text        -> IQuery (Maybe Teacher)
+lookupTeacherById               :: TeacherId     -> IQuery (Maybe Teacher)
+lookupSubjectByCodeLevel        :: T.Text -> Int -> IQuery (Maybe Subject)
+lookupStudentById               :: StudentId     -> IQuery (Maybe Student)
+lookupStudentByClassIndexNumber :: Class -> Int  -> IQuery (Maybe Student)
+lookupCcaById                                     = searchUniqueEntityEq
+lookupSubjectById                                 = searchUniqueEntityEq
+lookupTeacherByEmail                              = searchUniqueEntityEq
+lookupTeacherByWitnessName                        = searchUniqueEntityEq
+lookupTeacherById                                 = searchUniqueEntityEq
+lookupStudentById                                 = searchUniqueEntityEq
+lookupSubjectByCodeLevel code level               = unique <$> searchEntities [(@= code), (@= level)]
+lookupStudentByClassIndexNumber klass indexNumber = unique <$> searchEntities [(@= klass), (@= indexNumber)]
 
 listSubjectsByLevel       :: Int       -> IQuery (Set Subject)
 listStudentsFromClass     :: Class     -> IQuery (Set Student)
@@ -94,12 +105,12 @@ listStudentsFromCca       :: CcaId     -> IQuery (Set Student)
 listStudentsWithSubject   :: SubjectId -> IQuery (Set Student)
 listStudentsWithWitnesser :: TeacherId -> IQuery (Set Student)
 listStudentsByStatus      :: Bool      -> IQuery (Set Student)
-listSubjectsByLevel       = searchEntitiesEq subjectDb
-listStudentsFromClass     = searchEntitiesEq studentDb
-listStudentsFromCca       = searchEntitiesEq studentDb
-listStudentsWithSubject   = searchEntitiesEq studentDb
-listStudentsWithWitnesser = searchEntitiesEq studentDb
-listStudentsByStatus      = searchEntitiesEq studentDb
+listSubjectsByLevel       = searchEntitiesEq
+listStudentsFromClass     = searchEntitiesEq
+listStudentsFromCca       = searchEntitiesEq
+listStudentsWithSubject   = searchEntitiesEq
+listStudentsWithWitnesser = searchEntitiesEq
+listStudentsByStatus      = searchEntitiesEq
 
 -- |
 -- = Updates
@@ -127,21 +138,23 @@ liftQuery query = runReader query <$> get
 
 -- | Add an entity to a table, incrementing the counter. This is a
 -- primitive operation that never fails.
-addEntity :: (RecordId a i) => Lens' Database (IxSetCtr a) -> a -> IUpdate
-addEntity db a = db %= \(ctr, ixset) ->
+addEntity :: (RecordId a i) => a -> IUpdate
+addEntity a = dbField %= \(ctr, ixset) ->
   (succ ctr, IxSet.insert (set idField (idConstructor (succ ctr)) a) ixset)
 
 -- | Remove an entity from a table. It is not an error to delete
 -- nonexistent entities. This is a primitive operation that never
 -- fails.
-removeEntity :: (RecordId a i) => Lens' Database (IxSetCtr a) -> a -> IUpdate
-removeEntity db a = db._2 %= deleteIx (a ^. idField)
+removeEntity :: forall a i. (RecordId a i) => a -> IUpdate
+removeEntity a = dbField'._2 %= deleteIx (a ^. idField)
+  where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
 -- | Replace an entity with a new one in a table. It is not an error
 -- if the specified entity did not exist. This is a primitive
 -- operation that never fails.
-replaceEntity :: (RecordId a i) => Lens' Database (IxSetCtr a) -> a -> IUpdate
-replaceEntity db a = db._2 %= updateIx (a ^. idField) a
+replaceEntity :: (RecordId a i) => a -> IUpdate
+replaceEntity a = dbField._2 %= updateIx (a ^. idField) a
+
 
 -- | Convert a set of subjects to a mapping between the subject code
 -- and subject.
@@ -152,7 +165,7 @@ subjectsToMap = Set.foldr (\v m -> maybe m (\c -> Map.insert c v m) (v ^. subjec
 -- | Add a new CCA to the database. No uniqueness checks necessary
 -- because CCAs are looked up only through auto-incremented IDs.
 addCca :: Cca -> IUpdate
-addCca = addEntity ccaDb
+addCca = addEntity
 
 -- | Add a new subject to the database. Subjects are also looked up
 -- through subject code, so they must be unique among each
@@ -167,7 +180,7 @@ addSubject force subj = do
    Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
      subjects <- liftQuery $ listSubjectsByLevel level
      check level code (subj ^. subjectName) (subjectsToMap subjects)
-  addEntity subjectDb subj
+  addEntity subj
 
   where check level code name subjects = do
           -- first check for uniqueness of subject code
@@ -181,11 +194,11 @@ addSubject force subj = do
 addTeacher :: Bool -> Teacher -> IUpdate
 addTeacher force teacher = do
   unless force $ do
-    tryLookup lookupTeacherByEmail teacherEmail teacher errTeacherEmailAlreadyExists
-    tryLookup lookupTeacherByWitnessName teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
-  addEntity teacherDb teacher
-  where tryLookup query field entity errMsg = do
-          existing <- liftQuery . query $ entity ^. field
+    tryLookup teacherEmail teacher errTeacherEmailAlreadyExists
+    tryLookup teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
+  addEntity teacher
+  where tryLookup field entity errMsg = do
+          existing <- liftQuery $ unique <$> searchEntitiesEq (entity ^. field)
           maybe (return ()) (lift . Left . errMsg entity) existing
 
 -- | Add a new student to the database. Check for uniqueness of class
@@ -196,7 +209,7 @@ addStudent force student = do
   unless force $ do
     existing <- liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
     maybe (return ()) (lift . Left . errStudentAlreadyExists student) existing
-  addEntity studentDb student
+  addEntity student
 
 -- | Add many students to the database. If adding one student fails,
 -- everything fails, as expected by atomicity.
@@ -219,6 +232,7 @@ eventNames = [
     'lookupTeacherByWitnessName,
     'lookupTeacherById,
     'lookupSubjectByCodeLevel,
+    'lookupStudentById,
     'lookupStudentByClassIndexNumber,
     'listSubjectsByLevel,
     'listStudentsFromClass,

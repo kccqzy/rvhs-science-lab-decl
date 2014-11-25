@@ -65,14 +65,6 @@ newtype StudentId = StudentId Int     deriving (Show, Eq, Ord, Data, Typeable, G
 ixLitField :: (Typeable i, Ord i) => (a -> i) -> Ix a
 ixLitField = ixFun . ((:[]) .)
 
--- | There is a bijective mapping between a record type and its ID
--- type. The typeclass also ensures there exists a lens from the
--- record to its ID, and there exists a way to convert an integer to
--- an ID.
-class (Indexable a, Ord a, Typeable a, Typeable i) => RecordId a i | a -> i, i -> a where
-  idField :: Lens' a i
-  idConstructor :: Int -> i
-
 -- | The CCA table.
 data Cca = Cca {
   _ccaId :: CcaId,
@@ -80,10 +72,6 @@ data Cca = Cca {
   _ccaCategory :: T.Text
   } deriving (Show, Eq, Ord, Data, Typeable, Generic)
 $(makeLenses ''Cca)
-
-instance RecordId Cca CcaId where
-  idField = ccaId
-  idConstructor = CcaId
 
 -- | Indexed by only the ID.
 instance Indexable Cca where
@@ -98,10 +86,6 @@ data Subject = Subject {
   _subjectLevel :: IntSet -- this subject is for which level
   } deriving (Show, Eq, Ord, Data, Typeable, Generic)
 $(makeLenses ''Subject)
-
-instance RecordId Subject SubjectId where
-  idField = subjectId
-  idConstructor = SubjectId
 
 -- | Indexed by the subject ID, subject code (for lookups when
 -- importing student info), isScience and subjectLevel (for lookups
@@ -121,10 +105,6 @@ data Teacher = Teacher {
   _teacherEmail :: Email
   } deriving (Show, Eq, Ord, Data, Typeable, Generic)
 $(makeLenses ''Teacher)
-
-instance RecordId Teacher TeacherId where
-  idField = teacherId
-  idConstructor = TeacherId
 
 -- | Indexed by ID, email (for lookups during login), witnesser name
 -- (for lookups during student import).
@@ -148,10 +128,6 @@ data Student = Student {
   _studentSignaturePng :: Maybe ByteString64
   } deriving (Show, Eq, Ord, Data, Typeable, Generic)
 $(makeLenses ''Student)
-
-instance RecordId Student StudentId where
-  idField = studentId
-  idConstructor = StudentId
 
 -- | Indexed by ID, class and index number (during lookups), CCAs
 -- (during CCA deletes), subjects (during subject deletes), signature
@@ -184,6 +160,35 @@ $(makeLenses ''Database)
 -- | The default database has empty tables.
 instance Default Database where
   def = Database def def def def
+
+-- | There is a bijective mapping between a record type and its ID
+-- type. The typeclass also ensures there exists a lens from the
+-- record to its ID, and there exists a way to convert an integer to
+-- an ID.
+class (Indexable a, Ord a, Typeable a, Typeable i) => RecordId a i | a -> i, i -> a where
+  idField :: Lens' a i
+  idConstructor :: Int -> i
+  dbField :: Lens' Database (IxSetCtr a)
+
+instance RecordId Cca CcaId where
+  idField = ccaId
+  idConstructor = CcaId
+  dbField = ccaDb
+
+instance RecordId Subject SubjectId where
+  idField = subjectId
+  idConstructor = SubjectId
+  dbField = subjectDb
+
+instance RecordId Teacher TeacherId where
+  idField = teacherId
+  idConstructor = TeacherId
+  dbField = teacherDb
+
+instance RecordId Student StudentId where
+  idField = studentId
+  idConstructor = StudentId
+  dbField = studentDb
 
 -- | SafeCopy instances for use with Acid.
 $(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''Student, ''Database])
