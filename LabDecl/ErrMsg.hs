@@ -54,6 +54,25 @@ errEntityNotExist what = [stext| The #{whatName} referenced in the
   error. If you’re using the JSON REST API, check the id again. |]
   where whatName = T.toLower . T.pack . show . typeOf $ what
 
+errInvalidPublicSubmission = [stext| “You don’t try to game the
+  system!” Mrs Look shouts. Uh-oh. ;( But then of course, every
+  teenager has some anti-authority, anti-establishment streak. So it’s
+  perfectly okay and understandable. Even Steve Jobs hacked the public
+  telephone system when he was young. I, Qian Zhouyu of class 6N of
+  2015, the builder of this website once hacked the school Ntrix
+  system. Of course I’m not comparing myself to the great Jobs, but my
+  point is, I believe every human being has an anti-establishment
+  heart deep within him/her, though that may be burried deep by years
+  and years of experience in the harsh reality. The sharp angles
+  turned obtuse, the undaunted passion turned numb. Only in the
+  above-average ones among us does it still manifest. Fortunately, you
+  are one of them: you have kept your angles, had both the curiosity
+  and the skills to pull this feat. I am impressed; I am in awe. I’d
+  like to know you as a friend, talk to you—we might be great friends
+  after this! And I mean it: there aren’t that many students (in RV)
+  that has enough working knowledge of HTML, JavaScript, JSON, HTTP to
+  achieve it. Email me at qzy@qzy.io or find me on Twitter @kccqzy. |]
+
 errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV file. You
   may wish to open the CSV file in Notepad, TextEdit or another
   plain-text editing utility to visually inspect the structure of the

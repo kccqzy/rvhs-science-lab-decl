@@ -10,11 +10,7 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Error
-import Control.Lens.Type (Lens')
-import Control.Lens.Getter
-import Control.Lens.Setter
-import Control.Lens.Tuple
-import Control.Lens.Fold
+import Control.Lens
 import Data.List
 import Data.Char
 import qualified Data.ByteString.Char8 as C
@@ -80,7 +76,7 @@ listStudents :: IQuery (Set Student)
 listCcas     = listEntities
 listSubjects = listEntities
 listTeachers = listEntities
-listStudents = listEntities
+listStudents = redactSignatureDeclaration listEntities
 
 lookupCcaById                   :: CcaId         -> IQuery (Maybe Cca)
 lookupSubjectById               :: SubjectId     -> IQuery (Maybe Subject)
@@ -96,7 +92,7 @@ lookupTeacherByEmail                              = searchUniqueEntityEq
 lookupTeacherByWitnessName                        = searchUniqueEntityEq
 lookupTeacherById                                 = searchUniqueEntityEq
 lookupStudentById                                 = searchUniqueEntityEq
-lookupSubjectByCodeLevel code level               = unique <$> searchEntities [(@= code), (@= level)]
+lookupSubjectByCodeLevel code level               = unique <$> searchEntities [(@= code),  (@= level)]
 lookupStudentByClassIndexNumber klass indexNumber = unique <$> searchEntities [(@= klass), (@= indexNumber)]
 
 listSubjectsByLevel       :: Int       -> IQuery (Set Subject)
@@ -106,11 +102,14 @@ listStudentsWithSubject   :: SubjectId -> IQuery (Set Student)
 listStudentsWithWitnesser :: TeacherId -> IQuery (Set Student)
 listStudentsByStatus      :: Bool      -> IQuery (Set Student)
 listSubjectsByLevel       = searchEntitiesEq
-listStudentsFromClass     = searchEntitiesEq
-listStudentsFromCca       = searchEntitiesEq
-listStudentsWithSubject   = searchEntitiesEq
-listStudentsWithWitnesser = searchEntitiesEq
-listStudentsByStatus      = searchEntitiesEq
+listStudentsFromClass     = redactSignatureDeclaration . searchEntitiesEq
+listStudentsFromCca       = redactSignatureDeclaration . searchEntitiesEq
+listStudentsWithSubject   = redactSignatureDeclaration . searchEntitiesEq
+listStudentsWithWitnesser = redactSignatureDeclaration . searchEntitiesEq
+listStudentsByStatus      = redactSignatureDeclaration . searchEntitiesEq
+
+redactSignatureDeclaration :: (Functor f) => f (Set Student) -> f (Set Student)
+redactSignatureDeclaration = fmap $ Set.map $ (studentSubmission . ssSignature .~ Nothing) . (studentSubmission . ssFinalDeclaration .~ Nothing)
 
 -- |
 -- = Updates
@@ -245,6 +244,49 @@ removeSubject  = ensureExistThen removeEntity
 removeTeacher  = ensureExistThen removeEntity
 removeStudent  = ensureExistThen removeEntity
 
+-- |
+-- = Public (Restricted) Queries and Updates
+
+-- | A public query to list all classes.
+publicListClasses :: IQuery (Set Class)
+publicListClasses = Set.map redact <$> listStudents
+  where redact = (^. studentClass)
+
+-- | A public query to list all students in a class. We only return
+-- index number and student name, for privacy reasons.
+publicListStudentsFromClass :: Class -> IQuery (Set (Int, T.Text))
+publicListStudentsFromClass = fmap (Set.map redact) . listStudentsFromClass
+  where redact = liftM2 (,) (^. studentIndexNumber) (^. studentName)
+
+-- | A public query to obtain complete information of a student. NRIC
+-- authentication required.
+publicLookupStudentByClassIndexNumber :: Class -> Int -> Nric -> IQuery (Maybe Student)
+publicLookupStudentByClassIndexNumber klass indexNumber nric = do
+  maybeStudent <- lookupStudentByClassIndexNumber klass indexNumber
+  return $ do
+    student <- maybeStudent
+    guard $ nric == student ^. studentNric
+    return student
+
+-- | A public update to do submission. We intentionally do not just
+-- take the updated fields as arguments, but rather take a full
+-- student and then compare. This is more work but it will be worth it
+-- (at least I hope so).
+publicStudentDoSubmission :: Student -> IUpdate
+publicStudentDoSubmission newStudent = do
+  maybeStudent <- liftQuery $ lookupStudentById (newStudent ^. studentId)
+  validCcas <- liftQuery $ Set.map (^. ccaId) <$> listCcas
+  lift . note errInvalidPublicSubmission $ do
+    student <- maybeStudent
+    guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
+    guard . not $ (_SubmissionCompleted `isn't` (newStudent ^. studentSubmission))
+    guard . isJust . join $ newStudent ^? studentSubmission . ssSignature
+    guard $ Just Nothing == newStudent ^? studentSubmission . ssFinalDeclaration
+    guard $ maybe False (all (`Set.member` validCcas)) (newStudent ^? studentSubmission . ssCca)
+    let changedStudent = student & studentSubmission .~ newStudent ^. studentSubmission
+    guard $ changedStudent == newStudent
+  replaceEntity newStudent
+
 
 -- ============================================================
 
@@ -281,5 +323,9 @@ eventNames = [
     'removeCca,
     'removeSubject,
     'removeTeacher,
-    'removeStudent
+    'removeStudent,
+    'publicListClasses,
+    'publicListStudentsFromClass,
+    'publicLookupStudentByClassIndexNumber,
+    'publicStudentDoSubmission
     ]
