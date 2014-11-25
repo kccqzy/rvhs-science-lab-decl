@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE Rank2Types #-}
 module LabDecl.Models where
@@ -202,3 +203,32 @@ addStudent force student = do
 addStudents :: Bool -> Vector Student -> IUpdate
 addStudents = V.mapM_ . addStudent
 -- TODO add an extra argument to identify the row of the CSV file.
+
+-- ============================================================
+
+-- | The exported update/query event names. These events will be made
+-- acidic, and they do not contain type variables.
+eventNames = [
+    'listCcas,
+    'listSubjects,
+    'listTeachers,
+    'listStudents,
+    'lookupCcaById,
+    'lookupSubjectById,
+    'lookupTeacherByEmail,
+    'lookupTeacherByWitnessName,
+    'lookupTeacherById,
+    'lookupSubjectByCodeLevel,
+    'lookupStudentByClassIndexNumber,
+    'listSubjectsByLevel,
+    'listStudentsFromClass,
+    'listStudentsFromCca,
+    'listStudentsWithSubject,
+    'listStudentsWithWitnesser,
+    'listStudentsByStatus,
+    'addCca,
+    'addSubject,
+    'addTeacher,
+    'addStudent,
+    'addStudents
+    ]
