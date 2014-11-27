@@ -4,7 +4,6 @@ module LabDecl.ErrMsg where
 
 import Control.Lens
 import qualified Data.Text as T
-import Data.Typeable (typeOf)
 import Text.Shakespeare.Text (stext)
 
 import LabDecl.Types
@@ -52,7 +51,7 @@ errStudentAlreadyExists new old = [stext| Cannot add new student
 errEntityNotExist what = [stext| The #{whatName} referenced in the
   request does not exist. If you’re using the GUI, this is an internal
   error. If you’re using the JSON REST API, check the id again. |]
-  where whatName = T.toLower . T.pack . show . typeOf $ what
+  where whatName = T.toLower . T.pack . show $ what
 
 errInvalidPublicSubmission = [stext| “You don’t try to game the
   system!” Mrs Look shouts. Uh-oh. ;( But then of course, every

@@ -31,7 +31,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, typeOf)
 import qualified Data.Acid as Acid
 
 import LabDecl.Types
@@ -144,8 +144,8 @@ addEntity a = dbField %= \(ctr, ixset) ->
 -- | Remove an entity from a table. It is not an error to delete
 -- nonexistent entities. This is a primitive operation that never
 -- fails.
-removeEntity :: forall a i. (RecordId a i) => a -> IUpdate
-removeEntity a = dbField'._2 %= deleteIx (a ^. idField)
+removeEntity :: forall a i. (RecordId a i) => i -> IUpdate
+removeEntity i = dbField'._2 %= deleteIx i
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
 -- | Replace an entity with a new one in a table. It is not an error
@@ -153,7 +153,6 @@ removeEntity a = dbField'._2 %= deleteIx (a ^. idField)
 -- operation that never fails.
 replaceEntity :: (RecordId a i) => a -> IUpdate
 replaceEntity a = dbField._2 %= updateIx (a ^. idField) a
-
 
 -- | Convert a set of subjects to a mapping between the subject code
 -- and subject.
@@ -216,33 +215,40 @@ addStudents :: Bool -> Vector Student -> IUpdate
 addStudents = V.mapM_ . addStudent
 -- TODO add an extra argument to identify the row of the CSV file.
 
+-- | Ensure an id exists in the database.
+ensureExist :: forall a i. (RecordId a i) => i -> IUpdate
+ensureExist id = do
+  existing <- liftQuery $ query id
+  void . lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
+  where query :: i -> IQuery (Maybe a)
+        query id = unique <$> searchEntitiesEq id
+
+-- | Ensure an id exists in the database and then do something
+-- about it.
+ensureIdExistThen :: (RecordId a i) => (i -> IUpdate) -> i -> IUpdate
+ensureIdExistThen = liftM2 (>>) ensureExist
+
 -- | Ensure an entity exists in the database and then do something
 -- about it.
 ensureExistThen :: forall a i. (RecordId a i) => (a -> IUpdate) -> a -> IUpdate
-ensureExistThen = liftM2 (>>) ensureExist
-  where ensureExist entity = do
-          existing <- liftQuery $ query entity
-          lift $ note (errEntityNotExist existing) existing
-          return ()
-        query :: a -> IQuery (Maybe a)
-        query entity = unique <$> searchEntitiesEq (entity ^. idField)
+ensureExistThen = liftM2 (>>) (ensureExist . (^. idField))
 
 replaceCca     :: Cca     -> IUpdate
 replaceSubject :: Subject -> IUpdate
 replaceTeacher :: Teacher -> IUpdate
 replaceStudent :: Student -> IUpdate
-removeCca      :: Cca     -> IUpdate
-removeSubject  :: Subject -> IUpdate
-removeTeacher  :: Teacher -> IUpdate
-removeStudent  :: Student -> IUpdate
+removeCca      :: CcaId     -> IUpdate
+removeSubject  :: SubjectId -> IUpdate
+removeTeacher  :: TeacherId -> IUpdate
+removeStudent  :: StudentId -> IUpdate
 replaceCca     = ensureExistThen replaceEntity
 replaceSubject = ensureExistThen replaceEntity
 replaceTeacher = ensureExistThen replaceEntity
 replaceStudent = ensureExistThen replaceEntity
-removeCca      = ensureExistThen removeEntity
-removeSubject  = ensureExistThen removeEntity
-removeTeacher  = ensureExistThen removeEntity
-removeStudent  = ensureExistThen removeEntity
+removeCca      = ensureIdExistThen removeEntity
+removeSubject  = ensureIdExistThen removeEntity
+removeTeacher  = ensureIdExistThen removeEntity
+removeStudent  = ensureIdExistThen removeEntity
 
 -- |
 -- = Public (Restricted) Queries and Updates
