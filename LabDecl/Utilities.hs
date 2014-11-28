@@ -1,6 +1,7 @@
 module LabDecl.Utilities where
 
 import Control.Monad
+import Control.Monad.Trans
 import Control.Applicative ((<$>))
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -49,3 +50,6 @@ uniquelyDecodable codes = head $ catMaybes $ zipWith test danglingSuffixes dangl
 
 fromSndMaybe :: (a, Maybe b) -> Maybe (a, b)
 fromSndMaybe = liftM2 (<$>) ((,) . fst) snd
+
+lift2 :: (MonadTrans t1, MonadTrans t2, Monad (t1 m), Monad m) => m a -> t2 (t1 m) a
+lift2 = lift . lift

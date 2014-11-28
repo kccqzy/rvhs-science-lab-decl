@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE Rank2Types #-}
@@ -10,6 +11,7 @@ module LabDecl.Types where
 import Control.Monad
 import Control.Lens (Lens', makePrisms, makeLenses, (^.), (^?))
 import Data.Maybe
+import Data.Either
 import Data.List
 import Data.Char
 import qualified Data.ByteString.Char8 as C
@@ -37,6 +39,7 @@ import Data.SafeCopy (SafeCopy, base, deriveSafeCopy)
 import qualified Data.Acid as Acid
 import Text.Shakespeare.Text (ToText)
 import Web.PathPieces
+import qualified Network.HTTP.Types.Status as HTTP
 
 import LabDecl.Utilities
 
@@ -216,3 +219,15 @@ $(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Ema
 $(liftM concat . mapM (deriveJSON defaultOptions {
   fieldLabelModifier = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
   }) $ [''Cca, ''Subject, ''Teacher, ''Day, ''StudentSubmission, ''Student])
+
+class ToHTTPStatus a where
+  toHttpStatus :: a -> HTTP.Status
+
+instance ToHTTPStatus (Maybe a) where
+  toHttpStatus = maybe HTTP.status404 (const HTTP.status200)
+
+instance ToHTTPStatus (Set a) where
+  toHttpStatus a = if Set.null a then HTTP.status404 else HTTP.status200
+
+instance ToHTTPStatus (Either a b) where
+  toHttpStatus a = if isLeft a then HTTP.status400 else HTTP.status200
