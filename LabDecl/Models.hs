@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -58,8 +59,9 @@ listEntities :: (RecordId a i) => IQuery (Set a)
 listEntities = searchEntities []
 
 -- | Generically search for entities fulfilling some criteria.
-searchEntities :: (RecordId a i) => [IxSet a -> IxSet a] -> IQuery (Set a)
-searchEntities crits = toSet . foldr (.) id crits . snd . (^.dbField) <$> ask
+searchEntities :: forall a i. (RecordId a i) => [IxSet a -> IxSet a] -> IQuery (Set a)
+searchEntities crits = toSet . foldr (.) (@> idConstructor' 0) crits . snd . (^.dbField) <$> ask
+  where idConstructor' = idConstructor :: Int -> i
 
 -- | Search for entities that fulfil an equality criterion.
 searchEntitiesEq :: (RecordId a i, Typeable k) => k -> IQuery (Set a)
@@ -141,11 +143,17 @@ addEntity :: (RecordId a i) => a -> IUpdate
 addEntity a = dbField %= \(ctr, ixset) ->
   (succ ctr, IxSet.insert (set idField (idConstructor (succ ctr)) a) ixset)
 
--- | Remove an entity from a table. It is not an error to delete
--- nonexistent entities. This is a primitive operation that never
+-- | Remove an entity from a table. It only logically deletes the
+-- entity by setting the id to zero, ensuring it will never be found
+-- via a normal lookup. It is not an error to delete nonexistent or
+-- already deleted entities. This is a primitive operation that never
 -- fails.
 removeEntity :: forall a i. (RecordId a i) => i -> IUpdate
-removeEntity i = dbField'._2 %= deleteIx i
+removeEntity i = do
+  maybeEntity <- liftQuery $ searchUniqueEntityEq i
+  case maybeEntity of
+   Nothing -> return ()
+   Just entity -> dbField'._2 %= updateIx i (entity & idField .~ idConstructor 0)
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
 -- | Replace an entity with a new one in a table. It is not an error
@@ -293,12 +301,24 @@ publicStudentDoSubmission newStudent = do
     guard $ changedStudent == newStudent
   replaceEntity newStudent
 
+-- |
+-- = Internal Operations
+
+-- | Maintenance work: scrubbing dead foreign references.
+internalScrubDeadReferences :: IUpdate
+internalScrubDeadReferences = lift $ Left "internalScrubDeadReferences: unimplemented"
+
+-- | Physically delete the logically deleted entities.
+internalPhysicalDelete :: IUpdate
+internalPhysicalDelete = lift $ Left "internalPhysicalDelete: unimplemented"
 
 -- ============================================================
 
 -- | The exported update/query event names. These events will be made
 -- acidic, and they do not contain type variables.
 eventNames = [
+    'internalScrubDeadReferences,
+    'internalPhysicalDelete,
     'listCcas,
     'listSubjects,
     'listTeachers,
