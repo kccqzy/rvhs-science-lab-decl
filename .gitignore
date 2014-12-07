@@ -3,3 +3,4 @@ state/
 *.hi
 *.dyn_o
 *.dyn_hi
+.module-cache/

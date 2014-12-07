@@ -38,7 +38,7 @@ main = do
 
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
-    toWaiApp (LabDeclarationApp acid notifyChan) >>= Warp.runSettings (setSettings Warp.defaultSettings)
+    toWaiApp (LabDeclarationApp eStatic acid notifyChan) >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState def
         acidFinally = Acid.createCheckpointAndClose
         errNoTempDir = do

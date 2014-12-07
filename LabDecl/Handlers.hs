@@ -25,9 +25,14 @@ import qualified Data.Acid.Advanced as Acid
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.WebSockets as WS
 import Network.Wai.Parse (lbsBackEnd)
+import Text.Cassius (cassiusFile, cassiusFileReload)
+import Text.Hamlet (hamletFile, hamletFileReload)
+import Text.Julius (juliusFile, juliusFileReload)
+import Text.Jasmine (minifym)
 import Yesod.Core
 import Yesod.Form
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData)
+import Yesod.EmbeddedStatic
 
 import LabDecl.Utilities
 import LabDecl.Types
@@ -37,9 +42,12 @@ import LabDecl.Models
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
+  getStatic :: EmbeddedStatic,
   getAcid :: Acid.AcidState Database,
   getNotifyChan :: TChan ()
   }
+
+$(mkEmbeddedStatic False "eStatic" [embedDir "static"])
 
 -- | The routing. Routes of the form /api/items allow GET and POST,
 -- which are list* and add* respectively. Routes of the form
@@ -56,9 +64,14 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/teachers/#TeacherId  TeacherR  GET PUT DELETE
 /api/students             StudentsR GET POST
 /api/students/#StudentId  StudentR  GET PUT DELETE
+/static                   StaticR   EmbeddedStatic getStatic
+/admin/                   AdminR    GET
 |])
 
 instance Yesod LabDeclarationApp where
+  -- | Static files.
+  addStaticContent = embedStaticContent getStatic StaticR minifym
+
   -- | Use JSON for InvalidArgs error, which happends during form submission.
   errorHandler (InvalidArgs ia) = return . toTypedContent $ object [ "meta" .= object [ "code" .= (400 :: Int), "details" .= ia ] ]
   errorHandler other = defaultErrorHandler other
@@ -214,3 +227,16 @@ putStudentR = undefined
 
 deleteStudentR :: StudentId -> Handler Value
 deleteStudentR = undefined
+
+-- |
+-- = HTML handlers
+
+getAdminR :: Handler Html
+getAdminR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console"
+  addStylesheet $ StaticR bootstrap_min_css
+  addScript $ StaticR jquery_js
+  addScript $ StaticR underscore_js
+  addScript $ StaticR react_dev_js
+  addScript $ StaticR bootstrap_js
+  toWidget $(juliusFileReload "templates/jsxc/admin.js")
