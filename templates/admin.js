@@ -9,17 +9,16 @@ $(function() {
             conn = null,
             callback = null;
         var retry = function() {
-            connAttempts = (1 + connAttempts);
-            return ((connAttempts < 10) ?
+            return ((++connAttempts < 10) ?
                 (function() {
-                    conn = new WebSocket(wsUrl)();
+                    conn = new WebSocket(wsUrl);
                     conn.onmessage = callback;
                     conn.onerror = function() {
-                        console.log("WS connection errored");
+                        console.log("WS connection errored; how?");
                         return retry();
                     };
                     conn.onclose = function() {
-                        return console.log("WS connection closed");
+                        return console.log("WS connection closed; why?");
                     };
                 })() :
                 undefined);
@@ -47,22 +46,50 @@ $(function() {
                     rowSpan: this.props.firstRowSpan
                 },this.props.entity.category) :
                 "");
-            return React.createElement("tr",{},categoryTh,React.createElement("td",{},this.props.entity.name));
+            return React.createElement("tr",{},categoryTh,React.createElement("td",{},this.props.entity.name),React.createElement("td",{
+                className: "text-right"
+            },React.createElement("div",{
+                className: "btn-group",
+                role: "group",
+                "aria-label": "Action Buttons"
+            },React.createElement("button",{
+                type: "button",
+                className: "btn btn-default btn-xs",
+                "aria-label": "Edit"
+            },React.createElement("span",{
+                className: "glyphicon glyphicon-pencil",
+                "aria-hidden": "true"
+            })),React.createElement("button",{
+                type: "button",
+                className: "btn btn-default btn-xs",
+                "aria-label": "Delete"
+            },React.createElement("span",{
+                className: "glyphicon glyphicon-trash",
+                "aria-hidden": "true"
+            })))));
+        }
+    },{
+        render: function() {
+            return false;
         }
     },_.invert({
         EntityRow: "displayName"
     })));
     var EntityGroup = React.createClass(_.defaults({
         render: function() {
-            return React.createElement("tbody",{},_.map(this.props.entities,function(entity,i) {
+            return React.createElement("tbody",{},_.map(this.props.entities,function(entity,i,entities) {
                 return React.createElement(EntityRow,{
                     key: entity.id,
                     entity: entity,
                     firstRowSpan: (i ?
                         0 :
-                        this.props.entity.length)
+                        entities.length)
                 });
             }));
+        }
+    },{
+        render: function() {
+            return false;
         }
     },_.invert({
         EntityGroup: "displayName"
@@ -76,15 +103,16 @@ $(function() {
         componentDidMount: function() {
             var that = this;
             return this.props.conn.registerCallback(function(e) {
-                var groupedData = _.groupBy((JSON.parse(e.data)).data,"category");
-                var groupedDataSorted = _.object(_.map(groupedData,function(v,k) {
-                    return [
-                        k,
-                        _.sortBy(v,"name")
-                    ];
-                }));
+                var massagedData = _.map(_.sortBy(_.map(_.groupBy((JSON.parse(e.data)).data,"category"),function(v,k) {
+                    return {
+                        k: k,
+                        v: _.sortBy(v,"name")
+                    };
+                }),"k"),function(d) {
+                    return (d).v;
+                });
                 return that.setState({
-                    entities: groupedDataSorted
+                    entities: massagedData
                 });
             });
         },
@@ -92,7 +120,6 @@ $(function() {
             return this.props.conn.close();
         },
         render: function() {
-            console.log("EntityTable render");
             var rows = _.map(this.state.entities,function(entities,idx) {
                 return React.createElement(EntityGroup,{
                     entities: entities,
@@ -103,50 +130,16 @@ $(function() {
                 className: "table-responsive"
             },React.createElement("table",{
                 className: "table"
-            },React.createElement("thead",{},React.createElement("tr",{},React.createElement("th",{},"Category"),React.createElement("th",{},"Name"))),rows));
+            },React.createElement("thead",{},React.createElement("tr",{},React.createElement("th",{},"Category"),React.createElement("th",{},"Name"),React.createElement("th",{},""))),rows));
+        }
+    },{
+        render: function() {
+            return false;
         }
     },_.invert({
         EntityTable: "displayName"
     })));
-    var BSTab = React.createClass(_.defaults({
-        render: function() {
-            return React.createElement("li",{
-                role: "presentation",
-                className: (this.props.active ?
-                    "active" :
-                    "")
-            },React.createElement("a",{
-                "data-target": this.props.target,
-                "aria-controls": "home",
-                role: "tab",
-                "data-toggle": "tab"
-            },this.props.label));
-        },
-        componentDidMount: function() {
-            (this.props.willShow ?
-                (($(this.getDOMNode())).find("a")).on("show.bs.tab",this.props.WillShow) :
-                undefined);
-            return (this.props.didHide ?
-                (($(this.getDOMNode())).find("a")).on("hidden.bs.tab",this.props.didHide) :
-                undefined);
-        }
-    },_.invert({
-        BSTab: "displayName"
-    })));
-    var BSTabContent = React.createClass(_.defaults({
-        render: function() {
-            return React.createElement("div",{
-                role: "tabpanel",
-                className: (this.props.active ?
-                    "tab-pane fade in active" :
-                    "tab-pane fade in"),
-                id: this.props.name
-            },this.props.children);
-        }
-    },_.invert({
-        BSTabContent: "displayName"
-    })));
-    var BSModal = React.createClass(_.defaults({
+    var Modal = React.createClass(_.defaults({
         render: function() {
             var header = React.createElement("div",{
                 className: "modal-header"
@@ -185,10 +178,29 @@ $(function() {
                 backdrop: "static"
             });
         }
+    },{
+        render: function() {
+            return false;
+        }
     },_.invert({
-        BSModal: "displayName"
+        Modal: "displayName"
     })));
-    var EntityTableTab = React.createClass(_.defaults({
+    var AdminHomeR = React.createClass(_.defaults({
+        render: function() {
+            return React.createElement("div",{
+                className: "row"
+            },React.createElement("div",{
+                className: "col-sm-11 col-md-8 col-lg-7"
+            },React.createElement("h2",{},"Welcome"),React.createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. XXX Be verbose."),React.createElement("h2",{},"Quick Guide"),React.createElement("p",{},"TODO"),React.createElement("h2",{},"API Documentation"),React.createElement("p",{},"TODO")));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AdminHomeR: "displayName"
+    })));
+    var EntityView = React.createClass(_.defaults({
         render: function() {
             var name = this.props.name;
             var willShow = function() {
@@ -207,48 +219,123 @@ $(function() {
                 didHide: didHide
             });
         }
+    },{
+        render: function() {
+            return false;
+        }
     },_.invert({
-        EntityTableTab: "displayName"
+        EntityView: "displayName"
     })));
+    var AdminCcasR = React.createClass(_.defaults({
+        render: function() {
+            return React.createElement("div",{},React.createElement("div",{
+                className: "pull-right btn-group",
+                role: "toolbar",
+                "aria-label": "Action Buttons"
+            },React.createElement("button",{
+                type: "button",
+                className: "btn btn-default"
+            },"Add New"),React.createElement("button",{
+                type: "button",
+                className: "btn btn-default"
+            },"Remove All")),React.createElement("h2",{},"All CCAs"),React.createElement(EntityTable,{
+                conn: APIConnection("/api/ccas")
+            }));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AdminCcasR: "displayName"
+    })));
+    var AdminSubjectsR = React.createClass(_.defaults({},{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AdminSubjectsR: "displayName"
+    })));
+    var AdminTeachersR = React.createClass(_.defaults({},{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AdminTeachersR: "displayName"
+    })));
+    var AdminStudentsR = React.createClass(_.defaults({},{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AdminStudentsR: "displayName"
+    })));
+    var routes = {
+        "/admin": [
+            "Home",
+            AdminHomeR
+        ],
+        "/admin/ccas": [
+            "Manage CCAs",
+            AdminCcasR
+        ],
+        "/admin/subjects": [
+            "Manage Subjects",
+            AdminSubjectsR
+        ],
+        "/admin/teachers": [
+            "Manage Teachers",
+            AdminTeachersR
+        ],
+        "/admin/students": [
+            "Manage Students",
+            AdminStudentsR
+        ]
+    };
     var Page = React.createClass(_.defaults({
         render: function() {
-            React.createElement("div",{
-                id: "modal-wrapper"
+            var pathname = window.location.pathname;
+            var tabs = _.map(routes,function(tuple,route) {
+                return React.createElement("li",{
+                    key: route,
+                    role: "presentation",
+                    className: ((route === pathname) ?
+                        "active" :
+                        "")
+                },React.createElement("a",{
+                    href: ((route === pathname) ?
+                        "#" :
+                        route)
+                },tuple[0]));
             });
             return React.createElement("div",{
-                id: "wrapper"
+                id: "content-wrapper"
             },React.createElement("div",{
+                id: "modal-wrapper"
+            }),React.createElement("div",{
                 className: "container"
             },React.createElement("div",{
                 className: "page-header"
             },React.createElement("h1",{},"RVHS Science Lab Undertaking — For Teachers and Administrators")),React.createElement("p",{},"You are logged in as xxx."),React.createElement("div",{
                 role: "tabpanel"
             },React.createElement("ul",{
-                className: "nav nav-tabs",
-                role: "tablist"
-            },React.createElement(BSTab,{
-                active: 1,
-                target: "#home",
-                label: "Home"
-            }),React.createElement(EntityTableTab,{
-                name: "cca",
-                label: "Manage CCAs"
-            })),React.createElement("div",{
-                className: "tab-content"
-            },React.createElement(BSTabContent,{
-                active: 1,
-                name: "home"
-            },React.createElement("p",{},"ehh")),React.createElement(BSTabContent,{
-                name: "cca"
-            })))));
+                className: "nav nav-tabs"
+            },tabs)),React.createElement("div",{
+                id: "main-content"
+            })));
         },
         componentDidMount: function() {
+            var pathname = window.location.pathname;
             return ((typeof(window.WebSocket) === "undefined") ?
-                React.render(React.createElement(BSModal,{
+                React.render(React.createElement(Modal,{
                     canClose: 0,
                     title: "Browser Unsupported"
                 },React.createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),($("#modal-wrapper")).get(0)) :
-                undefined);
+                React.render(React.createElement(routes[pathname][1],{}),($("#main-content")).get(0)));
+        }
+    },{
+        render: function() {
+            return false;
         }
     },_.invert({
         Page: "displayName"

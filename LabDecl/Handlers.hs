@@ -56,16 +56,20 @@ $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
 -- searching through query args. Most of them just does simple
 -- marshalling and then invoke the events in LabDecl.AcidicModels.
 $(mkYesod "LabDeclarationApp" [parseRoutes|
-/api/ccas                 CcasR     GET POST
-/api/ccas/#CcaId          CcaR      GET PUT DELETE
-/api/subjects             SubjectsR GET POST
-/api/subjects/#SubjectId  SubjectR  GET PUT DELETE
-/api/teachers             TeachersR GET POST
-/api/teachers/#TeacherId  TeacherR  GET PUT DELETE
-/api/students             StudentsR GET POST
-/api/students/#StudentId  StudentR  GET PUT DELETE
-/static                   StaticR   EmbeddedStatic getStatic
-/admin/                   AdminR    GET
+/api/ccas                 CcasR          GET POST
+/api/ccas/#CcaId          CcaR           GET PUT DELETE
+/api/subjects             SubjectsR      GET POST
+/api/subjects/#SubjectId  SubjectR       GET PUT DELETE
+/api/teachers             TeachersR      GET POST
+/api/teachers/#TeacherId  TeacherR       GET PUT DELETE
+/api/students             StudentsR      GET POST
+/api/students/#StudentId  StudentR       GET PUT DELETE
+/admin                    AdminHomeR     GET
+/admin/ccas               AdminCcasR     GET
+/admin/subjects           AdminSubjectsR GET
+/admin/teachers           AdminTeachersR GET
+/admin/students           AdminStudentsR GET
+/static                   StaticR        EmbeddedStatic getStatic
 |])
 
 instance Yesod LabDeclarationApp where
@@ -231,12 +235,37 @@ deleteStudentR = undefined
 -- |
 -- = HTML handlers
 
-getAdminR :: Handler Html
-getAdminR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console"
+adminSite :: Widget
+adminSite = do
   addStylesheet $ StaticR bootstrap_min_css
+  addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js
   addScript $ StaticR underscore_js
   addScript $ StaticR react_dev_js
   addScript $ StaticR bootstrap_js
   toWidget $(juliusFileReload "templates/admin.js")
+
+getAdminHomeR :: Handler Html
+getAdminHomeR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console"
+  adminSite
+
+getAdminCcasR :: Handler Html
+getAdminCcasR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage CCAs"
+  adminSite
+
+getAdminTeachersR :: Handler Html
+getAdminTeachersR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Teachers"
+  adminSite
+
+getAdminSubjectsR :: Handler Html
+getAdminSubjectsR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Subjects"
+  adminSite
+
+getAdminStudentsR :: Handler Html
+getAdminStudentsR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
+  adminSite
