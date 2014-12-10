@@ -239,4 +239,4 @@ getAdminR = defaultLayout $ do
   addScript $ StaticR underscore_js
   addScript $ StaticR react_dev_js
   addScript $ StaticR bootstrap_js
-  toWidget $(juliusFileReload "templates/jsxc/admin.js")
+  toWidget $(juliusFileReload "templates/admin.js")
