@@ -6,23 +6,23 @@
 ;; everything is inside a quasiquote. And the syntax is weird. And
 ;; since it doesn't support quoting or symbol-name or stringification,
 ;; the displayName will be attached at runtime...
-(macro def (rest...)
-       (var ~rest...))
 (macro fn (args rest...)
        (function ~args ~rest...))
 (macro defn (name args rest...)
-       (def ~name (fn ~args ~rest...)))
+       (var ~name (fn ~args ~rest...)))
 (macro obj (rest...)
        (object ~rest...))
 (macro e (name attrs rest...)
        (React.createElement ~name (obj ~@attrs) ~rest...))
 (macro defcomponent (name rest...)
-       (def ~name (React.createClass (_.defaults (obj ~rest...) (obj render (fn () false)) (_.invert (obj ~name "displayName"))))))
+       (var ~name (React.createClass (_.defaults (obj ~rest...) (obj render (fn () false)) (_.invert (obj ~name "displayName"))))))
 
 ($
  (fn ()
+
+   ;; An APIConnection is a wrapper around WebSocket.
    (defn APIConnection (pathname)
-     (def wsUrl
+     (var wsUrl
           (+ (+ (if (= window.location.protocol "https:") "wss://" "ws://")
                 window.location.host)
              pathname)
@@ -47,25 +47,30 @@
                     (if conn conn.readyState -1))
        close (fn () (conn.close))))
 
+   ;; An EntityRow is a row of data in the table.
    (defcomponent EntityRow
      render
      (fn ()
-       (def categoryTh
-              (if this.props.firstRowSpan
-                (e "th" (rowSpan this.props.firstRowSpan) this.props.entity.category)
-                ""))
+       (var that this)
+       (var dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (var firstCell (if (&& (! (null? dataSpec.categoryColumn))
+                              this.props.firstRowSpan)
+                        (e "td" (rowSpan this.props.firstRowSpan) (get (get 0 dataSpec.categoryColumn) this.props.entity))
+                        ""))
        (e "tr" ()
-         categoryTh
-         (e "td" () this.props.entity.name)
+         firstCell
+         (_.map dataSpec.columns
+                (fn (spec idx)
+                  (e "td" (key idx) (get (get 0 spec) that.props.entity))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
              (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit")
                (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
              (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete")
-               (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))
-       ))
+               (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
 
-   (defcomponent EntityGroup
+   ;; An EntityCategory is a group of data shared under a category.
+   (defcomponent EntityCategory
      render
      (fn ()
        (e "tbody" ()
@@ -74,40 +79,62 @@
                   (e EntityRow
                       (key entity.id entity entity firstRowSpan (if i 0 entities.length))))))))
 
+   ;; An EntityTable is the entire table for holding the data.
    (defcomponent EntityTable
      getInitialState
-     (fn () (obj entities (obj)))
+     (fn () (obj tableData (obj data (array))))
      componentDidMount
      (fn ()
-       (def that this)
+       (var that this)
        (this.props.conn.registerCallback
         (fn (e)
-          (def massagedData (_.map (_.sortBy (_.map (_.groupBy (.data (JSON.parse e.data)) "category")
-                                                    (fn (v k) (obj k k v (_.sortBy v "name"))))
-                                             "k")
-                                   (fn (d) (.v d))))
-          (that.setState (obj entities massagedData)))))
+          (that.setState (obj tableData (JSON.parse e.data))))))
      componentWillUnmount
      (fn () (this.props.conn.close))
      render
      (fn ()
-       (def rows (_.map this.state.entities
-                        (fn (entities idx)
-                          (e EntityGroup
-                              (entities entities key idx)))))
+       ;; Now we need to group the data according to the requirements
+       ;; outlined in the dataSpec. The process has type [Object] ->
+       ;; [[Object]].
+       (var dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (var rawData this.state.tableData.data)
+       (var rows (if (null? dataSpec.categoryColumn)
+                   (do ; no category column, one row per entry without using EntityCategory
+                     (var sortName (get 0 (get 0 dataSpec.columns)))
+                     (var massagedData (_.sortBy rawData sortName))
+                     (e "tbody" ()
+                       (_.map massagedData
+                              (fn (entity idx)
+                                (e EntityRow (firstRowSpan 1 entity entity key idx))))))
+                   (do ; there is a category column, so group by that first
+                     (var categoryName (get 0 dataSpec.categoryColumn))
+                     (var sortName (get 0 (get 0 dataSpec.columns)))
+                     ;; groupBy :: (Eq b, Show b) => [a] -> (a -> b) -> {[a]}
+                     ;; map :: {v} -> (v -> String -> a) -> [a]
+                     ;; sortBy :: [{a}] -> String -> [{a}]
+                     (var massagedData (_.map (_.sortBy (_.map (_.groupBy rawData categoryName)
+                                                               (fn (v k) (obj k k v (_.sortBy v sortName))))
+                                                        "k")
+                                              (fn (d) (.v d))))
+                     (_.map massagedData
+                            (fn (entities idx)
+                              (e EntityCategory (entities entities key idx)))))))
+
+       (var headers (_.map (-> (if (null? dataSpec.categoryColumn) (array) (array (get 2 dataSpec.categoryColumn)))
+                               (.concat (_.map dataSpec.columns (fn (v) (get 2 v)))))
+                           (fn (label idx) (e "th" (key idx) label))))
        (e "div" (className "table-responsive")
          (e "table" (className "table")
            (e "thead" ()
              (e "tr" ()
-               (e "th" () "Category")
-               (e "th" () "Name")
-               (e "th" () "")))
+               headers
+               (e "td" ())))
            rows))))
 
    (defcomponent Modal
      render
      (fn ()
-       (def header
+       (var header
             (e "div" (className "modal-header")
               (if this.props.canClose
                 (e "button" (type "button" className "close" "data-dismiss" "modal")
@@ -115,7 +142,7 @@
                   (e "span" (className "sr-only") "Close"))
                 "")
               (e "h4" (className "modal-title") this.props.title)))
-       (def footer
+       (var footer
             (if this.props.buttons
               (e "div" (className "modal-footer") this.props.buttons)
               ""))
@@ -142,16 +169,6 @@
            (e "h2" () "API Documentation")
            (e "p" () "TODO")))))
 
-   (defcomponent EntityView
-     render
-     (fn ()
-       (def name this.props.name)
-       (defn willShow ()
-         (React.render (e EntityTable (conn (APIConnection (+ (+ "/api/" name) "s")))) (-> ($ (+ "#" name)) (.get 0))))
-       (defn didHide ()
-         (React.unmountComponentAtNode (-> ($ (+ "#" name)) (.get 0))))
-       (e BSTab (active 0 target (+ "#" name) label this.props.label willShow willShow didHide didHide))))
-
    (defcomponent AdminCcasR
      render
      (fn ()
@@ -168,20 +185,35 @@
 
    (defcomponent AdminStudentsR)
 
-   (def routes (obj "/admin" (array "Home" AdminHomeR)
-                    "/admin/ccas" (array "Manage CCAs" AdminCcasR)
-                    "/admin/subjects" (array "Manage Subjects" AdminSubjectsR)
-                    "/admin/teachers" (array "Manage Teachers" AdminTeachersR)
-                    "/admin/students" (array "Manage Students" AdminStudentsR)))
+   (var pageSpec (obj "/admin" (obj pageName "Home"
+                                    component AdminHomeR
+                                    dataSpec null)
+                      "/admin/ccas" (obj pageName "Manage CCAs"
+                                         component AdminCcasR
+                                         dataSpec (obj categoryColumn (array "category" _.identity "CCA Category")
+                                                       columns (array (array "name" _.identity "CCA Name"))))
+                      "/admin/subjects" (obj pageName "Manage Subjects"
+                                             component AdminSubjectsR
+                                             dataSpec (obj categoryColumn null
+                                                           columns (array (array "code" _.identity "Subject Code")
+                                                                          (array "level" _.identity "Applies To")
+                                                                          (array "is_science" _.identity "Science Subject?")
+                                                                          (array "name" _.identity "Subject Name"))))
+                      "/admin/teachers" (obj pageName "Manage Teachers"
+                                             component AdminTeachersR
+                                             dataSpec null)
+                      "/admin/students" (obj pageName "Manage Students"
+                                             component AdminStudentsR
+                                             dataSpec null)))
 
    (defcomponent Page
      render
      (fn ()
-       (def pathname window.location.pathname)
-       (def tabs (_.map routes (fn (tuple route)
+       (var pathname window.location.pathname)
+       (var tabs (_.map pageSpec (fn (page route)
                                  (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
                                    (e "a" (href (if (= route pathname) "#" route))
-                                     (get 0 tuple))))))
+                                     (.pageName page))))))
 
        (e "div" (id "content-wrapper")
          (e "div" (id "modal-wrapper"))
@@ -195,7 +227,7 @@
            (e "div" (id "main-content")))))
      componentDidMount
      (fn ()
-       (def pathname window.location.pathname)
+       (var pathname window.location.pathname)
        (if (undefined? window.WebSocket)
          (React.render
           (e Modal (canClose 0 title "Browser Unsupported")
@@ -203,7 +235,7 @@
               "Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available."))
           (-> ($ "#modal-wrapper") (.get 0)))
          (React.render
-          (e (get 1 (get pathname routes)) ())
+          (e (.component (get pathname pageSpec)) ())
           (-> ($ "#main-content") (.get 0))))))
 
    (React.render (e Page ()) document.body)))

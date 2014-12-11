@@ -41,12 +41,18 @@ $(function() {
     };
     var EntityRow = React.createClass(_.defaults({
         render: function() {
-            var categoryTh = (this.props.firstRowSpan ?
-                React.createElement("th",{
+            var that = this;
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var firstCell = (((!(dataSpec.categoryColumn === null)) && this.props.firstRowSpan) ?
+                React.createElement("td",{
                     rowSpan: this.props.firstRowSpan
-                },this.props.entity.category) :
+                },this.props.entity[dataSpec.categoryColumn[0]]) :
                 "");
-            return React.createElement("tr",{},categoryTh,React.createElement("td",{},this.props.entity.name),React.createElement("td",{
+            return React.createElement("tr",{},firstCell,_.map(dataSpec.columns,function(spec,idx) {
+                return React.createElement("td",{
+                    key: idx
+                },that.props.entity[spec[0]]);
+            }),React.createElement("td",{
                 className: "text-right"
             },React.createElement("div",{
                 className: "btn-group",
@@ -75,7 +81,7 @@ $(function() {
     },_.invert({
         EntityRow: "displayName"
     })));
-    var EntityGroup = React.createClass(_.defaults({
+    var EntityCategory = React.createClass(_.defaults({
         render: function() {
             return React.createElement("tbody",{},_.map(this.props.entities,function(entity,i,entities) {
                 return React.createElement(EntityRow,{
@@ -92,27 +98,21 @@ $(function() {
             return false;
         }
     },_.invert({
-        EntityGroup: "displayName"
+        EntityCategory: "displayName"
     })));
     var EntityTable = React.createClass(_.defaults({
         getInitialState: function() {
             return {
-                entities: {}
+                tableData: {
+                    data: []
+                }
             };
         },
         componentDidMount: function() {
             var that = this;
             return this.props.conn.registerCallback(function(e) {
-                var massagedData = _.map(_.sortBy(_.map(_.groupBy((JSON.parse(e.data)).data,"category"),function(v,k) {
-                    return {
-                        k: k,
-                        v: _.sortBy(v,"name")
-                    };
-                }),"k"),function(d) {
-                    return (d).v;
-                });
                 return that.setState({
-                    entities: massagedData
+                    tableData: JSON.parse(e.data)
                 });
             });
         },
@@ -120,17 +120,54 @@ $(function() {
             return this.props.conn.close();
         },
         render: function() {
-            var rows = _.map(this.state.entities,function(entities,idx) {
-                return React.createElement(EntityGroup,{
-                    entities: entities,
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var rawData = this.state.tableData.data;
+            var rows = ((dataSpec.categoryColumn === null) ?
+                (function() {
+                    var sortName = dataSpec.columns[0][0];
+                    var massagedData = _.sortBy(rawData,sortName);
+                    return React.createElement("tbody",{},_.map(massagedData,function(entity,idx) {
+                        return React.createElement(EntityRow,{
+                            firstRowSpan: 1,
+                            entity: entity,
+                            key: idx
+                        });
+                    }));
+                })() :
+                (function() {
+                    var categoryName = dataSpec.categoryColumn[0];
+                    var sortName = dataSpec.columns[0][0];
+                    var massagedData = _.map(_.sortBy(_.map(_.groupBy(rawData,categoryName),function(v,k) {
+                        return {
+                            k: k,
+                            v: _.sortBy(v,sortName)
+                        };
+                    }),"k"),function(d) {
+                        return (d).v;
+                    });
+                    return _.map(massagedData,function(entities,idx) {
+                        return React.createElement(EntityCategory,{
+                            entities: entities,
+                            key: idx
+                        });
+                    });
+                })());
+            var headers = _.map((((dataSpec.categoryColumn === null) ?
+                [] :
+                [
+                    dataSpec.categoryColumn[2]
+                ])).concat(_.map(dataSpec.columns,function(v) {
+                return v[2];
+            })),function(label,idx) {
+                return React.createElement("th",{
                     key: idx
-                });
+                },label);
             });
             return React.createElement("div",{
                 className: "table-responsive"
             },React.createElement("table",{
                 className: "table"
-            },React.createElement("thead",{},React.createElement("tr",{},React.createElement("th",{},"Category"),React.createElement("th",{},"Name"),React.createElement("th",{},""))),rows));
+            },React.createElement("thead",{},React.createElement("tr",{},headers,React.createElement("td",{}))),rows));
         }
     },{
         render: function() {
@@ -200,32 +237,6 @@ $(function() {
     },_.invert({
         AdminHomeR: "displayName"
     })));
-    var EntityView = React.createClass(_.defaults({
-        render: function() {
-            var name = this.props.name;
-            var willShow = function() {
-                return React.render(React.createElement(EntityTable,{
-                    conn: APIConnection((("/api/" + name) + "s"))
-                }),($(("#" + name))).get(0));
-            };
-            var didHide = function() {
-                return React.unmountComponentAtNode(($(("#" + name))).get(0));
-            };
-            return React.createElement(BSTab,{
-                active: 0,
-                target: ("#" + name),
-                label: this.props.label,
-                willShow: willShow,
-                didHide: didHide
-            });
-        }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        EntityView: "displayName"
-    })));
     var AdminCcasR = React.createClass(_.defaults({
         render: function() {
             return React.createElement("div",{},React.createElement("div",{
@@ -270,32 +281,74 @@ $(function() {
     },_.invert({
         AdminStudentsR: "displayName"
     })));
-    var routes = {
-        "/admin": [
-            "Home",
-            AdminHomeR
-        ],
-        "/admin/ccas": [
-            "Manage CCAs",
-            AdminCcasR
-        ],
-        "/admin/subjects": [
-            "Manage Subjects",
-            AdminSubjectsR
-        ],
-        "/admin/teachers": [
-            "Manage Teachers",
-            AdminTeachersR
-        ],
-        "/admin/students": [
-            "Manage Students",
-            AdminStudentsR
-        ]
+    var pageSpec = {
+        "/admin": {
+            pageName: "Home",
+            component: AdminHomeR,
+            dataSpec: null
+        },
+        "/admin/ccas": {
+            pageName: "Manage CCAs",
+            component: AdminCcasR,
+            dataSpec: {
+                categoryColumn: [
+                    "category",
+                    _.identity,
+                    "CCA Category"
+                ],
+                columns: [
+                    [
+                        "name",
+                        _.identity,
+                        "CCA Name"
+                    ]
+                ]
+            }
+        },
+        "/admin/subjects": {
+            pageName: "Manage Subjects",
+            component: AdminSubjectsR,
+            dataSpec: {
+                categoryColumn: null,
+                columns: [
+                    [
+                        "code",
+                        _.identity,
+                        "Subject Code"
+                    ],
+                    [
+                        "level",
+                        _.identity,
+                        "Applies To"
+                    ],
+                    [
+                        "is_science",
+                        _.identity,
+                        "Science Subject?"
+                    ],
+                    [
+                        "name",
+                        _.identity,
+                        "Subject Name"
+                    ]
+                ]
+            }
+        },
+        "/admin/teachers": {
+            pageName: "Manage Teachers",
+            component: AdminTeachersR,
+            dataSpec: null
+        },
+        "/admin/students": {
+            pageName: "Manage Students",
+            component: AdminStudentsR,
+            dataSpec: null
+        }
     };
     var Page = React.createClass(_.defaults({
         render: function() {
             var pathname = window.location.pathname;
-            var tabs = _.map(routes,function(tuple,route) {
+            var tabs = _.map(pageSpec,function(page,route) {
                 return React.createElement("li",{
                     key: route,
                     role: "presentation",
@@ -306,7 +359,7 @@ $(function() {
                     href: ((route === pathname) ?
                         "#" :
                         route)
-                },tuple[0]));
+                },(page).pageName));
             });
             return React.createElement("div",{
                 id: "content-wrapper"
@@ -331,7 +384,7 @@ $(function() {
                     canClose: 0,
                     title: "Browser Unsupported"
                 },React.createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),($("#modal-wrapper")).get(0)) :
-                React.render(React.createElement(routes[pathname][1],{}),($("#main-content")).get(0)));
+                React.render(React.createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
         }
     },{
         render: function() {
