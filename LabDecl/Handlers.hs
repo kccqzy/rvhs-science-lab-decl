@@ -68,13 +68,13 @@ $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
 -- searching through query args. Most of them just does simple
 -- marshalling and then invoke the events in LabDecl.AcidicModels.
 $(mkYesod "LabDeclarationApp" [parseRoutes|
-/api/ccas                 CcasR          GET POST
+/api/ccas                 CcasR          GET POST DELETE
 /api/ccas/#CcaId          CcaR           GET PUT DELETE
-/api/subjects             SubjectsR      GET POST
+/api/subjects             SubjectsR      GET POST DELETE
 /api/subjects/#SubjectId  SubjectR       GET PUT DELETE
-/api/teachers             TeachersR      GET POST
+/api/teachers             TeachersR      GET POST DELETE
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
-/api/students             StudentsR      GET POST
+/api/students             StudentsR      GET POST DELETE
 /api/students/#StudentId  StudentR       GET PUT DELETE
 /admin                    AdminHomeR     GET
 /admin/ccas               AdminCcasR     GET
@@ -313,6 +313,9 @@ putCcaR = (acidUpdateHandler . ReplaceCca =<<) . runInputPost . ccaForm
 deleteCcaR :: CcaId -> Handler Value
 deleteCcaR = acidUpdateHandler . RemoveCca
 
+deleteCcasR :: Handler Value
+deleteCcasR = acidUpdateHandler RemoveAllCcas
+
 getSubjectsR :: Handler Value
 getSubjectsR = acidQueryHandler ListSubjects
 
@@ -330,6 +333,9 @@ putSubjectR = (acidUpdateHandler . ReplaceSubject =<<) . runInputPost . subjectF
 
 deleteSubjectR :: SubjectId -> Handler Value
 deleteSubjectR = acidUpdateHandler . RemoveSubject
+
+deleteSubjectsR :: Handler Value
+deleteSubjectsR = acidUpdateHandler RemoveAllSubjects
 
 getTeachersR :: Handler Value
 getTeachersR = acidQueryHandler ListTeachers
@@ -349,6 +355,9 @@ putTeacherR = (acidUpdateHandler . ReplaceTeacher =<<) . runInputPost . teacherF
 deleteTeacherR :: TeacherId -> Handler Value
 deleteTeacherR = acidUpdateHandler . RemoveTeacher
 
+deleteTeachersR :: Handler Value
+deleteTeachersR = acidUpdateHandler RemoveAllTeachers
+
 getStudentsR :: Handler Value
 getStudentsR = undefined
 
@@ -363,6 +372,9 @@ putStudentR = undefined
 
 deleteStudentR :: StudentId -> Handler Value
 deleteStudentR = undefined
+
+deleteStudentsR :: Handler Value
+deleteStudentsR = acidUpdateHandler RemoveAllStudents
 
 -- |
 -- = HTML handlers

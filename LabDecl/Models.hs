@@ -162,6 +162,10 @@ removeEntity i = do
 replaceEntity :: (RecordId a i) => a -> IUpdate
 replaceEntity a = dbField._2 %= updateIx (a ^. idField) a
 
+removeAllEntities :: forall a i. (RecordId a i) => Proxy a -> IUpdate
+removeAllEntities _ = dbField'._2 .= empty
+  where dbField' = dbField :: Lens' Database (IxSetCtr a)
+
 -- | Convert a set of subjects to a mapping between the subject code
 -- and subject.
 subjectsToMap :: Set Subject -> Map T.Text Subject
@@ -245,18 +249,28 @@ replaceCca     :: Cca     -> IUpdate
 replaceSubject :: Subject -> IUpdate
 replaceTeacher :: Teacher -> IUpdate
 replaceStudent :: Student -> IUpdate
-removeCca      :: CcaId     -> IUpdate
-removeSubject  :: SubjectId -> IUpdate
-removeTeacher  :: TeacherId -> IUpdate
-removeStudent  :: StudentId -> IUpdate
 replaceCca     = ensureExistThen replaceEntity
 replaceSubject = ensureExistThen replaceEntity
 replaceTeacher = ensureExistThen replaceEntity
 replaceStudent = ensureExistThen replaceEntity
-removeCca      = ensureIdExistThen removeEntity
-removeSubject  = ensureIdExistThen removeEntity
-removeTeacher  = ensureIdExistThen removeEntity
-removeStudent  = ensureIdExistThen removeEntity
+
+removeCca     :: CcaId     -> IUpdate
+removeSubject :: SubjectId -> IUpdate
+removeTeacher :: TeacherId -> IUpdate
+removeStudent :: StudentId -> IUpdate
+removeCca     = ensureIdExistThen removeEntity
+removeSubject = ensureIdExistThen removeEntity
+removeTeacher = ensureIdExistThen removeEntity
+removeStudent = ensureIdExistThen removeEntity
+
+removeAllCcas     :: IUpdate
+removeAllSubjects :: IUpdate
+removeAllTeachers :: IUpdate
+removeAllStudents :: IUpdate
+removeAllCcas     = removeAllEntities (Proxy :: Proxy Cca)
+removeAllSubjects = removeAllEntities (Proxy :: Proxy Subject)
+removeAllTeachers = removeAllEntities (Proxy :: Proxy Teacher)
+removeAllStudents = removeAllEntities (Proxy :: Proxy Student)
 
 -- |
 -- = Public (Restricted) Queries and Updates
@@ -350,6 +364,10 @@ eventNames = [
     'removeSubject,
     'removeTeacher,
     'removeStudent,
+    'removeAllCcas,
+    'removeAllSubjects,
+    'removeAllTeachers,
+    'removeAllStudents,
     'publicListClasses,
     'publicListStudentsFromClass,
     'publicLookupStudentByClassIndexNumber,
