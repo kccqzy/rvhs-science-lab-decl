@@ -39,15 +39,17 @@
          (set conn.onclose (fn ()
                              (console.log "WS connection closed; why?")))))
      (retry)
+     (-> ($ window) (.on "beforeunload" (fn () (conn.close))))
      (obj
-       registerCallback (fn (func)
-                          (set conn.onmessage func)
-                          (set callback func))
-       readyState (fn ()
-                    (if conn conn.readyState -1))
-       close (fn () (conn.close))))
+      registerCallback (fn (func)
+                         (set conn.onmessage func)
+                         (set callback func))
+      readyState (fn ()
+                   (if conn conn.readyState -1))
+      close (fn () (conn.close))))
 
-   ;; An EntityRow is a row of data in the table.
+   ;; An EntityRow is a row of data in the table. Each row also has
+   ;; two action buttons.
    (defcomponent EntityRow
      render
      (fn ()
@@ -55,8 +57,9 @@
        (var dataSpec (.dataSpec (get window.location.pathname pageSpec)))
        (var firstCell (if (&& (! (null? dataSpec.categoryColumn))
                               this.props.firstRowSpan)
-                        (e "td" (rowSpan this.props.firstRowSpan) (get (get 0 dataSpec.categoryColumn) this.props.entity))
-                        ""))
+                        (e "td" (rowSpan this.props.firstRowSpan)
+                          (get (get 0 dataSpec.categoryColumn) this.props.entity))
+                        null))
        (e "tr" ()
          firstCell
          (_.map dataSpec.columns
@@ -64,12 +67,13 @@
                   (e "td" (key idx) (get (get 0 spec) that.props.entity))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit")
+             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" "data-action" "edit" "data-entityid" this.props.entity.id)
                (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete")
+             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete" "data-action" "delete" "data-entityid" this.props.entity.id)
                (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
 
-   ;; An EntityCategory is a group of data shared under a category.
+   ;; An EntityCategory is a group of data shared under a category,
+   ;; presented as a rowspan.
    (defcomponent EntityCategory
      render
      (fn ()
@@ -79,7 +83,8 @@
                   (e EntityRow
                       (key entity.id entity entity firstRowSpan (if i 0 entities.length))))))))
 
-   ;; An EntityTable is the entire table for holding the data.
+   ;; An EntityTable is the entire table for holding the data. It
+   ;; receives events from the two action buttons on each row.
    (defcomponent EntityTable
      getInitialState
      (fn () (obj tableData (obj data (array))))
@@ -88,7 +93,20 @@
        (var that this)
        (this.props.conn.registerCallback
         (fn (e)
-          (that.setState (obj tableData (JSON.parse e.data))))))
+          (that.setState (obj tableData (JSON.parse e.data)))))
+       (-> ($ (this.getDOMNode))
+           (.on "click" "button[data-action=\"edit\"]"
+                (fn ()
+                  (var entityid (-> ($ this) (.data "entityid")))
+                  (var entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
+                  (React.render
+                   (e that.props.entityEditor (editing entity))
+                   (getModalWrapper))))
+           (.on "click" "button[data-action=\"delete\"]"
+                (fn ()
+                  (React.render
+                   (e that.props.deleteConfirmation (deleting (-> ($ this) (.data "entityid"))))
+                   (getModalWrapper))))))
      componentWillUnmount
      (fn () (this.props.conn.close))
      render
@@ -100,15 +118,15 @@
        (var rawData this.state.tableData.data)
        (var rows (if (null? dataSpec.categoryColumn)
                    (do ; no category column, one row per entry without using EntityCategory
-                     (var sortName (get 0 (get 0 dataSpec.columns)))
-                     (var massagedData (_.sortBy rawData sortName))
+                       (var sortName (get 0 (get 0 dataSpec.columns)))
+                       (var massagedData (_.sortBy rawData sortName))
                      (e "tbody" ()
                        (_.map massagedData
-                              (fn (entity idx)
-                                (e EntityRow (firstRowSpan 1 entity entity key idx))))))
+                              (fn (entity)
+                                (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
                    (do ; there is a category column, so group by that first
-                     (var categoryName (get 0 dataSpec.categoryColumn))
-                     (var sortName (get 0 (get 0 dataSpec.columns)))
+                       (var categoryName (get 0 dataSpec.categoryColumn))
+                       (var sortName (get 0 (get 0 dataSpec.columns)))
                      ;; groupBy :: (Eq b, Show b) => [a] -> (a -> b) -> {[a]}
                      ;; map :: {v} -> (v -> String -> a) -> [a]
                      ;; sortBy :: [{a}] -> String -> [{a}]
@@ -117,8 +135,8 @@
                                                         "k")
                                               (fn (d) (.v d))))
                      (_.map massagedData
-                            (fn (entities idx)
-                              (e EntityCategory (entities entities key idx)))))))
+                            (fn (entities)
+                              (e EntityCategory (entities entities key (.category (get 0 entities)))))))))
 
        (var headers (_.map (-> (if (null? dataSpec.categoryColumn) (array) (array (get 2 dataSpec.categoryColumn)))
                                (.concat (_.map dataSpec.columns (fn (v) (get 2 v)))))
@@ -128,7 +146,7 @@
            (e "thead" ()
              (e "tr" ()
                headers
-               (e "td" ())))
+               (e "th" ())))
            rows))))
 
    (defcomponent Modal
@@ -155,7 +173,48 @@
      componentDidMount
      (fn ()
        (-> ($ (this.getDOMNode))
+           (.modal (obj keyboard false backdrop "static"))))
+     componentDidUpdate
+     (fn ()
+       (-> ($ (this.getDOMNode))
            (.modal (obj keyboard false backdrop "static")))))
+
+   (defn getModalWrapper () (-> ($ "#modal-wrapper") (.get 0)))
+
+   (defcomponent ActionModal
+     render
+     (fn ()
+       (e Modal (canClose 1 title this.props.title buttons (e "div" ()
+                                                             (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
+                                                             (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel)))
+         this.props.children))
+     componentDidMount
+     (fn ()
+       (var that this)
+       (-> ($ "#actionButton")
+           (.on "click" (fn (e)
+                          (e.preventDefault)
+                          (that.props.next (fn () (-> ($ "#modal") (.modal "hide")))))))))
+
+   (defcomponent CcaEditor
+     render
+     (fn ()
+       (var title (if this.props.editing "Edit CCA" "Add a new CCA"))
+       (var actionButtonLabel (if this.props.editing "Edit" "Add"))
+       (var endpoint (if this.props.editing (+ "/api/ccas/" this.props.editing.id) "/api/ccas"))
+       (var method (if this.props.editing "PUT" "POST"))
+       (e "form" (id "ccaEditorForm" role "form")
+         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit"
+                               next (fn (hideModal)
+                                      ($.ajax endpoint (obj type method
+                                                               data (-> ($ "#ccaEditorForm") (.serialize))
+                                                               complete hideModal))))
+           (e "div" (className "form-group")
+             (e "label" (htmlFor "name") "Name")
+             (e "input" (type "text" className "form-control" id "name" name "name" placeholder "CCA Name" defaultValue (if this.props.editing this.props.editing.name ""))))
+           (e "div" (className "form-group")
+             (e "label" (htmlFor "category") "Category")
+             (e "input" (type "text" className "form-control" id "category" name "category" placeholder "CCA Category" defaultValue (if this.props.editing this.props.editing.category ""))))))))
 
    (defcomponent AdminHomeR
      render
@@ -167,17 +226,40 @@
            (e "h2" () "Quick Guide")
            (e "p" () "TODO")
            (e "h2" () "API Documentation")
-           (e "p" () "TODO")))))
+           (e "p" () "If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")))))
 
    (defcomponent AdminCcasR
      render
      (fn ()
+       (defcomponent CcaDeleteConfirmation
+         render
+         (fn ()
+           (var that this)
+           (e ActionModal
+             (title "Delete This CCA" actionButtonLabel "Delete It" actionButtonStyle "danger"
+              next (fn (hideModal) ($.ajax (+ "/api/ccas/" that.props.deleting) (obj type "DELETE" complete hideModal))))
+             (e "p" () "Are you sure want to delete this CCA from the database?"))))
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
-           (e "button" (type "button" className "btn btn-default") "Add New")
-           (e "button" (type "button" className "btn btn-default") "Remove All"))
+           (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
+           (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
          (e "h2" () "All CCAs")
-         (e EntityTable (conn (APIConnection "/api/ccas"))))))
+         (e EntityTable (conn (APIConnection "/api/ccas") entityEditor CcaEditor deleteConfirmation CcaDeleteConfirmation))))
+     componentDidMount
+     (fn ()
+       (-> ($ "#addButton")
+           (.on "click" (fn ()
+                          (React.render
+                           (e CcaEditor ())
+                           (getModalWrapper)))))
+       (-> ($ "#removeAllButton")
+           (.on "click" (fn ()
+                          (React.render
+                           (e ActionModal
+                             (title "Deleting All CCAs" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/ccas" (obj type "DELETE" complete hideModal))))
+                             (e "p" () "Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information."))
+                           (getModalWrapper)))))
+       ))
 
    (defcomponent AdminSubjectsR)
 
@@ -211,9 +293,9 @@
      (fn ()
        (var pathname window.location.pathname)
        (var tabs (_.map pageSpec (fn (page route)
-                                 (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
-                                   (e "a" (href (if (= route pathname) "#" route))
-                                     (.pageName page))))))
+                                   (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
+                                     (e "a" (href (if (= route pathname) "#" route))
+                                       (.pageName page))))))
 
        (e "div" (id "content-wrapper")
          (e "div" (id "modal-wrapper"))
@@ -233,7 +315,7 @@
           (e Modal (canClose 0 title "Browser Unsupported")
             (e "p" ()
               "Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available."))
-          (-> ($ "#modal-wrapper") (.get 0)))
+          (getModalWrapper))
          (React.render
           (e (.component (get pathname pageSpec)) ())
           (-> ($ "#main-content") (.get 0))))))
@@ -242,8 +324,8 @@
 
 
 ;;; Local variables:
-;;; enable-local-eval: t
 ;;; eval: (put 'fn 'lisp-indent-function 'defun)
 ;;; eval: (put 'e 'lisp-indent-function 2)
 ;;; eval: (put 'if 'lisp-indent-function 1)
+;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls")))
 ;;; End:

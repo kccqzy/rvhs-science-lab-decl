@@ -24,6 +24,9 @@ $(function() {
                 undefined);
         };
         retry();
+        ($(window)).on("beforeunload",function() {
+            return conn.close();
+        });
         return {
             registerCallback: function(func) {
                 conn.onmessage = func;
@@ -47,7 +50,7 @@ $(function() {
                 React.createElement("td",{
                     rowSpan: this.props.firstRowSpan
                 },this.props.entity[dataSpec.categoryColumn[0]]) :
-                "");
+                null);
             return React.createElement("tr",{},firstCell,_.map(dataSpec.columns,function(spec,idx) {
                 return React.createElement("td",{
                     key: idx
@@ -61,14 +64,18 @@ $(function() {
             },React.createElement("button",{
                 type: "button",
                 className: "btn btn-default btn-xs",
-                "aria-label": "Edit"
+                "aria-label": "Edit",
+                "data-action": "edit",
+                "data-entityid": this.props.entity.id
             },React.createElement("span",{
                 className: "glyphicon glyphicon-pencil",
                 "aria-hidden": "true"
             })),React.createElement("button",{
                 type: "button",
                 className: "btn btn-default btn-xs",
-                "aria-label": "Delete"
+                "aria-label": "Delete",
+                "data-action": "delete",
+                "data-entityid": this.props.entity.id
             },React.createElement("span",{
                 className: "glyphicon glyphicon-trash",
                 "aria-hidden": "true"
@@ -110,10 +117,23 @@ $(function() {
         },
         componentDidMount: function() {
             var that = this;
-            return this.props.conn.registerCallback(function(e) {
+            this.props.conn.registerCallback(function(e) {
                 return that.setState({
                     tableData: JSON.parse(e.data)
                 });
+            });
+            return (($(this.getDOMNode())).on("click","button[data-action=\"edit\"]",function() {
+                var entityid = ($(this)).data("entityid");
+                var entity = _.find(that.state.tableData.data,function(d) {
+                    return (d.id === entityid);
+                });
+                return React.render(React.createElement(that.props.entityEditor,{
+                    editing: entity
+                }),getModalWrapper());
+            })).on("click","button[data-action=\"delete\"]",function() {
+                return React.render(React.createElement(that.props.deleteConfirmation,{
+                    deleting: ($(this)).data("entityid")
+                }),getModalWrapper());
             });
         },
         componentWillUnmount: function() {
@@ -126,11 +146,11 @@ $(function() {
                 (function() {
                     var sortName = dataSpec.columns[0][0];
                     var massagedData = _.sortBy(rawData,sortName);
-                    return React.createElement("tbody",{},_.map(massagedData,function(entity,idx) {
+                    return React.createElement("tbody",{},_.map(massagedData,function(entity) {
                         return React.createElement(EntityRow,{
                             firstRowSpan: 1,
                             entity: entity,
-                            key: idx
+                            key: entity.id
                         });
                     }));
                 })() :
@@ -145,10 +165,10 @@ $(function() {
                     }),"k"),function(d) {
                         return (d).v;
                     });
-                    return _.map(massagedData,function(entities,idx) {
+                    return _.map(massagedData,function(entities) {
                         return React.createElement(EntityCategory,{
                             entities: entities,
-                            key: idx
+                            key: (entities[0]).category
                         });
                     });
                 })());
@@ -167,7 +187,7 @@ $(function() {
                 className: "table-responsive"
             },React.createElement("table",{
                 className: "table"
-            },React.createElement("thead",{},React.createElement("tr",{},headers,React.createElement("td",{}))),rows));
+            },React.createElement("thead",{},React.createElement("tr",{},headers,React.createElement("th",{}))),rows));
         }
     },{
         render: function() {
@@ -214,6 +234,12 @@ $(function() {
                 keyboard: false,
                 backdrop: "static"
             });
+        },
+        componentDidUpdate: function() {
+            return ($(this.getDOMNode())).modal({
+                keyboard: false,
+                backdrop: "static"
+            });
         }
     },{
         render: function() {
@@ -222,13 +248,112 @@ $(function() {
     },_.invert({
         Modal: "displayName"
     })));
+    var getModalWrapper = function() {
+        return ($("#modal-wrapper")).get(0);
+    };
+    var ActionModal = React.createClass(_.defaults({
+        render: function() {
+            return React.createElement(Modal,{
+                canClose: 1,
+                title: this.props.title,
+                buttons: React.createElement("div",{},React.createElement("button",{
+                    type: "button",
+                    className: "btn btn-default",
+                    "data-dismiss": "modal"
+                },"Cancel"),React.createElement("button",{
+                    type: (this.props.actionButtonType || "button"),
+                    className: ("btn btn-" + this.props.actionButtonStyle),
+                    id: "actionButton"
+                },this.props.actionButtonLabel))
+            },this.props.children);
+        },
+        componentDidMount: function() {
+            var that = this;
+            return ($("#actionButton")).on("click",function(e) {
+                e.preventDefault();
+                return that.props.next(function() {
+                    return ($("#modal")).modal("hide");
+                });
+            });
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        ActionModal: "displayName"
+    })));
+    var CcaEditor = React.createClass(_.defaults({
+        render: function() {
+            var title = (this.props.editing ?
+                "Edit CCA" :
+                "Add a new CCA");
+            var actionButtonLabel = (this.props.editing ?
+                "Edit" :
+                "Add");
+            var endpoint = (this.props.editing ?
+                ("/api/ccas/" + this.props.editing.id) :
+                "/api/ccas");
+            var method = (this.props.editing ?
+                "PUT" :
+                "POST");
+            return React.createElement("form",{
+                id: "ccaEditorForm",
+                role: "form"
+            },React.createElement(ActionModal,{
+                title: title,
+                actionButtonLabel: actionButtonLabel,
+                actionButtonStyle: "primary",
+                actionButtonType: "submit",
+                next: function(hideModal) {
+                    return $.ajax(endpoint,{
+                        type: method,
+                        data: ($("#ccaEditorForm")).serialize(),
+                        complete: hideModal
+                    });
+                }
+            },React.createElement("div",{
+                className: "form-group"
+            },React.createElement("label",{
+                htmlFor: "name"
+            },"Name"),React.createElement("input",{
+                type: "text",
+                className: "form-control",
+                id: "name",
+                name: "name",
+                placeholder: "CCA Name",
+                defaultValue: (this.props.editing ?
+                    this.props.editing.name :
+                    "")
+            })),React.createElement("div",{
+                className: "form-group"
+            },React.createElement("label",{
+                htmlFor: "category"
+            },"Category"),React.createElement("input",{
+                type: "text",
+                className: "form-control",
+                id: "category",
+                name: "category",
+                placeholder: "CCA Category",
+                defaultValue: (this.props.editing ?
+                    this.props.editing.category :
+                    "")
+            }))));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        CcaEditor: "displayName"
+    })));
     var AdminHomeR = React.createClass(_.defaults({
         render: function() {
             return React.createElement("div",{
                 className: "row"
             },React.createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
-            },React.createElement("h2",{},"Welcome"),React.createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. XXX Be verbose."),React.createElement("h2",{},"Quick Guide"),React.createElement("p",{},"TODO"),React.createElement("h2",{},"API Documentation"),React.createElement("p",{},"TODO")));
+            },React.createElement("h2",{},"Welcome"),React.createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. XXX Be verbose."),React.createElement("h2",{},"Quick Guide"),React.createElement("p",{},"TODO"),React.createElement("h2",{},"API Documentation"),React.createElement("p",{},"If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")));
         }
     },{
         render: function() {
@@ -239,19 +364,63 @@ $(function() {
     })));
     var AdminCcasR = React.createClass(_.defaults({
         render: function() {
+            var CcaDeleteConfirmation = React.createClass(_.defaults({
+                render: function() {
+                    var that = this;
+                    return React.createElement(ActionModal,{
+                        title: "Delete This CCA",
+                        actionButtonLabel: "Delete It",
+                        actionButtonStyle: "danger",
+                        next: function(hideModal) {
+                            return $.ajax(("/api/ccas/" + that.props.deleting),{
+                                type: "DELETE",
+                                complete: hideModal
+                            });
+                        }
+                    },React.createElement("p",{},"Are you sure want to delete this CCA from the database?"));
+                }
+            },{
+                render: function() {
+                    return false;
+                }
+            },_.invert({
+                CcaDeleteConfirmation: "displayName"
+            })));
             return React.createElement("div",{},React.createElement("div",{
                 className: "pull-right btn-group",
                 role: "toolbar",
                 "aria-label": "Action Buttons"
             },React.createElement("button",{
+                id: "addButton",
                 type: "button",
                 className: "btn btn-default"
             },"Add New"),React.createElement("button",{
+                id: "removeAllButton",
                 type: "button",
                 className: "btn btn-default"
             },"Remove All")),React.createElement("h2",{},"All CCAs"),React.createElement(EntityTable,{
-                conn: APIConnection("/api/ccas")
+                conn: APIConnection("/api/ccas"),
+                entityEditor: CcaEditor,
+                deleteConfirmation: CcaDeleteConfirmation
             }));
+        },
+        componentDidMount: function() {
+            ($("#addButton")).on("click",function() {
+                return React.render(React.createElement(CcaEditor,{}),getModalWrapper());
+            });
+            return ($("#removeAllButton")).on("click",function() {
+                return React.render(React.createElement(ActionModal,{
+                    title: "Deleting All CCAs",
+                    actionButtonLabel: "Yes, Delete All",
+                    actionButtonStyle: "danger",
+                    next: function(hideModal) {
+                        return $.ajax("/api/ccas",{
+                            type: "DELETE",
+                            complete: hideModal
+                        });
+                    }
+                },React.createElement("p",{},"Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information.")),getModalWrapper());
+            });
         }
     },{
         render: function() {
@@ -383,7 +552,7 @@ $(function() {
                 React.render(React.createElement(Modal,{
                     canClose: 0,
                     title: "Browser Unsupported"
-                },React.createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),($("#modal-wrapper")).get(0)) :
+                },React.createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),getModalWrapper()) :
                 React.render(React.createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
         }
     },{
