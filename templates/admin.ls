@@ -8,28 +8,35 @@
 ;; the displayName will be attached at runtime...
 (macro fn (args rest...)
        (function ~args ~rest...))
-(macro defn (name args rest...)
+(macro defun (name args rest...)
        (var ~name (fn ~args ~rest...)))
 (macro obj (rest...)
        (object ~rest...))
-(macro e (name attrs rest...)
-       (React.createElement ~name (obj ~@attrs) ~rest...))
-(macro defcomponent (name rest...)
-       (var ~name (React.createClass (_.defaults (obj ~rest...) (obj render (fn () false)) (_.invert (obj ~name "displayName"))))))
+(macro defvar (name value) (var ~name ~value))
 
 ($
  (fn ()
 
+   ;; Aliases to help minification and macros to save typing.
+   (defvar React_createElement React.createElement)
+   (defvar React_createClass React.createClass)
+   (macro e (name attrs rest...)
+          (React_createElement ~name (obj ~@attrs) ~rest...))
+   (macro defcomponent (name rest...)
+          (var ~name (React_createClass (_.defaults (obj ~rest...)
+                                                    (obj render (fn () false))
+                                                    (_.invert (obj ~name "displayName"))))))
+
    ;; An APIConnection is a wrapper around WebSocket.
-   (defn APIConnection (pathname)
-     (var wsUrl
-          (+ (+ (if (= window.location.protocol "https:") "wss://" "ws://")
-                window.location.host)
-             pathname)
-          conn null
-          callback null
-          timeConnected null)
-     (defn connect ()
+   (defun APIConnection (pathname)
+     (defvar wsUrl
+       (+ (+ (if (= window.location.protocol "https:") "wss://" "ws://")
+             window.location.host)
+          pathname))
+     (defvar conn null)
+     (defvar callback null)
+     (defvar timeConnected null)
+     (defun connect ()
        (if (> (- (Date.now) timeConnected) 2000)
          (do
            (set conn (new WebSocket wsUrl))
@@ -56,13 +63,13 @@
    (defcomponent EntityRow
      render
      (fn ()
-       (var that this)
-       (var dataSpec (.dataSpec (get window.location.pathname pageSpec)))
-       (var firstCell (if (&& (! (null? dataSpec.categoryColumn))
-                              this.props.firstRowSpan)
-                        (e "td" (rowSpan this.props.firstRowSpan)
-                          (get (get 0 dataSpec.categoryColumn) this.props.entity))
-                        null))
+       (defvar that this)
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar firstCell (if (&& (! (null? dataSpec.categoryColumn))
+                                 this.props.firstRowSpan)
+                           (e "td" (rowSpan this.props.firstRowSpan)
+                             (get (get 0 dataSpec.categoryColumn) this.props.entity))
+                           null))
        (e "tr" ()
          firstCell
          (_.map dataSpec.columns
@@ -76,7 +83,7 @@
                (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
 
    ;; An EntityCategory is a group of data shared under a category,
-   ;; presented as a rowspan.
+   ;; presented as a tbody with a single cell spanning all of them.
    (defcomponent EntityCategory
      render
      (fn ()
@@ -89,61 +96,78 @@
    ;; An EntityTable is the entire table for holding the data. It
    ;; receives events from the two action buttons on each row.
    (defcomponent EntityTable
+
+     ;; Assume no data for initial state.
      getInitialState
      (fn () (obj tableData (obj data (array))))
+
+     ;; When mounted, add event handlers.
      componentDidMount
      (fn ()
-       (var that this)
+       (defvar that this)
        (this.props.conn.registerCallback
         (fn (e)
           (that.setState (obj tableData (JSON.parse e.data)))))
        (-> ($ (this.getDOMNode))
            (.on "click" "button[data-action=\"edit\"]"
                 (fn ()
-                  (var entityid (-> ($ this) (.data "entityid")))
-                  (var entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
+                  (defvar entityid (-> ($ this) (.data "entityid")))
+                  (defvar entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
                   (React.render
-                   (e that.props.entityEditor (editing entity))
+                   (e that.props.entityEditor (entity entity))
                    (getModalWrapper))))
            (.on "click" "button[data-action=\"delete\"]"
                 (fn ()
                   (React.render
-                   (e that.props.deleteConfirmation (deleting (-> ($ this) (.data "entityid"))))
+                   (e that.props.deleteConfirmation (entityid (-> ($ this) (.data "entityid"))))
                    (getModalWrapper))))))
+
+     ;; Close connection when unmounted. This is paranoia because
+     ;; currently there is no event to unmount them.
      componentWillUnmount
      (fn () (this.props.conn.close))
+
+     ;; Now we need to group the data according to the requirements
+     ;; outlined in the dataSpec (a.k.a. massage) and then render
+     ;; them. The massaging process has type [Object] -> [[Object]].
+     ;; [[Object]].
      render
      (fn ()
-       ;; Now we need to group the data according to the requirements
-       ;; outlined in the dataSpec. The process has type [Object] ->
-       ;; [[Object]].
-       (var dataSpec (.dataSpec (get window.location.pathname pageSpec)))
-       (var rawData this.state.tableData.data)
-       (var rows (if (null? dataSpec.categoryColumn)
-                   (do ; no category column, one row per entry without using EntityCategory
-                       (var sortName (get 0 (get 0 dataSpec.columns)))
-                       (var massagedData (_.sortBy rawData sortName))
-                     (e "tbody" ()
-                       (_.map massagedData
-                              (fn (entity)
-                                (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
-                   (do ; there is a category column, so group by that first
-                       (var categoryName (get 0 dataSpec.categoryColumn))
-                       (var sortName (get 0 (get 0 dataSpec.columns)))
-                     ;; groupBy :: (Eq b, Show b) => [a] -> (a -> b) -> {[a]}
-                     ;; map :: {v} -> (v -> String -> a) -> [a]
-                     ;; sortBy :: [{a}] -> String -> [{a}]
-                     (var massagedData (_.map (_.sortBy (_.map (_.groupBy rawData categoryName)
-                                                               (fn (v k) (obj k k v (_.sortBy v sortName))))
-                                                        "k")
-                                              (fn (d) (.v d))))
-                     (_.map massagedData
-                            (fn (entities)
-                              (e EntityCategory (entities entities key (.category (get 0 entities)))))))))
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar rawData this.state.tableData.data)
+       (defvar rows (if (null? dataSpec.categoryColumn)
+                      (do ; no category column, one row per entry without
+                                        ; using EntityCategory
+                        (defvar sortName (get 0 (get 0 dataSpec.columns)))
+                        (defvar massagedData (_.sortBy rawData sortName))
+                        (e "tbody" ()
+                          (_.map massagedData
+                                 (fn (entity)
+                                   (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
+                      (do ; there is a category column, so group by that
+                                        ; first
+                        (defvar categoryName (get 0 dataSpec.categoryColumn))
+                        (defvar sortName (get 0 (get 0 dataSpec.columns)))
 
-       (var headers (_.map (-> (if (null? dataSpec.categoryColumn) (array) (array (get 2 dataSpec.categoryColumn)))
-                               (.concat (_.map dataSpec.columns (fn (v) (get 2 v)))))
-                           (fn (label idx) (e "th" (key idx) label))))
+                        ;; This is dense, so a reminder of the types:
+                        ;; groupBy :: (Eq b, Show b) => [a] -> (a -> b) -> {[a]}
+                        ;; map :: {v} -> (v -> String -> a) -> [a]
+                        ;; sortBy :: [{a}] -> String -> [{a}]
+                        (defvar massagedData
+                          (_.map (_.sortBy (_.map (_.groupBy rawData categoryName)
+                                                  (fn (v k) (obj k k v (_.sortBy v sortName))))
+                                           "k")
+                                 (fn (d) (.v d))))
+                        (_.map massagedData
+                               (fn (entities)
+                                 (defvar category (.category (get 0 entities)))
+                                 (e EntityCategory (entities entities key category)))))))
+
+       (defvar headers (_.map (-> (if (null? dataSpec.categoryColumn)
+                                    (array)
+                                    (array (get 2 dataSpec.categoryColumn)))
+                                  (.concat (_.map dataSpec.columns (fn (v) (get 2 v)))))
+                              (fn (label idx) (e "th" (key idx) label))))
        (e "div" (className "table-responsive")
          (e "table" (className "table")
            (e "thead" ()
@@ -152,73 +176,85 @@
                (e "th" ())))
            rows))))
 
+   ;; The Modal dialog that takes control of input and needs to be
+   ;; dealt with before the rest of the page is functional.
    (defcomponent Modal
+     ;; Modal rendering.
      render
      (fn ()
-       (var header
-            (e "div" (className "modal-header")
-              (if this.props.canClose
-                (e "button" (type "button" className "close" "data-dismiss" "modal")
-                  (e "span" ("aria-hidden" "true") "×")
-                  (e "span" (className "sr-only") "Close"))
-                "")
-              (e "h4" (className "modal-title") this.props.title)))
-       (var footer
-            (if this.props.buttons
-              (e "div" (className "modal-footer") this.props.buttons)
-              ""))
+       (defvar header
+         (e "div" (className "modal-header")
+           (if this.props.canClose
+             (e "button" (type "button" className "close" "data-dismiss" "modal")
+               (e "span" ("aria-hidden" "true") "×")
+               (e "span" (className "sr-only") "Close"))
+             "")
+           (e "h4" (className "modal-title") this.props.title)))
+       (defvar footer
+         (if this.props.buttons
+           (e "div" (className "modal-footer") this.props.buttons)
+           ""))
        (e "div" (id "modal" className "modal fade")
          (e "div" (className "modal-dialog")
            (e "div" (className "modal-content")
              header
              (e "div" (className "modal-body") this.props.children)
              footer))))
-     componentDidMount
-     (fn ()
-       (-> ($ (this.getDOMNode))
-           (.modal (obj keyboard false backdrop "static"))))
-     componentDidUpdate
-     (fn ()
-       (-> ($ (this.getDOMNode))
-           (.modal (obj keyboard false backdrop "static")))))
 
-   (defn getModalWrapper () (-> ($ "#modal-wrapper") (.get 0)))
+     ;; When it is mounted or updated, it needs to be shown.
+     componentDidMount (fn ()
+                         (-> ($ (this.getDOMNode))
+                             (.modal (obj keyboard false backdrop "static"))))
+     componentDidUpdate (fn ()
+                          (-> ($ (this.getDOMNode))
+                              (.modal (obj keyboard false backdrop "static")))))
 
+   ;; The target for rendering the Modal.
+   (defun getModalWrapper () (-> ($ "#modal-wrapper") (.get 0)))
+
+   ;; An action modal, with custom content, a Cancel button and an
+   ;; action button.
    (defcomponent ActionModal
      render
      (fn ()
-       (e Modal (canClose 1 title this.props.title buttons (e "div" ()
-                                                             (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
-                                                             (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel)))
+       (defvar buttons
+         (e "div" ()
+           (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
+           (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel)))
+       (e Modal (canClose 1 title this.props.title buttons buttons)
          this.props.children))
+
+     ;; Register click handler.
      componentDidMount
      (fn ()
-       (var that this)
+       (defvar that this)
        (-> ($ "#actionButton")
            (.on "click" (fn (e)
                           (e.preventDefault)
                           (that.props.next (fn () (-> ($ "#modal") (.modal "hide")))))))))
 
+   ;; The CCA editor control.
    (defcomponent CcaEditor
      render
      (fn ()
-       (var title (if this.props.editing "Edit CCA" "Add a new CCA"))
-       (var actionButtonLabel (if this.props.editing "Edit" "Add"))
-       (var endpoint (if this.props.editing (+ "/api/ccas/" this.props.editing.id) "/api/ccas"))
-       (var method (if this.props.editing "PUT" "POST"))
+       (defvar title (if this.props.entity "Edit CCA" "Add a new CCA"))
+       (defvar actionButtonLabel (if this.props.entity "Edit" "Add"))
+       (defvar endpoint (if this.props.entity (+ "/api/ccas/" this.props.entity.id) "/api/ccas"))
+       (defvar method (if this.props.entity "PUT" "POST"))
+       (defun next (hideModal)
+         ($.ajax endpoint (obj type method
+                               data (-> ($ "#ccaEditorForm") (.serialize))
+                               complete hideModal)))
        (e "form" (id "ccaEditorForm" role "form")
-         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit"
-                               next (fn (hideModal)
-                                      ($.ajax endpoint (obj type method
-                                                               data (-> ($ "#ccaEditorForm") (.serialize))
-                                                               complete hideModal))))
+         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" next next)
            (e "div" (className "form-group")
              (e "label" (htmlFor "name") "Name")
-             (e "input" (type "text" className "form-control" id "name" name "name" placeholder "CCA Name" defaultValue (if this.props.editing this.props.editing.name ""))))
+             (e "input" (type "text" className "form-control" name "name" placeholder "CCA Name" defaultValue (if this.props.entity this.props.entity.name ""))))
            (e "div" (className "form-group")
              (e "label" (htmlFor "category") "Category")
-             (e "input" (type "text" className "form-control" id "category" name "category" placeholder "CCA Category" defaultValue (if this.props.editing this.props.editing.category ""))))))))
+             (e "input" (type "text" className "form-control" name "category" placeholder "CCA Category" defaultValue (if this.props.entity this.props.entity.category ""))))))))
 
+   ;; The Admin console homepage.
    (defcomponent AdminHomeR
      render
      (fn ()
@@ -231,16 +267,18 @@
            (e "h2" () "API Documentation")
            (e "p" () "If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")))))
 
+   ;; The admin console CCA page.
    (defcomponent AdminCcasR
      render
      (fn ()
        (defcomponent CcaDeleteConfirmation
          render
          (fn ()
-           (var that this)
+           (defvar that this)
+           (defun next (hideModal)
+             ($.ajax (+ "/api/ccas/" that.props.entityid) (obj type "DELETE" complete hideModal)))
            (e ActionModal
-             (title "Delete This CCA" actionButtonLabel "Delete It" actionButtonStyle "danger"
-              next (fn (hideModal) ($.ajax (+ "/api/ccas/" that.props.deleting) (obj type "DELETE" complete hideModal))))
+               (title "Delete This CCA" actionButtonLabel "Delete It" actionButtonStyle "danger" next next)
              (e "p" () "Are you sure want to delete this CCA from the database?"))))
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
@@ -248,20 +286,23 @@
            (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
          (e "h2" () "All CCAs")
          (e EntityTable (conn (APIConnection "/api/ccas") entityEditor CcaEditor deleteConfirmation CcaDeleteConfirmation))))
+
      componentDidMount
      (fn ()
        (-> ($ "#addButton")
-           (.on "click" (fn ()
-                          (React.render
-                           (e CcaEditor ())
-                           (getModalWrapper)))))
+           (.on "click"
+                (fn ()
+                  (React.render
+                   (e CcaEditor ())
+                   (getModalWrapper)))))
        (-> ($ "#removeAllButton")
-           (.on "click" (fn ()
-                          (React.render
-                           (e ActionModal
-                             (title "Deleting All CCAs" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/ccas" (obj type "DELETE" complete hideModal))))
-                             (e "p" () "Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information."))
-                           (getModalWrapper)))))
+           (.on "click"
+                (fn ()
+                  (React.render
+                   (e ActionModal
+                       (title "Deleting All CCAs" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/ccas" (obj type "DELETE" complete hideModal))))
+                     (e "p" () "Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information."))
+                   (getModalWrapper)))))
        ))
 
    (defcomponent AdminSubjectsR)
@@ -270,36 +311,37 @@
 
    (defcomponent AdminStudentsR)
 
-   (var pageSpec (obj "/admin" (obj pageName "Home"
-                                    component AdminHomeR
-                                    dataSpec null)
-                      "/admin/ccas" (obj pageName "Manage CCAs"
-                                         component AdminCcasR
-                                         dataSpec (obj categoryColumn (array "category" _.identity "CCA Category")
-                                                       columns (array (array "name" _.identity "CCA Name"))))
-                      "/admin/subjects" (obj pageName "Manage Subjects"
-                                             component AdminSubjectsR
-                                             dataSpec (obj categoryColumn null
-                                                           columns (array (array "code" _.identity "Subject Code")
-                                                                          (array "level" _.identity "Applies To")
-                                                                          (array "is_science" _.identity "Science Subject?")
-                                                                          (array "name" _.identity "Subject Name"))))
-                      "/admin/teachers" (obj pageName "Manage Teachers"
-                                             component AdminTeachersR
-                                             dataSpec null)
-                      "/admin/students" (obj pageName "Manage Students"
-                                             component AdminStudentsR
-                                             dataSpec null)))
+   (defvar pageSpec (obj "/admin" (obj pageName "Home"
+                                       component AdminHomeR
+                                       dataSpec null)
+                         "/admin/ccas" (obj pageName "Manage CCAs"
+                                            component AdminCcasR
+                                            dataSpec (obj categoryColumn (array "category" _.identity "CCA Category")
+                                                          columns (array (array "name" _.identity "CCA Name"))))
+                         "/admin/subjects" (obj pageName "Manage Subjects"
+                                                component AdminSubjectsR
+                                                dataSpec (obj categoryColumn null
+                                                              columns (array (array "code" _.identity "Subject Code")
+                                                                             (array "level" _.identity "Applies To")
+                                                                             (array "is_science" _.identity "Science Subject?")
+                                                                             (array "name" _.identity "Subject Name"))))
+                         "/admin/teachers" (obj pageName "Manage Teachers"
+                                                component AdminTeachersR
+                                                dataSpec null)
+                         "/admin/students" (obj pageName "Manage Students"
+                                                component AdminStudentsR
+                                                dataSpec null)))
 
    (defcomponent Page
      render
      (fn ()
-       (var pathname window.location.pathname)
-       (var tabs (_.map pageSpec (fn (page route)
-                                   (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
-                                     (e "a" (href (if (= route pathname) "#" route))
-                                       (.pageName page))))))
-
+       (defvar pathname window.location.pathname)
+       (defvar tabs
+         (_.map pageSpec
+                (fn (page route)
+                  (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
+                    (e "a" (href (if (= route pathname) "#" route))
+                      (.pageName page))))))
        (e "div" (id "content-wrapper")
          (e "div" (id "modal-wrapper"))
          (e "div" (className "container")
@@ -312,7 +354,7 @@
            (e "div" (id "main-content")))))
      componentDidMount
      (fn ()
-       (var pathname window.location.pathname)
+       (defvar pathname window.location.pathname)
        (if (undefined? window.WebSocket)
          (React.render
           (e Modal (canClose 0 title "Browser Unsupported")
@@ -331,5 +373,5 @@
 ;;; eval: (put 'e 'lisp-indent-function 2)
 ;;; eval: (put 'if 'lisp-indent-function 1)
 ;;; eval: (put 'do 'lisp-indent-function 0)
-;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls")))
+;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls") (shell-command "/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar ../../scratch/closure-compiler/compiler.jar --compilation_level SIMPLE_OPTIMIZATIONS --language_in ECMASCRIPT5_STRICT --js admin.js > admin.min.js")) nil t)
 ;;; End:
