@@ -210,6 +210,7 @@ $(function() {
                 React_createElement("button",{
                     type: "button",
                     className: "close",
+                    id: "modalClose",
                     "data-dismiss": "modal"
                 },React_createElement("span",{
                     "aria-hidden": "true"
@@ -259,7 +260,9 @@ $(function() {
     };
     var ActionModal = React_createClass(_.defaults({
         render: function() {
-            var buttons = React_createElement("div",{},React_createElement("button",{
+            var buttons = React_createElement("div",{
+                id: "actionModalButtons"
+            },React_createElement("button",{
                 type: "button",
                 className: "btn btn-default",
                 "data-dismiss": "modal"
@@ -278,6 +281,8 @@ $(function() {
             var that = this;
             return ($("#actionButton")).on("click",function(e) {
                 e.preventDefault();
+                (($("#actionModalButtons")).empty()).append("<img width=16 height=16 src=/static/res/loading.gif />");
+                ($("#modalClose")).remove();
                 return that.props.next(function() {
                     return ($("#modal")).modal("hide");
                 });

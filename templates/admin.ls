@@ -185,7 +185,7 @@
        (defvar header
          (e "div" (className "modal-header")
            (if this.props.canClose
-             (e "button" (type "button" className "close" "data-dismiss" "modal")
+             (e "button" (type "button" className "close" id "modalClose" "data-dismiss" "modal")
                (e "span" ("aria-hidden" "true") "×")
                (e "span" (className "sr-only") "Close"))
              "")
@@ -218,7 +218,7 @@
      render
      (fn ()
        (defvar buttons
-         (e "div" ()
+         (e "div" (id "actionModalButtons")
            (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
            (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel)))
        (e Modal (canClose 1 title this.props.title buttons buttons)
@@ -231,6 +231,11 @@
        (-> ($ "#actionButton")
            (.on "click" (fn (e)
                           (e.preventDefault)
+                          (-> ($ "#actionModalButtons")
+                              (.empty)
+                              (.append "<img width=16 height=16 src=/static/res/loading.gif />"))
+                          (-> ($ "#modalClose")
+                              (.remove))
                           (that.props.next (fn () (-> ($ "#modal") (.modal "hide")))))))))
 
    ;; The CCA editor control.
