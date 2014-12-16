@@ -26,19 +26,22 @@
           (+ (+ (if (= window.location.protocol "https:") "wss://" "ws://")
                 window.location.host)
              pathname)
-          connAttempts 0
           conn null
-          callback null)
-     (defn retry ()
-       (when (< ++connAttempts 10)
-         (set conn (new WebSocket wsUrl))
-         (set conn.onmessage callback)
-         (set conn.onerror (fn ()
-                             (console.log "WS connection errored; how?")
-                             (retry)))
-         (set conn.onclose (fn ()
-                             (console.log "WS connection closed; why?")))))
-     (retry)
+          callback null
+          timeConnected null)
+     (defn connect ()
+       (if (> (- (Date.now) timeConnected) 2000)
+         (do
+           (set conn (new WebSocket wsUrl))
+           (set conn.onopen (fn () (set timeConnected (Date.now))))
+           (set conn.onmessage callback)
+           (set conn.onerror (fn ()
+                               (console.log "WS connection errored; how?")
+                               (connect)))
+           (set conn.onclose (fn ()
+                               (console.log "WS connection closed; why?"))))
+         (setTimeout connect (- (Date.now) timeConnected))))
+     (connect)
      (-> ($ window) (.on "beforeunload" (fn () (conn.close))))
      (obj
       registerCallback (fn (func)
@@ -327,5 +330,6 @@
 ;;; eval: (put 'fn 'lisp-indent-function 'defun)
 ;;; eval: (put 'e 'lisp-indent-function 2)
 ;;; eval: (put 'if 'lisp-indent-function 1)
+;;; eval: (put 'do 'lisp-indent-function 0)
 ;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls")))
 ;;; End:

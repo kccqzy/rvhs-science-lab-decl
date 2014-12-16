@@ -5,25 +5,28 @@ $(function() {
         var wsUrl = ((((window.location.protocol === "https:") ?
                 "wss://" :
                 "ws://") + window.location.host) + pathname),
-            connAttempts = 0,
             conn = null,
-            callback = null;
-        var retry = function() {
-            return ((++connAttempts < 10) ?
+            callback = null,
+            timeConnected = null;
+        var connect = function() {
+            return (((Date.now() - timeConnected) > 2000) ?
                 (function() {
                     conn = new WebSocket(wsUrl);
+                    conn.onopen = function() {
+                        timeConnected = Date.now();
+                    };
                     conn.onmessage = callback;
                     conn.onerror = function() {
                         console.log("WS connection errored; how?");
-                        return retry();
+                        return connect();
                     };
                     conn.onclose = function() {
                         return console.log("WS connection closed; why?");
                     };
                 })() :
-                undefined);
+                setTimeout(connect,(Date.now() - timeConnected)));
         };
-        retry();
+        connect();
         ($(window)).on("beforeunload",function() {
             return conn.close();
         });
