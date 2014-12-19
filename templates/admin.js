@@ -48,18 +48,24 @@ $(function() {
         };
     };
     var EntityRow = React_createClass(_.defaults({
+        propTypes: {
+            firstRowSpan: React.PropTypes.number.isRequired,
+            entity: React.PropTypes.object.isRequired
+        },
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var firstCell = (((!(dataSpec.categoryColumn === null)) && this.props.firstRowSpan) ?
                 React_createElement("td",{
                     rowSpan: this.props.firstRowSpan
-                },this.props.entity[dataSpec.categoryColumn[0]]) :
+                },dataSpec.categoryColumn[1](this.props.entity[dataSpec.categoryColumn[0]])) :
                 null);
             return React_createElement("tr",{},firstCell,_.map(dataSpec.columns,function(spec,idx) {
+                var value = that.props.entity[spec[0]];
+                var mapper = spec[1];
                 return React_createElement("td",{
                     key: idx
-                },that.props.entity[spec[0]]);
+                },mapper(value));
             }),React_createElement("td",{
                 className: "text-right"
             },React_createElement("div",{
@@ -94,6 +100,9 @@ $(function() {
         EntityRow: "displayName"
     })));
     var EntityCategory = React_createClass(_.defaults({
+        propTypes: {
+            entities: React.PropTypes.array.isRequired
+        },
         render: function() {
             return React_createElement("tbody",{},_.map(this.props.entities,function(entity,i,entities) {
                 return React_createElement(EntityRow,{
@@ -113,6 +122,11 @@ $(function() {
         EntityCategory: "displayName"
     })));
     var EntityTable = React_createClass(_.defaults({
+        propTypes: {
+            conn: React.PropTypes.object.isRequired,
+            entityEditor: React.PropTypes.any.isRequired,
+            deleteConfirmation: React.PropTypes.any.isRequired
+        },
         getInitialState: function() {
             return {
                 tableData: {
@@ -136,8 +150,12 @@ $(function() {
                     entity: entity
                 }),getModalWrapper());
             })).on("click","button[data-action=\"delete\"]",function() {
+                var entityid = ($(this)).data("entityid");
+                var entity = _.find(that.state.tableData.data,function(d) {
+                    return (d.id === entityid);
+                });
                 return React.render(React_createElement(that.props.deleteConfirmation,{
-                    entityid: ($(this)).data("entityid")
+                    entity: entity
                 }),getModalWrapper());
             });
         },
@@ -171,7 +189,7 @@ $(function() {
                         return (d).v;
                     });
                     return _.map(massagedData,function(entities) {
-                        var category = (entities[0]).category;
+                        var category = entities[0][categoryName];
                         return React_createElement(EntityCategory,{
                             entities: entities,
                             key: category
@@ -203,6 +221,12 @@ $(function() {
         EntityTable: "displayName"
     })));
     var Modal = React_createClass(_.defaults({
+        propTypes: {
+            canClose: React.PropTypes.bool.isRequired,
+            title: React.PropTypes.node.isRequired,
+            buttons: React.PropTypes.node,
+            children: React.PropTypes.node.isRequired
+        },
         render: function() {
             var header = React_createElement("div",{
                 className: "modal-header"
@@ -237,13 +261,9 @@ $(function() {
             },this.props.children),footer)));
         },
         componentDidMount: function() {
-            return ($(this.getDOMNode())).modal({
-                keyboard: false,
-                backdrop: "static"
-            });
-        },
-        componentDidUpdate: function() {
-            return ($(this.getDOMNode())).modal({
+            return (($(this.getDOMNode())).on("hidden.bs.modal",function() {
+                return React.unmountComponentAtNode(getModalWrapper());
+            })).modal({
                 keyboard: false,
                 backdrop: "static"
             });
@@ -259,9 +279,35 @@ $(function() {
         return ($("#modal-wrapper")).get(0);
     };
     var ActionModal = React_createClass(_.defaults({
+        propTypes: {
+            actionButtonType: React.PropTypes.string,
+            actionButtonStyle: React.PropTypes.string.isRequired,
+            actionButtonLabel: React.PropTypes.node.isRequired,
+            title: React.PropTypes.node.isRequired,
+            children: React.PropTypes.node.isRequired,
+            next: React.PropTypes.func.isRequired
+        },
+        getInitialState: function() {
+            return {
+                spinner: 0
+            };
+        },
         render: function() {
-            var buttons = React_createElement("div",{
-                id: "actionModalButtons"
+            var buttons = React_createElement("div",{},React_createElement("img",{
+                width: 16,
+                height: 16,
+                src: "/static/res/loading.gif",
+                style: {
+                    display: (this.state.spinner ?
+                        "inline" :
+                        "none")
+                }
+            }),React_createElement("div",{
+                style: {
+                    display: (this.state.spinner ?
+                        "none" :
+                        "block")
+                }
             },React_createElement("button",{
                 type: "button",
                 className: "btn btn-default",
@@ -270,22 +316,25 @@ $(function() {
                 type: (this.props.actionButtonType || "button"),
                 className: ("btn btn-" + this.props.actionButtonStyle),
                 id: "actionButton"
-            },this.props.actionButtonLabel));
+            },this.props.actionButtonLabel)));
             return React_createElement(Modal,{
-                canClose: 1,
+                canClose: true,
                 title: this.props.title,
                 buttons: buttons
             },this.props.children);
         },
         componentDidMount: function() {
             var that = this;
+            var setSpinner = function(v) {
+                return that.setState({
+                    spinner: v
+                });
+            };
             return ($("#actionButton")).on("click",function(e) {
                 e.preventDefault();
-                (($("#actionModalButtons")).empty()).append("<img width=16 height=16 src=/static/res/loading.gif />");
-                ($("#modalClose")).remove();
                 return that.props.next(function() {
                     return ($("#modal")).modal("hide");
-                });
+                },setSpinner);
             });
         }
     },{
@@ -295,29 +344,56 @@ $(function() {
     },_.invert({
         ActionModal: "displayName"
     })));
-    var CcaEditor = React_createClass(_.defaults({
+    var RecordEditor = React_createClass(_.defaults({
+        propTypes: {
+            entityTypeHumanName: React.PropTypes.string.isRequired,
+            entityTypeMachineName: React.PropTypes.string.isRequired,
+            entity: React.PropTypes.object,
+            children: React.PropTypes.node.isRequired
+        },
+        getInitialState: function() {
+            return {
+                err: null
+            };
+        },
         render: function() {
+            var that = this;
+            var hname = this.props.entityTypeHumanName;
+            var mname = this.props.entityTypeMachineName;
             var title = (this.props.entity ?
-                "Edit CCA" :
-                "Add a new CCA");
+                ("Edit " + hname) :
+                ("Add a new " + hname));
             var actionButtonLabel = (this.props.entity ?
                 "Edit" :
                 "Add");
             var endpoint = (this.props.entity ?
-                ("/api/ccas/" + this.props.entity.id) :
-                "/api/ccas");
+                ((("/api/" + mname) + "/") + this.props.entity.id) :
+                ("/api/" + mname));
             var method = (this.props.entity ?
                 "PUT" :
                 "POST");
-            var next = function(hideModal) {
+            var onError = function(jqxhr) {
+                var resp = JSON.parse(jqxhr.responseText);
+                return that.setState({
+                    err: resp.meta.details
+                });
+            };
+            var next = function(hideModal,setSpinner) {
+                console.log(($("#editorForm")).serialize());
+                setSpinner(1);
                 return $.ajax(endpoint,{
                     type: method,
-                    data: ($("#ccaEditorForm")).serialize(),
-                    complete: hideModal
+                    data: ($("#editorForm")).serialize(),
+                    success: hideModal,
+                    error: function(jqxhr) {
+                        setSpinner(0);
+                        console.log("http error");
+                        return onError(jqxhr);
+                    }
                 });
             };
             return React_createElement("form",{
-                id: "ccaEditorForm",
+                id: "editorForm",
                 role: "form"
             },React_createElement(ActionModal,{
                 title: title,
@@ -325,15 +401,38 @@ $(function() {
                 actionButtonStyle: "primary",
                 actionButtonType: "submit",
                 next: next
+            },(this.state.err ?
+                React_createElement("div",{
+                    className: "alert alert-danger",
+                    role: "alert"
+                },this.state.err) :
+                null),this.props.children));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        RecordEditor: "displayName"
+    })));
+    var CcaEditor = React_createClass(_.defaults({
+        propTypes: {
+            entity: React.PropTypes.object
+        },
+        render: function() {
+            return React_createElement(RecordEditor,{
+                entity: this.props.entity,
+                entityTypeHumanName: "CCA",
+                entityTypeMachineName: "ccas"
             },React_createElement("div",{
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "name"
-            },"Name"),React_createElement("input",{
+            },"CCA Name"),React_createElement("input",{
                 type: "text",
                 className: "form-control",
                 name: "name",
-                placeholder: "CCA Name",
+                placeholder: "e.g. Infocomm Club",
                 defaultValue: (this.props.entity ?
                     this.props.entity.name :
                     "")
@@ -341,15 +440,15 @@ $(function() {
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "category"
-            },"Category"),React_createElement("input",{
+            },"CCA Category"),React_createElement("input",{
                 type: "text",
                 className: "form-control",
                 name: "category",
-                placeholder: "CCA Category",
+                placeholder: "e.g. Clubs and Societies",
                 defaultValue: (this.props.entity ?
                     this.props.entity.category :
                     "")
-            }))));
+            })));
         }
     },{
         render: function() {
@@ -357,6 +456,179 @@ $(function() {
         }
     },_.invert({
         CcaEditor: "displayName"
+    })));
+    var SubjectEditor = React_createClass(_.defaults({
+        propTypes: {
+            entity: React.PropTypes.object
+        },
+        getInitialState: function() {
+            return {
+                compulsory: ((!this.props.entity) ?
+                    false :
+                    (this.props.entity.code === null))
+            };
+        },
+        render: function() {
+            console.log(this.props.entity);
+            var that = this;
+            var compulsoryChanged = function(event) {
+                return that.setState({
+                    compulsory: event.target.checked
+                });
+            };
+            return React_createElement(RecordEditor,{
+                entity: this.props.entity,
+                entityTypeHumanName: "Subject",
+                entityTypeMachineName: "subjects"
+            },React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "name"
+            },"Subject Name"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "name",
+                placeholder: "e.g. Mathematics (H3)",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.name :
+                    "")
+            }),React_createElement("div",{
+                className: "checkbox"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "checkbox",
+                onChange: compulsoryChanged,
+                checked: this.state.compulsory
+            }),"This is a compulsory subject.")),React_createElement("div",{
+                className: "checkbox"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "checkbox",
+                name: "science",
+                defaultChecked: (this.props.entity ?
+                    this.props.entity.is_science :
+                    false)
+            }),"This is a science subject."))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "code"
+            },"Subject Code"),(this.state.compulsory ?
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    disabled: true,
+                    value: "",
+                    placeholder: "None"
+                }) :
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    name: "code",
+                    placeholder: "e.g. MA(H3)",
+                    defaultValue: (this.props.entity ?
+                        this.props.entity.code :
+                        "")
+                })),React_createElement("p",{
+                className: "help-block"
+            },"Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects.")),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "level"
+            },"Applies To"),React_createElement("div",{
+                className: "checkbox"
+            },_.map([
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ],function(lv) {
+                var checked = (that.props.entity ?
+                    (-1 !== _.indexOf(that.props.entity.level,lv)) :
+                    false);
+                return React_createElement("label",{
+                    key: lv,
+                    className: "checkbox-inline"
+                },React_createElement("input",{
+                    type: "checkbox",
+                    name: "level",
+                    value: lv,
+                    defaultChecked: checked
+                }),"Year ",lv);
+            }))),React_createElement("div",{
+                className: "checkbox"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "checkbox",
+                name: "force",
+                defaultChecked: false
+            }),"Force the operation to continue despite errors (not recommended).")));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        SubjectEditor: "displayName"
+    })));
+    var DeleteConfirmation = React_createClass(_.defaults({
+        propTypes: {
+            entityTypeHumanName: React.PropTypes.string.isRequired,
+            entityTypeMachineName: React.PropTypes.string.isRequired,
+            entity: React.PropTypes.object.isRequired
+        },
+        render: function() {
+            var hname = this.props.entityTypeHumanName;
+            var mname = this.props.entityTypeMachineName;
+            var endpoint = ((("/api/" + mname) + "/") + this.props.entity.id);
+            var next = function(hideModal) {
+                return $.ajax(endpoint,{
+                    type: "DELETE",
+                    complete: hideModal
+                });
+            };
+            var message = (((("Are you sure you want to delete the " + hname) + " “") + this.props.entity.name) + "” from the database?");
+            return React_createElement(ActionModal,{
+                title: ("Delete " + hname),
+                actionButtonLabel: "Delete",
+                actionButtonStyle: "danger",
+                next: next
+            },React_createElement("p",{},message));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        DeleteConfirmation: "displayName"
+    })));
+    var CcaDeleteConfirmation = React_createClass(_.defaults({
+        render: function() {
+            return React_createElement(DeleteConfirmation,{
+                entity: this.props.entity,
+                entityTypeHumanName: "CCA",
+                entityTypeMachineName: "ccas"
+            });
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        CcaDeleteConfirmation: "displayName"
+    })));
+    var SubjectDeleteConfirmation = React_createClass(_.defaults({
+        render: function() {
+            return React_createElement(DeleteConfirmation,{
+                entity: this.props.entity,
+                entityTypeHumanName: "Subject",
+                entityTypeMachineName: "subjects"
+            });
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        SubjectDeleteConfirmation: "displayName"
     })));
     var AdminHomeR = React_createClass(_.defaults({
         render: function() {
@@ -375,29 +647,6 @@ $(function() {
     })));
     var AdminCcasR = React_createClass(_.defaults({
         render: function() {
-            var CcaDeleteConfirmation = React_createClass(_.defaults({
-                render: function() {
-                    var that = this;
-                    var next = function(hideModal) {
-                        return $.ajax(("/api/ccas/" + that.props.entityid),{
-                            type: "DELETE",
-                            complete: hideModal
-                        });
-                    };
-                    return React_createElement(ActionModal,{
-                        title: "Delete This CCA",
-                        actionButtonLabel: "Delete It",
-                        actionButtonStyle: "danger",
-                        next: next
-                    },React_createElement("p",{},"Are you sure want to delete this CCA from the database?"));
-                }
-            },{
-                render: function() {
-                    return false;
-                }
-            },_.invert({
-                CcaDeleteConfirmation: "displayName"
-            })));
             return React_createElement("div",{},React_createElement("div",{
                 className: "pull-right btn-group",
                 role: "toolbar",
@@ -441,7 +690,45 @@ $(function() {
     },_.invert({
         AdminCcasR: "displayName"
     })));
-    var AdminSubjectsR = React_createClass(_.defaults({},{
+    var AdminSubjectsR = React_createClass(_.defaults({
+        render: function() {
+            return React_createElement("div",{},React_createElement("div",{
+                className: "pull-right btn-group",
+                role: "toolbar",
+                "aria-label": "Action Buttons"
+            },React_createElement("button",{
+                id: "addButton",
+                type: "button",
+                className: "btn btn-default"
+            },"Add New"),React_createElement("button",{
+                id: "removeAllButton",
+                type: "button",
+                className: "btn btn-default"
+            },"Remove All")),React_createElement("h2",{},"All Subjects"),React_createElement(EntityTable,{
+                conn: APIConnection("/api/subjects"),
+                entityEditor: SubjectEditor,
+                deleteConfirmation: SubjectDeleteConfirmation
+            }));
+        },
+        componentDidMount: function() {
+            ($("#addButton")).on("click",function() {
+                return React.render(React_createElement(SubjectEditor,{}),getModalWrapper());
+            });
+            return ($("#removeAllButton")).on("click",function() {
+                return React.render(React_createElement(ActionModal,{
+                    title: "Deleting All Subjects",
+                    actionButtonLabel: "Yes, Delete All",
+                    actionButtonStyle: "danger",
+                    next: function(hideModal) {
+                        return $.ajax("/api/subjects",{
+                            type: "DELETE",
+                            complete: hideModal
+                        });
+                    }
+                },React_createElement("p",{},"Are you sure you want to delete all subjects currently stored in the database? This will also delete all students’ subject information.")),getModalWrapper());
+            });
+        }
+    },{
         render: function() {
             return false;
         }
@@ -490,27 +777,38 @@ $(function() {
             pageName: "Manage Subjects",
             component: AdminSubjectsR,
             dataSpec: {
-                categoryColumn: null,
+                categoryColumn: [
+                    "level",
+                    function(ls) {
+                        return (_.map(ls,function(l) {
+                            return ("Year " + l);
+                        })).join(", ");
+                    },
+                    "Applies To"
+                ],
                 columns: [
-                    [
-                        "code",
-                        _.identity,
-                        "Subject Code"
-                    ],
-                    [
-                        "level",
-                        _.identity,
-                        "Applies To"
-                    ],
-                    [
-                        "is_science",
-                        _.identity,
-                        "Science Subject?"
-                    ],
                     [
                         "name",
                         _.identity,
                         "Subject Name"
+                    ],
+                    [
+                        "code",
+                        function(v) {
+                            return (v ?
+                                React_createElement("code",{},v) :
+                                React_createElement("i",{},"(None; Compulsory Subject)"));
+                        },
+                        "Subject Code"
+                    ],
+                    [
+                        "is_science",
+                        function(b) {
+                            return (b ?
+                                "Yes" :
+                                "No");
+                        },
+                        "Science Subject?"
                     ]
                 ]
             }
@@ -562,7 +860,7 @@ $(function() {
             var pathname = window.location.pathname;
             return ((typeof(window.WebSocket) === "undefined") ?
                 React.render(React_createElement(Modal,{
-                    canClose: 0,
+                    canClose: false,
                     title: "Browser Unsupported"
                 },React_createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),getModalWrapper()) :
                 React.render(React_createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));

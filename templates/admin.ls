@@ -61,6 +61,11 @@
    ;; An EntityRow is a row of data in the table. Each row also has
    ;; two action buttons.
    (defcomponent EntityRow
+     propTypes
+     (obj
+      firstRowSpan React.PropTypes.number.isRequired
+      entity React.PropTypes.object.isRequired)
+
      render
      (fn ()
        (defvar that this)
@@ -68,13 +73,15 @@
        (defvar firstCell (if (&& (! (null? dataSpec.categoryColumn))
                                  this.props.firstRowSpan)
                            (e "td" (rowSpan this.props.firstRowSpan)
-                             (get (get 0 dataSpec.categoryColumn) this.props.entity))
+                             ((get 1 dataSpec.categoryColumn) (get (get 0 dataSpec.categoryColumn) this.props.entity)))
                            null))
        (e "tr" ()
          firstCell
          (_.map dataSpec.columns
                 (fn (spec idx)
-                  (e "td" (key idx) (get (get 0 spec) that.props.entity))))
+                  (defvar value (get (get 0 spec) that.props.entity))
+                  (defvar mapper (get 1 spec))
+                  (e "td" (key idx) (mapper value))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
              (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" "data-action" "edit" "data-entityid" this.props.entity.id)
@@ -85,6 +92,9 @@
    ;; An EntityCategory is a group of data shared under a category,
    ;; presented as a tbody with a single cell spanning all of them.
    (defcomponent EntityCategory
+     propTypes
+     (obj
+      entities React.PropTypes.array.isRequired)
      render
      (fn ()
        (e "tbody" ()
@@ -96,6 +106,11 @@
    ;; An EntityTable is the entire table for holding the data. It
    ;; receives events from the two action buttons on each row.
    (defcomponent EntityTable
+     propTypes
+     (obj
+      conn React.PropTypes.object.isRequired
+      entityEditor React.PropTypes.any.isRequired  ; we actually expect a React class here
+      deleteConfirmation React.PropTypes.any.isRequired)
 
      ;; Assume no data for initial state.
      getInitialState
@@ -118,8 +133,10 @@
                    (getModalWrapper))))
            (.on "click" "button[data-action=\"delete\"]"
                 (fn ()
+                  (defvar entityid (-> ($ this) (.data "entityid")))
+                  (defvar entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
                   (React.render
-                   (e that.props.deleteConfirmation (entityid (-> ($ this) (.data "entityid"))))
+                   (e that.props.deleteConfirmation (entity entity))
                    (getModalWrapper))))))
 
      ;; Close connection when unmounted. This is paranoia because
@@ -136,16 +153,16 @@
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
        (defvar rawData this.state.tableData.data)
        (defvar rows (if (null? dataSpec.categoryColumn)
-                      (do ; no category column, one row per entry without
-                                        ; using EntityCategory
+                      (do ; no category column, one row per entry
+                          ; without using EntityCategory
                         (defvar sortName (get 0 (get 0 dataSpec.columns)))
                         (defvar massagedData (_.sortBy rawData sortName))
                         (e "tbody" ()
                           (_.map massagedData
                                  (fn (entity)
                                    (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
-                      (do ; there is a category column, so group by that
-                                        ; first
+                      (do ; there is a category column, so group by
+                          ; that first
                         (defvar categoryName (get 0 dataSpec.categoryColumn))
                         (defvar sortName (get 0 (get 0 dataSpec.columns)))
 
@@ -160,7 +177,7 @@
                                  (fn (d) (.v d))))
                         (_.map massagedData
                                (fn (entities)
-                                 (defvar category (.category (get 0 entities)))
+                                 (defvar category (get categoryName (get 0 entities)))
                                  (e EntityCategory (entities entities key category)))))))
 
        (defvar headers (_.map (-> (if (null? dataSpec.categoryColumn)
@@ -179,6 +196,13 @@
    ;; The Modal dialog that takes control of input and needs to be
    ;; dealt with before the rest of the page is functional.
    (defcomponent Modal
+     propTypes
+     (obj
+      canClose React.PropTypes.bool.isRequired
+      title React.PropTypes.node.isRequired
+      buttons React.PropTypes.node
+      children React.PropTypes.node.isRequired)
+
      ;; Modal rendering.
      render
      (fn ()
@@ -204,10 +228,8 @@
      ;; When it is mounted or updated, it needs to be shown.
      componentDidMount (fn ()
                          (-> ($ (this.getDOMNode))
-                             (.modal (obj keyboard false backdrop "static"))))
-     componentDidUpdate (fn ()
-                          (-> ($ (this.getDOMNode))
-                              (.modal (obj keyboard false backdrop "static")))))
+                             (.on "hidden.bs.modal" (fn () (React.unmountComponentAtNode (getModalWrapper))))
+                             (.modal (obj keyboard false backdrop "static")))))
 
    ;; The target for rendering the Modal.
    (defun getModalWrapper () (-> ($ "#modal-wrapper") (.get 0)))
@@ -215,49 +237,177 @@
    ;; An action modal, with custom content, a Cancel button and an
    ;; action button.
    (defcomponent ActionModal
+     propTypes
+     (obj
+      actionButtonType React.PropTypes.string
+      actionButtonStyle React.PropTypes.string.isRequired
+      actionButtonLabel React.PropTypes.node.isRequired
+      title React.PropTypes.node.isRequired
+      children React.PropTypes.node.isRequired
+      next React.PropTypes.func.isRequired)
+
+     getInitialState
+     (fn () (obj spinner 0))
      render
      (fn ()
        (defvar buttons
-         (e "div" (id "actionModalButtons")
-           (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
-           (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel)))
-       (e Modal (canClose 1 title this.props.title buttons buttons)
+         (e "div" ()
+           ;; Note that we must render both elements in both cases
+           ;; because we don't want to deal with re-attaching event
+           ;; handlers.
+           (e "img" (width 16 height 16 src "/static/res/loading.gif" style (obj display (if this.state.spinner "inline" "none"))))
+           (e "div" (style (obj display (if this.state.spinner "none" "block")))
+             (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
+             (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel))))
+       (e Modal (canClose true title this.props.title buttons buttons)
          this.props.children))
 
      ;; Register click handler.
      componentDidMount
      (fn ()
        (defvar that this)
+       (defun setSpinner (v) (that.setState (obj spinner v)))
        (-> ($ "#actionButton")
            (.on "click" (fn (e)
                           (e.preventDefault)
-                          (-> ($ "#actionModalButtons")
-                              (.empty)
-                              (.append "<img width=16 height=16 src=/static/res/loading.gif />"))
-                          (-> ($ "#modalClose")
-                              (.remove))
-                          (that.props.next (fn () (-> ($ "#modal") (.modal "hide")))))))))
+                          (that.props.next (fn () (-> ($ "#modal") (.modal "hide"))) setSpinner))))))
+
+   ;; An editor for records.
+   (defcomponent RecordEditor
+     propTypes
+     (obj
+      entityTypeHumanName React.PropTypes.string.isRequired
+      entityTypeMachineName React.PropTypes.string.isRequired
+      entity React.PropTypes.object
+      children React.PropTypes.node.isRequired)
+
+     getInitialState
+     (fn ()
+       (obj err null))
+
+     render
+     (fn ()
+       (defvar that this)
+       (defvar hname this.props.entityTypeHumanName)
+       (defvar mname this.props.entityTypeMachineName)
+       (defvar title (if this.props.entity (+ "Edit " hname) (+ "Add a new " hname)))
+       (defvar actionButtonLabel (if this.props.entity "Edit" "Add"))
+       (defvar endpoint (if this.props.entity
+                          (+ (+ (+ "/api/" mname) "/") this.props.entity.id)
+                          (+ "/api/" mname)))
+       (defvar method (if this.props.entity "PUT" "POST"))
+       (defun onError (jqxhr)
+         (defvar resp (JSON.parse jqxhr.responseText))
+         (that.setState (obj err resp.meta.details)))
+       (defun next (hideModal setSpinner)
+         (console.log (-> ($ "#editorForm") (.serialize)))
+         (setSpinner 1)
+         ($.ajax endpoint (obj type method
+                               data (-> ($ "#editorForm") (.serialize))
+                               success hideModal
+                               error (fn (jqxhr)
+                                       (setSpinner 0)
+                                       (console.log "http error")
+                                       (onError jqxhr)))))
+       (e "form" (id "editorForm" role "form")
+         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" next next)
+           (if this.state.err
+             (e "div" (className "alert alert-danger" role "alert") this.state.err)
+             null)
+           this.props.children))))
 
    ;; The CCA editor control.
    (defcomponent CcaEditor
+     propTypes
+     (obj
+      entity React.PropTypes.object)
+
      render
      (fn ()
-       (defvar title (if this.props.entity "Edit CCA" "Add a new CCA"))
-       (defvar actionButtonLabel (if this.props.entity "Edit" "Add"))
-       (defvar endpoint (if this.props.entity (+ "/api/ccas/" this.props.entity.id) "/api/ccas"))
-       (defvar method (if this.props.entity "PUT" "POST"))
+       (e RecordEditor (entity this.props.entity entityTypeHumanName "CCA" entityTypeMachineName "ccas")
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "name") "CCA Name")
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Infocomm Club" defaultValue (if this.props.entity this.props.entity.name ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "category") "CCA Category")
+           (e "input" (type "text" className "form-control" name "category" placeholder "e.g. Clubs and Societies" defaultValue (if this.props.entity this.props.entity.category "")))))))
+
+   (defcomponent SubjectEditor
+     propTypes
+     (obj
+      entity React.PropTypes.object)
+
+     getInitialState
+     (fn ()
+       (obj compulsory (if (! this.props.entity) false (null? this.props.entity.code))))
+
+     render
+     (fn ()
+       (console.log this.props.entity)
+       (var that this)
+       (defun compulsoryChanged (event)
+         (that.setState (obj compulsory event.target.checked)))
+       (e RecordEditor (entity this.props.entity entityTypeHumanName "Subject" entityTypeMachineName "subjects")
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "name") "Subject Name")
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Mathematics (H3)" defaultValue (if this.props.entity this.props.entity.name "")))
+           (e "div" (className "checkbox")
+             (e "label" ()
+               (e "input" (type "checkbox" onChange compulsoryChanged checked this.state.compulsory)) "This is a compulsory subject."))
+           (e "div" (className "checkbox")
+             (e "label" ()
+               (e "input" (type "checkbox" name "science" defaultChecked (if this.props.entity this.props.entity.is_science false))) "This is a science subject.")))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "code") "Subject Code")
+           (if this.state.compulsory
+             (e "input" (type "text" className "form-control" disabled true value "" placeholder "None"))
+             (e "input" (type "text" className "form-control" name "code" placeholder "e.g. MA(H3)" defaultValue (if this.props.entity this.props.entity.code ""))))
+          (e "p" (className "help-block") "Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects."))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "level") "Applies To")
+           (e "div" (className "checkbox")
+             (_.map (array 1 2 3 4 5 6)
+                    (fn (lv)
+                      (defvar checked (if that.props.entity (!= -1 (_.indexOf that.props.entity.level lv)) false))
+                      (e "label" (key lv className "checkbox-inline")
+                        (e "input" (type "checkbox" name "level" value lv defaultChecked checked)) "Year " lv)))))
+         (e "div" (className "checkbox")
+           (e "label" ()
+             (e "input" (type "checkbox" name "force" defaultChecked false)) "Force the operation to continue despite errors (not recommended).")))))
+
+
+   ;; The CCA Delete Confirmation.
+   (defcomponent DeleteConfirmation
+     propTypes
+     (obj
+      entityTypeHumanName React.PropTypes.string.isRequired
+      entityTypeMachineName React.PropTypes.string.isRequired
+      entity React.PropTypes.object.isRequired)
+
+     render
+     (fn ()
+       (defvar hname this.props.entityTypeHumanName)
+       (defvar mname this.props.entityTypeMachineName)
+       (defvar endpoint (+ (+ (+ "/api/" mname) "/") this.props.entity.id))
        (defun next (hideModal)
-         ($.ajax endpoint (obj type method
-                               data (-> ($ "#ccaEditorForm") (.serialize))
-                               complete hideModal)))
-       (e "form" (id "ccaEditorForm" role "form")
-         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" next next)
-           (e "div" (className "form-group")
-             (e "label" (htmlFor "name") "Name")
-             (e "input" (type "text" className "form-control" name "name" placeholder "CCA Name" defaultValue (if this.props.entity this.props.entity.name ""))))
-           (e "div" (className "form-group")
-             (e "label" (htmlFor "category") "Category")
-             (e "input" (type "text" className "form-control" name "category" placeholder "CCA Category" defaultValue (if this.props.entity this.props.entity.category ""))))))))
+         ($.ajax endpoint (obj type "DELETE" complete hideModal)))
+       (defvar message (+ (+ (+ (+ "Are you sure you want to delete the " hname) " “") this.props.entity.name)
+                          "” from the database?"))
+       (e ActionModal
+           (title (+ "Delete " hname) actionButtonLabel "Delete" actionButtonStyle "danger" next next)
+         (e "p" () message))))
+
+   ;; The CCA Delete Confirmation.
+   (defcomponent CcaDeleteConfirmation
+     render
+     (fn ()
+       (e DeleteConfirmation (entity this.props.entity entityTypeHumanName "CCA" entityTypeMachineName "ccas"))))
+
+   ;; The Subject Delete Confirmation.
+   (defcomponent SubjectDeleteConfirmation
+     render
+     (fn ()
+       (e DeleteConfirmation (entity this.props.entity entityTypeHumanName "Subject" entityTypeMachineName "subjects"))))
 
    ;; The Admin console homepage.
    (defcomponent AdminHomeR
@@ -276,15 +426,6 @@
    (defcomponent AdminCcasR
      render
      (fn ()
-       (defcomponent CcaDeleteConfirmation
-         render
-         (fn ()
-           (defvar that this)
-           (defun next (hideModal)
-             ($.ajax (+ "/api/ccas/" that.props.entityid) (obj type "DELETE" complete hideModal)))
-           (e ActionModal
-               (title "Delete This CCA" actionButtonLabel "Delete It" actionButtonStyle "danger" next next)
-             (e "p" () "Are you sure want to delete this CCA from the database?"))))
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
            (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
@@ -307,10 +448,35 @@
                    (e ActionModal
                        (title "Deleting All CCAs" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/ccas" (obj type "DELETE" complete hideModal))))
                      (e "p" () "Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information."))
-                   (getModalWrapper)))))
-       ))
+                   (getModalWrapper)))))))
 
-   (defcomponent AdminSubjectsR)
+   (defcomponent AdminSubjectsR
+     render
+     (fn ()
+       (e "div" ()
+         (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
+           (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
+           (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
+         (e "h2" () "All Subjects")
+         (e EntityTable (conn (APIConnection "/api/subjects") entityEditor SubjectEditor deleteConfirmation SubjectDeleteConfirmation))))
+
+     componentDidMount
+     (fn ()
+       (-> ($ "#addButton")
+           (.on "click"
+                (fn ()
+                  (React.render
+                   (e SubjectEditor ())
+                   (getModalWrapper)))))
+       (-> ($ "#removeAllButton")
+           (.on "click"
+                (fn ()
+                  (React.render
+                   (e ActionModal
+                       (title "Deleting All Subjects" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/subjects" (obj type "DELETE" complete hideModal))))
+                     (e "p" () "Are you sure you want to delete all subjects currently stored in the database? This will also delete all students’ subject information."))
+                   (getModalWrapper))))))
+       )
 
    (defcomponent AdminTeachersR)
 
@@ -325,11 +491,12 @@
                                                           columns (array (array "name" _.identity "CCA Name"))))
                          "/admin/subjects" (obj pageName "Manage Subjects"
                                                 component AdminSubjectsR
-                                                dataSpec (obj categoryColumn null
-                                                              columns (array (array "code" _.identity "Subject Code")
-                                                                             (array "level" _.identity "Applies To")
-                                                                             (array "is_science" _.identity "Science Subject?")
-                                                                             (array "name" _.identity "Subject Name"))))
+                                                dataSpec (obj categoryColumn (array "level" (fn (ls) (-> (_.map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
+                                                              columns (array
+                                                                       (array "name" _.identity "Subject Name")
+                                                                       (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
+
+                                                                       (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
                          "/admin/teachers" (obj pageName "Manage Teachers"
                                                 component AdminTeachersR
                                                 dataSpec null)
@@ -362,7 +529,7 @@
        (defvar pathname window.location.pathname)
        (if (undefined? window.WebSocket)
          (React.render
-          (e Modal (canClose 0 title "Browser Unsupported")
+          (e Modal (canClose false title "Browser Unsupported")
             (e "p" ()
               "Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available."))
           (getModalWrapper))

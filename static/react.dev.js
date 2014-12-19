@@ -9660,7 +9660,8 @@ function warnAndMonitorForKeyUse(warningID, message, component, parentType) {
     component: useName,
     componentOwner: childOwnerName
   });
-  console.warn(message);
+  debugger;
+  throw (message);
 }
 
 /**
