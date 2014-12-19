@@ -12,7 +12,7 @@ import Control.Monad
 import Control.Monad.Loops
 import Control.Monad.Trans
 import Control.Monad.Reader (ReaderT(..), ask)
-import Control.Monad.State (get, put, evalStateT)
+import Control.Monad.State (get, put, evalStateT, execStateT, StateT)
 import Control.Monad.STM (STM, atomically)
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.Async
@@ -27,6 +27,9 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Attoparsec.ByteString.Char8 as PC
+import qualified Data.Attoparsec.Text as PT
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
@@ -71,7 +74,8 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/ccas                 CcasR          GET POST DELETE
 /api/ccas/#CcaId          CcaR           GET PUT DELETE
 /api/subjects             SubjectsR      GET POST DELETE
-/api/subjects/#SubjectId  SubjectR       GET PUT DELETE
+/api/subjects/test-decode TestDecodeR    GET
+!/api/subjects/#SubjectId SubjectR       GET PUT DELETE
 /api/teachers             TeachersR      GET POST DELETE
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
 /api/students             StudentsR      GET POST DELETE
@@ -187,6 +191,19 @@ validateEmailBS = (isRight .) . PC.parseOnly $ do
         domainPart = do
           r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
           guard $ C.length (C.intercalate "-" r) <= 63
+
+-- | Parses a subject code string into a set of subjects.
+parseSubjectCode :: Map T.Text Subject -> T.Text -> [Set Subject]
+parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (parseSubjects allSubjects) . (,Set.empty)
+  where parseSubjects = many . subjectCodeParser
+        subjectCodeParser :: Map T.Text Subject -> StateT (T.Text, Set Subject) [] ()
+        subjectCodeParser candidates = do
+          (str, parsed) <- get
+          (code, subject) <- lift $ Map.toList candidates
+          let str' = T.dropWhile (PT.inClass " \t,;.") str
+          case T.stripPrefix code str' of
+           Nothing -> mzero
+           Just remaining -> put (remaining, Set.insert subject parsed)
 
 -- | A stronger version of FormInput that allows coupled
 -- fields. Monads assume later computations depend on results of
@@ -348,6 +365,15 @@ deleteSubjectR = acidUpdateHandler . RemoveSubject
 
 deleteSubjectsR :: Handler Value
 deleteSubjectsR = acidUpdateHandler RemoveAllSubjects
+
+getTestDecodeR :: Handler Value
+getTestDecodeR = do
+  (level, str) <- runInputGet $ (,) <$> ireq levelField "level" <*> ireq textField "str"
+  acid <- getAcid <$> ask
+  allSubjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
+  let parsed = Set.toList <$> parseSubjectCode (subjectsToMap allSubjects) str
+  return $ object [ "meta" .= object ["code" .=  (200 :: Int) ], "data" .= parsed ]
+  where levelField = radioFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
 
 getTeachersR :: Handler Value
 getTeachersR = acidQueryHandler ListTeachers

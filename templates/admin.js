@@ -569,6 +569,96 @@ $(function() {
     },_.invert({
         SubjectEditor: "displayName"
     })));
+    var TestDecoder = React_createClass(_.defaults({
+        getInitialState: function() {
+            return {
+                decodeResult: null
+            };
+        },
+        render: function() {
+            var that = this;
+            var next = function(hideModal,setSpinner) {
+                console.log(($("#decoderForm")).serialize());
+                setSpinner(1);
+                return $.getJSON("/api/subjects/test-decode",($("#decoderForm")).serialize(),function(data) {
+                    setSpinner(0);
+                    return that.setState({
+                        decodeResult: data.data
+                    });
+                });
+            };
+            var subjectsToString = function(ss) {
+                return (_.map(ss,function(s) {
+                    return s.name;
+                })).join(", ");
+            };
+            return React_createElement(ActionModal,{
+                actionButtonStyle: "primary",
+                actionButtonLabel: "Decode",
+                title: "Test Decode Subject Codes",
+                next: next
+            },(this.state.decodeResult ?
+                React_createElement("div",{
+                    className: "panel panel-default"
+                },React_createElement("div",{
+                    className: "panel-heading"
+                },"Decode Results"),React_createElement("div",{
+                    className: "panel-body"
+                },((0 === this.state.decodeResult.length) ?
+                    "The subject codes could not be decoded at all." :
+                    ((1 === this.state.decodeResult.length) ?
+                        React_createElement("div",{},"The subject codes could be unambiguously decoded: ",React_createElement("br",{}),subjectsToString(this.state.decodeResult[0])) :
+                        (true ?
+                            React_createElement("div",{},"The subject codes could not be unambiguously decoded; here are the possibilities:",React_createElement("ul",{},_.map(this.state.decodeResult,function(ss) {
+                                return React_createElement("li",{},subjectsToString(ss));
+                            }))) :
+                            undefined))))) :
+                null),React_createElement("form",{
+                id: "decoderForm",
+                role: "form"
+            },React_createElement("p",{
+                className: "help-block"
+            },"This decoder allows you to preview decoding of a set of subject codes. You can enter a series of subject codes and see how it will be decoded."),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "level"
+            },"Year"),React_createElement("div",{
+                className: "radio"
+            },_.map([
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ],function(lv) {
+                return React_createElement("label",{
+                    key: lv,
+                    className: "checkbox-inline"
+                },React_createElement("input",{
+                    type: "radio",
+                    name: "level",
+                    value: lv,
+                    defaultChecked: (1 === lv)
+                }),"Year ",lv);
+            }))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "str"
+            },"Subject Code Combination"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "str",
+                placeholder: "Enter subject codes here"
+            }))));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        TestDecoder: "displayName"
+    })));
     var DeleteConfirmation = React_createClass(_.defaults({
         propTypes: {
             entityTypeHumanName: React.PropTypes.string.isRequired,
@@ -697,6 +787,10 @@ $(function() {
                 role: "toolbar",
                 "aria-label": "Action Buttons"
             },React_createElement("button",{
+                id: "testDecodeButton",
+                type: "button",
+                className: "btn btn-default"
+            },"Test Decode"),React_createElement("button",{
                 id: "addButton",
                 type: "button",
                 className: "btn btn-default"
@@ -711,6 +805,9 @@ $(function() {
             }));
         },
         componentDidMount: function() {
+            ($("#testDecodeButton")).on("click",function() {
+                return React.render(React_createElement(TestDecoder,{}),getModalWrapper());
+            });
             ($("#addButton")).on("click",function() {
                 return React.render(React_createElement(SubjectEditor,{}),getModalWrapper());
             });

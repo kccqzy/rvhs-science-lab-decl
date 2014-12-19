@@ -375,6 +375,53 @@
            (e "label" ()
              (e "input" (type "checkbox" name "force" defaultChecked false)) "Force the operation to continue despite errors (not recommended).")))))
 
+   (defcomponent TestDecoder
+     getInitialState
+     (fn () (obj decodeResult null))
+     render
+     (fn ()
+       (defvar that this)
+       (defun next (hideModal setSpinner)
+         (console.log (-> ($ "#decoderForm") (.serialize)))
+         (setSpinner 1)
+         ($.getJSON "/api/subjects/test-decode"
+                    (-> ($ "#decoderForm") (.serialize))
+                    (fn (data)
+                      (setSpinner 0)
+                      (that.setState (obj decodeResult data.data)))))
+       (defun subjectsToString (ss) (-> (_.map ss (fn (s) s.name)) (.join ", ")))
+       (e ActionModal (actionButtonStyle "primary" actionButtonLabel "Decode" title "Test Decode Subject Codes" next next)
+         (if this.state.decodeResult
+           (e "div" (className "panel panel-default")
+             (e "div" (className "panel-heading") "Decode Results")
+             (e "div" (className "panel-body")
+               (cond (= 0 this.state.decodeResult.length)
+                     "The subject codes could not be decoded at all."
+                     (= 1 this.state.decodeResult.length)
+                     (e "div" ()
+                       "The subject codes could be unambiguously decoded: "
+                       (e "br" ())
+                       (subjectsToString (get 0 this.state.decodeResult)))
+                     true
+                     (e "div" ()
+                       "The subject codes could not be unambiguously decoded; here are the possibilities:"
+                       (e "ul" ()
+                         (_.map this.state.decodeResult
+                                (fn (ss) (e "li" () (subjectsToString ss)))))))))
+           null)
+         (e "form" (id "decoderForm" role "form")
+           (e "p" (className "help-block") "This decoder allows you to preview decoding of a set of subject codes. You can enter a series of subject codes and see how it will be decoded.")
+           (e "div" (className "form-group")
+             (e "label" (htmlFor "level") "Year")
+             (e "div" (className "radio")
+               (_.map (array 1 2 3 4 5 6)
+                      (fn (lv)
+                        (e "label" (key lv className "checkbox-inline")
+                          (e "input" (type "radio" name "level" value lv defaultChecked (= 1 lv))) "Year " lv)))))
+           (e "div" (className "form-group")
+             (e "label" (htmlFor "str") "Subject Code Combination")
+             (e "input" (type "text" className "form-control" name "str" placeholder "Enter subject codes here")))))))
+
 
    ;; The CCA Delete Confirmation.
    (defcomponent DeleteConfirmation
@@ -455,6 +502,7 @@
      (fn ()
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
+           (e "button" (id "testDecodeButton" type "button" className "btn btn-default") "Test Decode")
            (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
            (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
          (e "h2" () "All Subjects")
@@ -462,6 +510,12 @@
 
      componentDidMount
      (fn ()
+       (-> ($ "#testDecodeButton")
+           (.on "click"
+                (fn ()
+                  (React.render
+                   (e TestDecoder ())
+                   (getModalWrapper)))))
        (-> ($ "#addButton")
            (.on "click"
                 (fn ()
