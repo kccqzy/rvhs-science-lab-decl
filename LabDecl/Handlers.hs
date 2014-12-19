@@ -151,9 +151,10 @@ acidQueryHandler event = do
 -- | Generically handles a database update. When an update is
 -- successful, send a notification to all listening query handlers.
 acidUpdateHandler :: (Acid.UpdateEvent ev,
-                      ToJSON a, ToJSON e,
-                      Acid.MethodResult ev ~ Either e a,
-                      Acid.MethodState ev ~ Database) => ev -> Handler Value
+                      ToJSON r, ToJSON e,
+                      Acid.MethodResult ev ~ Either e r,
+                      Acid.MethodState ev ~ Database) =>
+                     ev -> Handler Value
 acidUpdateHandler event = do
   acid <- getAcid <$> ask
   notifyChan <- getNotifyChan <$> ask
@@ -293,13 +294,27 @@ studentForm sid = unMFormInput $ do
                   optionsPairs . map (liftM2 (,) (T.pack . show . unSubjectId) id . (^. subjectId)) . Set.toList $ e
                 unSubjectId (SubjectId i) = i
 
+-- | Generically parses forms and handles a database update.
+acidFormUpdateHandler :: (Acid.UpdateEvent ev,
+                          ToJSON r, ToJSON e,
+                          Acid.MethodResult ev ~ Either e r,
+                          Acid.MethodState ev ~ Database,
+                          HasPrimaryKey a i) =>
+                         (i -> FormInput Handler a) ->
+                         (Bool -> a -> ev) ->
+                         i -> Handler Value
+acidFormUpdateHandler form eventCon eid = do
+  entity <- runInputPost (form eid)
+  force <- runInputPost (ireq checkBoxField "force")
+  acidUpdateHandler $ eventCon force entity
+
 -- | Enumerate all CCAs with all information. Public.
 getCcasR :: Handler Value
 getCcasR = acidQueryHandler ListCcas
 
 -- | Add new CCA. Requires admin.
 postCcasR :: Handler Value
-postCcasR = acidUpdateHandler . AddCca =<< runInputPost (ccaForm (CcaId 0))
+postCcasR = acidFormUpdateHandler ccaForm AddCca (CcaId 0)
 
 -- | Get information about a single Cca. Public.
 getCcaR :: CcaId -> Handler Value
@@ -307,7 +322,7 @@ getCcaR = acidQueryHandler . LookupCcaById
 
 -- | Edit CCA. Requires admin.
 putCcaR :: CcaId -> Handler Value
-putCcaR = (acidUpdateHandler . ReplaceCca =<<) . runInputPost . ccaForm
+putCcaR = acidFormUpdateHandler ccaForm ReplaceCca
 
 -- | Delete CCA. Requires Admin.
 deleteCcaR :: CcaId -> Handler Value
@@ -320,16 +335,13 @@ getSubjectsR :: Handler Value
 getSubjectsR = acidQueryHandler ListSubjects
 
 postSubjectsR :: Handler Value
-postSubjectsR = do
-  subject <- runInputPost (subjectForm (SubjectId 0))
-  force <- runInputPost (ireq checkBoxField "force")
-  acidUpdateHandler $ AddSubject force subject
+postSubjectsR = acidFormUpdateHandler subjectForm AddSubject (SubjectId 0)
 
 getSubjectR :: SubjectId -> Handler Value
 getSubjectR = acidQueryHandler . LookupSubjectById
 
 putSubjectR :: SubjectId -> Handler Value
-putSubjectR = (acidUpdateHandler . ReplaceSubject =<<) . runInputPost . subjectForm
+putSubjectR = acidFormUpdateHandler subjectForm ReplaceSubject
 
 deleteSubjectR :: SubjectId -> Handler Value
 deleteSubjectR = acidUpdateHandler . RemoveSubject
@@ -341,16 +353,13 @@ getTeachersR :: Handler Value
 getTeachersR = acidQueryHandler ListTeachers
 
 postTeachersR :: Handler Value
-postTeachersR = do
-  teacher <- runInputPost (teacherForm (TeacherId 0))
-  force <- runInputPost (ireq checkBoxField "force")
-  acidUpdateHandler $ AddTeacher force teacher
+postTeachersR = undefined
 
 getTeacherR :: TeacherId -> Handler Value
 getTeacherR = acidQueryHandler . LookupTeacherById
 
 putTeacherR :: TeacherId -> Handler Value
-putTeacherR = (acidUpdateHandler . ReplaceTeacher =<<) . runInputPost . teacherForm
+putTeacherR = undefined
 
 deleteTeacherR :: TeacherId -> Handler Value
 deleteTeacherR = acidUpdateHandler . RemoveTeacher

@@ -186,27 +186,27 @@ instance Default Database where
 -- type. The typeclass also ensures there exists a lens from the
 -- record to its ID, and there exists a way to convert an integer to
 -- an ID.
-class (Indexable a, Ord a, Typeable a, Typeable i) => RecordId a i | a -> i, i -> a where
+class (Indexable a, Ord a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
   idField :: Lens' a i
   idConstructor :: Int -> i
   dbField :: Lens' Database (IxSetCtr a)
 
-instance RecordId Cca CcaId where
+instance HasPrimaryKey Cca CcaId where
   idField = ccaId
   idConstructor = CcaId
   dbField = ccaDb
 
-instance RecordId Subject SubjectId where
+instance HasPrimaryKey Subject SubjectId where
   idField = subjectId
   idConstructor = SubjectId
   dbField = subjectDb
 
-instance RecordId Teacher TeacherId where
+instance HasPrimaryKey Teacher TeacherId where
   idField = teacherId
   idConstructor = TeacherId
   dbField = teacherDb
 
-instance RecordId Student StudentId where
+instance HasPrimaryKey Student StudentId where
   idField = studentId
   idConstructor = StudentId
   dbField = studentDb

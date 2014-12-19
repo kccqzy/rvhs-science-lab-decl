@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module LabDecl.Models where
 
 import Control.Applicative ((<$>))
@@ -55,20 +56,20 @@ makeAcidQuery query = runReader query <$> ask
 type IQuery a = Reader Database a
 
 -- | List entities in a table.
-listEntities :: (RecordId a i) => IQuery (Set a)
+listEntities :: (HasPrimaryKey a i) => IQuery (Set a)
 listEntities = searchEntities []
 
 -- | Generically search for entities fulfilling some criteria.
-searchEntities :: forall a i. (RecordId a i) => [IxSet a -> IxSet a] -> IQuery (Set a)
+searchEntities :: forall a i. (HasPrimaryKey a i) => [IxSet a -> IxSet a] -> IQuery (Set a)
 searchEntities crits = toSet . foldr (.) (@> idConstructor' 0) crits . snd . (^.dbField) <$> ask
   where idConstructor' = idConstructor :: Int -> i
 
 -- | Search for entities that fulfil an equality criterion.
-searchEntitiesEq :: (RecordId a i, Typeable k) => k -> IQuery (Set a)
+searchEntitiesEq :: (HasPrimaryKey a i, Typeable k) => k -> IQuery (Set a)
 searchEntitiesEq prop = searchEntities [(@= prop)]
 
 -- | Search for a unique entity that fulfils an equality criterion.
-searchUniqueEntityEq :: (RecordId a i, Typeable k) => k -> IQuery (Maybe a)
+searchUniqueEntityEq :: (HasPrimaryKey a i, Typeable k) => k -> IQuery (Maybe a)
 searchUniqueEntityEq = fmap unique . searchEntitiesEq
 
 listCcas     :: IQuery (Set Cca)
@@ -139,16 +140,21 @@ liftQuery query = runReader query <$> get
 
 -- | Add an entity to a table, incrementing the counter. This is a
 -- primitive operation that never fails.
-addEntity :: (RecordId a i) => a -> IUpdate
-addEntity a = dbField %= \(ctr, ixset) ->
+unsafeAddEntity :: (HasPrimaryKey a i) => a -> IUpdate
+unsafeAddEntity a = dbField %= \(ctr, ixset) ->
   (succ ctr, IxSet.insert (set idField (idConstructor (succ ctr)) a) ixset)
+
+-- | Add an entity to a table, without incrementing the counter. This
+-- is a primitive operation that never fails.
+unsafeAddEntityKeepId :: (HasPrimaryKey a i) => a -> IUpdate
+unsafeAddEntityKeepId a = dbField._2 %= IxSet.insert a
 
 -- | Remove an entity from a table. It only logically deletes the
 -- entity by setting the id to zero, ensuring it will never be found
 -- via a normal lookup. It is not an error to delete nonexistent or
 -- already deleted entities. This is a primitive operation that never
 -- fails.
-removeEntity :: forall a i. (RecordId a i) => i -> IUpdate
+removeEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
 removeEntity i = do
   maybeEntity <- liftQuery $ searchUniqueEntityEq i
   case maybeEntity of
@@ -156,13 +162,9 @@ removeEntity i = do
    Just entity -> dbField'._2 %= updateIx i (entity & idField .~ idConstructor 0)
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
--- | Replace an entity with a new one in a table. It is not an error
--- if the specified entity did not exist. This is a primitive
--- operation that never fails.
-replaceEntity :: (RecordId a i) => a -> IUpdate
-replaceEntity a = dbField._2 %= updateIx (a ^. idField) a
-
-removeAllEntities :: forall a i. (RecordId a i) => Proxy a -> IUpdate
+-- | Remove all entities from a table. This physically deletes
+-- everything.
+removeAllEntities :: forall a i. (HasPrimaryKey a i) => Proxy a -> IUpdate
 removeAllEntities _ = dbField'._2 .= empty
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
@@ -171,55 +173,77 @@ removeAllEntities _ = dbField'._2 .= empty
 subjectsToMap :: Set Subject -> Map T.Text Subject
 subjectsToMap = Set.foldr (\v m -> maybe m (\c -> Map.insert c v m) (v ^. subjectCode)) Map.empty
 
+-- | A prerequisite for safe adds.
+class (HasPrimaryKey a i) => HasAddConstraint a i where
+  preAddCheck :: Bool -> a -> IUpdate
 
--- | Add a new CCA to the database. No uniqueness checks necessary
--- because CCAs are looked up only through auto-incremented IDs.
-addCca :: Cca -> IUpdate
-addCca = addEntity
+-- | Safely add an entity by performing a check first.
+addEntity :: (HasAddConstraint a i) => Bool -> a -> IUpdate
+addEntity force a = do
+  preAddCheck force a
+  unsafeAddEntity a
 
--- | Add a new subject to the database. Subjects are also looked up
--- through subject code, so they must be unique among each
--- level. Subject *names* are *intentionally* not checked for
--- uniqueness. A variant of Sardinas-Patterson algorithm will check
--- all subjects in the level are uniquely decodable, unless the
--- subject is force added.
-addSubject :: Bool -> Subject -> IUpdate
-addSubject force subj = do
-  case subj ^. subjectCode of
-   Nothing -> return () -- no need to check anything
-   Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
-     subjects <- liftQuery $ listSubjectsByLevel level
-     check level code (subj ^. subjectName) (subjectsToMap subjects)
-  addEntity subj
+-- | Safely edit an entity by ensuring it exists, removes it, checks
+-- it and then adds the new entity back. The wonderful
+-- @makeAcidUpdate@ ensures abortion of entire update operation when
+-- one action fails.
+replaceEntity :: (HasAddConstraint a i) => Bool -> a -> IUpdate
+replaceEntity force a = do
+  ensureExist (a ^. idField)
+  removeEntity (a ^. idField)
+  preAddCheck force a
+  unsafeAddEntityKeepId a
 
-  where check level code name subjects = do
-          -- first check for uniqueness of subject code
-          maybe (return ()) (lift . Left . errSubjectAlreadyExists code name) . Map.lookup code $ subjects
-          -- then check for decodability
-          unless (uniquelyDecodable . Set.insert code . Map.keysSet $ subjects) .
-            lift . Left $ errSubjectsNotUniquelyDecodable name level
+-- | Ensure an id exists in the database.
+ensureExist :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
+ensureExist id = do
+  existing <- liftQuery $ query id
+  void . lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
+  where query :: i -> IQuery (Maybe a)
+        query id = unique <$> searchEntitiesEq id
 
--- | Add a new teacher to the database. Check for uniqueness of email
--- and witnesser name unless forced.
-addTeacher :: Bool -> Teacher -> IUpdate
-addTeacher force teacher = do
-  unless force $ do
-    tryLookup teacherEmail teacher errTeacherEmailAlreadyExists
-    tryLookup teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
-  addEntity teacher
-  where tryLookup field entity errMsg = do
-          existing <- liftQuery $ unique <$> searchEntitiesEq (entity ^. field)
-          maybe (return ()) (lift . Left . errMsg entity) existing
+-- | No uniqueness checks necessary because CCAs are looked up only
+-- through auto-incremented IDs.
+instance HasAddConstraint Cca CcaId where
+  preAddCheck _ _ = return ()
 
--- | Add a new student to the database. Check for uniqueness of class
--- and index number. This is expected to be called when a teacher adds
--- a student, not when the student does submission.
-addStudent :: Bool -> Student -> IUpdate
-addStudent force student = do
-  unless force $ do
-    existing <- liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
-    maybe (return ()) (lift . Left . errStudentAlreadyExists student) existing
-  addEntity student
+-- | Subjects are also looked up through subject code, so they must be
+-- unique among each level. Subject *names* are *intentionally* not
+-- checked for uniqueness. A variant of Sardinas-Patterson algorithm
+-- will check all subjects in the level are uniquely decodable, unless
+-- the subject is force added.
+instance HasAddConstraint Subject SubjectId where
+  preAddCheck force subj = do
+    case subj ^. subjectCode of
+     Nothing -> return () -- no need to check anything
+     Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
+       subjects <- liftQuery $ listSubjectsByLevel level
+       check level code (subj ^. subjectName) (subjectsToMap subjects)
+    where check level code name subjects = do
+            -- first check for uniqueness of subject code
+            maybe (return ()) (lift . Left . errSubjectAlreadyExists code name) . Map.lookup code $ subjects
+            -- then check for decodability
+            unless (uniquelyDecodable . Set.insert code . Map.keysSet $ subjects) .
+              lift . Left $ errSubjectsNotUniquelyDecodable name level
+
+-- | Check for uniqueness of email and witnesser name unless forced.
+instance HasAddConstraint Teacher TeacherId where
+  preAddCheck force teacher = do
+    unless force $ do
+      tryLookup teacherEmail teacher errTeacherEmailAlreadyExists
+      tryLookup teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
+    where tryLookup field entity errMsg = do
+            existing <- liftQuery $ unique <$> searchEntitiesEq (entity ^. field)
+            maybe (return ()) (lift . Left . errMsg entity) existing
+
+-- | Check for uniqueness of class and index number. This is expected
+-- to be called when a teacher adds a student, not when the student
+-- does submission.
+instance HasAddConstraint Student StudentId where
+  preAddCheck force student = do
+    unless force $ do
+      existing <- liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
+      maybe (return ()) (lift . Left . errStudentAlreadyExists student) existing
 
 -- | Add many students to the database. If adding one student fails,
 -- everything fails, as expected by atomicity.
@@ -227,32 +251,28 @@ addStudents :: Bool -> Vector Student -> IUpdate
 addStudents = V.mapM_ . addStudent
 -- TODO add an extra argument to identify the row of the CSV file.
 
--- | Ensure an id exists in the database.
-ensureExist :: forall a i. (RecordId a i) => i -> IUpdate
-ensureExist id = do
-  existing <- liftQuery $ query id
-  void . lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
-  where query :: i -> IQuery (Maybe a)
-        query id = unique <$> searchEntitiesEq id
-
 -- | Ensure an id exists in the database and then do something
 -- about it.
-ensureIdExistThen :: (RecordId a i) => (i -> IUpdate) -> i -> IUpdate
+ensureIdExistThen :: (HasPrimaryKey a i) => (i -> IUpdate) -> i -> IUpdate
 ensureIdExistThen = liftM2 (>>) ensureExist
 
--- | Ensure an entity exists in the database and then do something
--- about it.
-ensureExistThen :: forall a i. (RecordId a i) => (a -> IUpdate) -> a -> IUpdate
-ensureExistThen = liftM2 (>>) (ensureExist . (^. idField))
+addCca     :: Bool -> Cca -> IUpdate
+addSubject :: Bool -> Subject -> IUpdate
+addTeacher :: Bool -> Teacher -> IUpdate
+addStudent :: Bool -> Student -> IUpdate
+addCca     = addEntity
+addSubject = addEntity
+addTeacher = addEntity
+addStudent = addEntity
 
-replaceCca     :: Cca     -> IUpdate
-replaceSubject :: Subject -> IUpdate
-replaceTeacher :: Teacher -> IUpdate
-replaceStudent :: Student -> IUpdate
-replaceCca     = ensureExistThen replaceEntity
-replaceSubject = ensureExistThen replaceEntity
-replaceTeacher = ensureExistThen replaceEntity
-replaceStudent = ensureExistThen replaceEntity
+replaceCca     :: Bool -> Cca     -> IUpdate
+replaceSubject :: Bool -> Subject -> IUpdate
+replaceTeacher :: Bool -> Teacher -> IUpdate
+replaceStudent :: Bool -> Student -> IUpdate
+replaceCca     = replaceEntity
+replaceSubject = replaceEntity
+replaceTeacher = replaceEntity
+replaceStudent = replaceEntity
 
 removeCca     :: CcaId     -> IUpdate
 removeSubject :: SubjectId -> IUpdate
@@ -313,7 +333,7 @@ publicStudentDoSubmission newStudent = do
     guard $ maybe False (all (`Set.member` validCcas)) (newStudent ^? studentSubmission . ssCca)
     let changedStudent = student & studentSubmission .~ newStudent ^. studentSubmission
     guard $ changedStudent == newStudent
-  replaceEntity newStudent
+  replaceEntity True newStudent
 
 -- |
 -- = Internal Operations
