@@ -109,8 +109,7 @@
      propTypes
      (obj
       conn React.PropTypes.object.isRequired
-      entityEditor React.PropTypes.any.isRequired  ; we actually expect a React class here
-      deleteConfirmation React.PropTypes.any.isRequired)
+      entityEditor React.PropTypes.any.isRequired)
 
      ;; Assume no data for initial state.
      getInitialState
@@ -136,7 +135,7 @@
                   (defvar entityid (-> ($ this) (.data "entityid")))
                   (defvar entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
                   (React.render
-                   (e that.props.deleteConfirmation (entity entity))
+                   (e DeleteConfirmation (entity entity))
                    (getModalWrapper))))))
 
      ;; Close connection when unmounted. This is paranoia because
@@ -422,19 +421,41 @@
              (e "label" (htmlFor "str") "Subject Code Combination")
              (e "input" (type "text" className "form-control" name "str" placeholder "Enter subject codes here")))))))
 
+   (defcomponent TeacherEditor
+     propTypes
+     (obj
+      entity React.PropTypes.object)
 
-   ;; The CCA Delete Confirmation.
+     render
+     (fn ()
+       (e RecordEditor (entity this.props.entity entityTypeHumanName "Teacher" entityTypeMachineName "teachers")
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "name") "Teacher Name")
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Chow Ban Hoe" defaultValue (if this.props.entity this.props.entity.name "")))
+           (e "div" (className "checkbox")
+             (e "label" ()
+               (e "input" (type "checkbox" name "admin" defaultChecked (if this.props.entity this.props.entity.is_admin false))) "This teacher is an administrator.")))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "witness") "Witness Name (Capital, with Salutation)")
+           (e "input" (type "text" className "form-control" name "witness" placeholder "e.g. MR CHOW BAN HOE" defaultValue (if this.props.entity this.props.entity.witness_name ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "email") "Email Address")
+           (e "input" (type "email" className "form-control" name "email" placeholder "e.g. chow_ban_hoe@moe.edu.sg" defaultValue (if this.props.entity this.props.entity.email ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "unit") "Unit")
+           (e "input" (type "email" className "form-control" name "unit" placeholder "e.g. Bio" defaultValue (if this.props.entity this.props.entity.unit "")))))))
+
+   ;; The Delete Confirmation.
    (defcomponent DeleteConfirmation
      propTypes
      (obj
-      entityTypeHumanName React.PropTypes.string.isRequired
-      entityTypeMachineName React.PropTypes.string.isRequired
       entity React.PropTypes.object.isRequired)
 
      render
      (fn ()
-       (defvar hname this.props.entityTypeHumanName)
-       (defvar mname this.props.entityTypeMachineName)
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar hname dataSpec.humanName)
+       (defvar mname dataSpec.machineName)
        (defvar endpoint (+ (+ (+ "/api/" mname) "/") this.props.entity.id))
        (defun next (hideModal)
          ($.ajax endpoint (obj type "DELETE" complete hideModal)))
@@ -443,18 +464,6 @@
        (e ActionModal
            (title (+ "Delete " hname) actionButtonLabel "Delete" actionButtonStyle "danger" next next)
          (e "p" () message))))
-
-   ;; The CCA Delete Confirmation.
-   (defcomponent CcaDeleteConfirmation
-     render
-     (fn ()
-       (e DeleteConfirmation (entity this.props.entity entityTypeHumanName "CCA" entityTypeMachineName "ccas"))))
-
-   ;; The Subject Delete Confirmation.
-   (defcomponent SubjectDeleteConfirmation
-     render
-     (fn ()
-       (e DeleteConfirmation (entity this.props.entity entityTypeHumanName "Subject" entityTypeMachineName "subjects"))))
 
    ;; The Admin console homepage.
    (defcomponent AdminHomeR
@@ -469,44 +478,52 @@
            (e "h2" () "API Documentation")
            (e "p" () "If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")))))
 
-   ;; The admin console CCA page.
-   (defcomponent AdminCcasR
+   (defcomponent EntityPage
      render
      (fn ()
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar hnamepl dataSpec.humanNamePlural)
+       (defvar mname dataSpec.machineName)
+       (defvar editor dataSpec.editor)
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
+           (if this.props.customButtons this.props.customButtons null)
            (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
            (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
-         (e "h2" () "All CCAs")
-         (e EntityTable (conn (APIConnection "/api/ccas") entityEditor CcaEditor deleteConfirmation CcaDeleteConfirmation))))
+         (e "h2" () (+ "View " hnamepl))
+         (e EntityTable (conn (APIConnection (+ "/api/" mname)) entityEditor editor))))
 
      componentDidMount
      (fn ()
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar hnamepl dataSpec.humanNamePlural)
+       (defvar mname dataSpec.machineName)
+       (defvar editor dataSpec.editor)
        (-> ($ "#addButton")
            (.on "click"
                 (fn ()
                   (React.render
-                   (e CcaEditor ())
+                   (e editor ())
                    (getModalWrapper)))))
        (-> ($ "#removeAllButton")
            (.on "click"
                 (fn ()
                   (React.render
                    (e ActionModal
-                       (title "Deleting All CCAs" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/ccas" (obj type "DELETE" complete hideModal))))
-                     (e "p" () "Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information."))
+                       (title (+ "Deleting All " hnamepl) actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax (+ "/api/" mname) (obj type "DELETE" complete hideModal))))
+                     (e "p" () (+ (+ (+ (+ "Are you sure you want to delete all " hnamepl) " currently stored in the database? This will also delete all references to these ") hnamepl) ", if they exist.")))
                    (getModalWrapper)))))))
+
+   ;; The admin console CCA page.
+   (defcomponent AdminCcasR
+     render
+     (fn () (e EntityPage ())))
 
    (defcomponent AdminSubjectsR
      render
      (fn ()
-       (e "div" ()
-         (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
-           (e "button" (id "testDecodeButton" type "button" className "btn btn-default") "Test Decode")
-           (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
-           (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
-         (e "h2" () "All Subjects")
-         (e EntityTable (conn (APIConnection "/api/subjects") entityEditor SubjectEditor deleteConfirmation SubjectDeleteConfirmation))))
+       (defvar customButtons (e "button" (id "testDecodeButton" type "button" className "btn btn-default") "Test Decode"))
+       (e EntityPage (customButtons customButtons)))
 
      componentDidMount
      (fn ()
@@ -515,24 +532,11 @@
                 (fn ()
                   (React.render
                    (e TestDecoder ())
-                   (getModalWrapper)))))
-       (-> ($ "#addButton")
-           (.on "click"
-                (fn ()
-                  (React.render
-                   (e SubjectEditor ())
-                   (getModalWrapper)))))
-       (-> ($ "#removeAllButton")
-           (.on "click"
-                (fn ()
-                  (React.render
-                   (e ActionModal
-                       (title "Deleting All Subjects" actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax "/api/subjects" (obj type "DELETE" complete hideModal))))
-                     (e "p" () "Are you sure you want to delete all subjects currently stored in the database? This will also delete all students’ subject information."))
-                   (getModalWrapper))))))
-       )
+                   (getModalWrapper)))))))
 
-   (defcomponent AdminTeachersR)
+   (defcomponent AdminTeachersR
+     render
+     (fn () (e EntityPage ())))
 
    (defcomponent AdminStudentsR)
 
@@ -541,11 +545,19 @@
                                        dataSpec null)
                          "/admin/ccas" (obj pageName "Manage CCAs"
                                             component AdminCcasR
-                                            dataSpec (obj categoryColumn (array "category" _.identity "CCA Category")
+                                            dataSpec (obj humanName "CCA"
+                                                          humanNamePlural "CCAs"
+                                                          machineName "ccas"
+                                                          editor CcaEditor
+                                                          categoryColumn (array "category" _.identity "CCA Category")
                                                           columns (array (array "name" _.identity "CCA Name"))))
                          "/admin/subjects" (obj pageName "Manage Subjects"
                                                 component AdminSubjectsR
-                                                dataSpec (obj categoryColumn (array "level" (fn (ls) (-> (_.map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
+                                                dataSpec (obj humanName "Subject"
+                                                              humanNamePlural "Subjects"
+                                                              machineName "subjects"
+                                                              editor SubjectEditor
+                                                              categoryColumn (array "level" (fn (ls) (-> (_.map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
                                                               columns (array
                                                                        (array "name" _.identity "Subject Name")
                                                                        (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
@@ -553,7 +565,17 @@
                                                                        (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
                          "/admin/teachers" (obj pageName "Manage Teachers"
                                                 component AdminTeachersR
-                                                dataSpec null)
+                                                dataSpec (obj humanName "Teacher"
+                                                              humanNamePlural "Teachers"
+                                                              machineName "teachers"
+                                                              editor TeacherEditor
+                                                              categoryColumn null
+                                                              columns (array
+                                                                       (array "name" _.identity "Name")
+                                                                       (array "unit" _.identity "Unit")
+                                                                       (array "email" _.identity "Email Address")
+                                                                       (array "is_admin" (fn (b) (if b "Yes" "No")) "Administrator?")
+                                                                       (array "witness_name" _.identity "Witness Name"))))
                          "/admin/students" (obj pageName "Manage Students"
                                                 component AdminStudentsR
                                                 dataSpec null)))

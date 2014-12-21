@@ -379,13 +379,13 @@ getTeachersR :: Handler Value
 getTeachersR = acidQueryHandler ListTeachers
 
 postTeachersR :: Handler Value
-postTeachersR = undefined
+postTeachersR = acidFormUpdateHandler teacherForm AddTeacher (TeacherId 0)
 
 getTeacherR :: TeacherId -> Handler Value
 getTeacherR = acidQueryHandler . LookupTeacherById
 
 putTeacherR :: TeacherId -> Handler Value
-putTeacherR = undefined
+putTeacherR = acidFormUpdateHandler teacherForm ReplaceTeacher
 
 deleteTeacherR :: TeacherId -> Handler Value
 deleteTeacherR = acidUpdateHandler . RemoveTeacher

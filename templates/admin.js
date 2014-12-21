@@ -124,8 +124,7 @@ $(function() {
     var EntityTable = React_createClass(_.defaults({
         propTypes: {
             conn: React.PropTypes.object.isRequired,
-            entityEditor: React.PropTypes.any.isRequired,
-            deleteConfirmation: React.PropTypes.any.isRequired
+            entityEditor: React.PropTypes.any.isRequired
         },
         getInitialState: function() {
             return {
@@ -154,7 +153,7 @@ $(function() {
                 var entity = _.find(that.state.tableData.data,function(d) {
                     return (d.id === entityid);
                 });
-                return React.render(React_createElement(that.props.deleteConfirmation,{
+                return React.render(React_createElement(DeleteConfirmation,{
                     entity: entity
                 }),getModalWrapper());
             });
@@ -659,15 +658,88 @@ $(function() {
     },_.invert({
         TestDecoder: "displayName"
     })));
+    var TeacherEditor = React_createClass(_.defaults({
+        propTypes: {
+            entity: React.PropTypes.object
+        },
+        render: function() {
+            return React_createElement(RecordEditor,{
+                entity: this.props.entity,
+                entityTypeHumanName: "Teacher",
+                entityTypeMachineName: "teachers"
+            },React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "name"
+            },"Teacher Name"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "name",
+                placeholder: "e.g. Chow Ban Hoe",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.name :
+                    "")
+            }),React_createElement("div",{
+                className: "checkbox"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "checkbox",
+                name: "admin",
+                defaultChecked: (this.props.entity ?
+                    this.props.entity.is_admin :
+                    false)
+            }),"This teacher is an administrator."))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "witness"
+            },"Witness Name (Capital, with Salutation)"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "witness",
+                placeholder: "e.g. MR CHOW BAN HOE",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.witness_name :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "email"
+            },"Email Address"),React_createElement("input",{
+                type: "email",
+                className: "form-control",
+                name: "email",
+                placeholder: "e.g. chow_ban_hoe@moe.edu.sg",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.email :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "unit"
+            },"Unit"),React_createElement("input",{
+                type: "email",
+                className: "form-control",
+                name: "unit",
+                placeholder: "e.g. Bio",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.unit :
+                    "")
+            })));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        TeacherEditor: "displayName"
+    })));
     var DeleteConfirmation = React_createClass(_.defaults({
         propTypes: {
-            entityTypeHumanName: React.PropTypes.string.isRequired,
-            entityTypeMachineName: React.PropTypes.string.isRequired,
             entity: React.PropTypes.object.isRequired
         },
         render: function() {
-            var hname = this.props.entityTypeHumanName;
-            var mname = this.props.entityTypeMachineName;
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var hname = dataSpec.humanName;
+            var mname = dataSpec.machineName;
             var endpoint = ((("/api/" + mname) + "/") + this.props.entity.id);
             var next = function(hideModal) {
                 return $.ajax(endpoint,{
@@ -690,36 +762,6 @@ $(function() {
     },_.invert({
         DeleteConfirmation: "displayName"
     })));
-    var CcaDeleteConfirmation = React_createClass(_.defaults({
-        render: function() {
-            return React_createElement(DeleteConfirmation,{
-                entity: this.props.entity,
-                entityTypeHumanName: "CCA",
-                entityTypeMachineName: "ccas"
-            });
-        }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        CcaDeleteConfirmation: "displayName"
-    })));
-    var SubjectDeleteConfirmation = React_createClass(_.defaults({
-        render: function() {
-            return React_createElement(DeleteConfirmation,{
-                entity: this.props.entity,
-                entityTypeHumanName: "Subject",
-                entityTypeMachineName: "subjects"
-            });
-        }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        SubjectDeleteConfirmation: "displayName"
-    })));
     var AdminHomeR = React_createClass(_.defaults({
         render: function() {
             return React_createElement("div",{
@@ -735,13 +777,19 @@ $(function() {
     },_.invert({
         AdminHomeR: "displayName"
     })));
-    var AdminCcasR = React_createClass(_.defaults({
+    var EntityPage = React_createClass(_.defaults({
         render: function() {
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var hnamepl = dataSpec.humanNamePlural;
+            var mname = dataSpec.machineName;
+            var editor = dataSpec.editor;
             return React_createElement("div",{},React_createElement("div",{
                 className: "pull-right btn-group",
                 role: "toolbar",
                 "aria-label": "Action Buttons"
-            },React_createElement("button",{
+            },(this.props.customButtons ?
+                this.props.customButtons :
+                null),React_createElement("button",{
                 id: "addButton",
                 type: "button",
                 className: "btn btn-default"
@@ -749,29 +797,43 @@ $(function() {
                 id: "removeAllButton",
                 type: "button",
                 className: "btn btn-default"
-            },"Remove All")),React_createElement("h2",{},"All CCAs"),React_createElement(EntityTable,{
-                conn: APIConnection("/api/ccas"),
-                entityEditor: CcaEditor,
-                deleteConfirmation: CcaDeleteConfirmation
+            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),React_createElement(EntityTable,{
+                conn: APIConnection(("/api/" + mname)),
+                entityEditor: editor
             }));
         },
         componentDidMount: function() {
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var hnamepl = dataSpec.humanNamePlural;
+            var mname = dataSpec.machineName;
+            var editor = dataSpec.editor;
             ($("#addButton")).on("click",function() {
-                return React.render(React_createElement(CcaEditor,{}),getModalWrapper());
+                return React.render(React_createElement(editor,{}),getModalWrapper());
             });
             return ($("#removeAllButton")).on("click",function() {
                 return React.render(React_createElement(ActionModal,{
-                    title: "Deleting All CCAs",
+                    title: ("Deleting All " + hnamepl),
                     actionButtonLabel: "Yes, Delete All",
                     actionButtonStyle: "danger",
                     next: function(hideModal) {
-                        return $.ajax("/api/ccas",{
+                        return $.ajax(("/api/" + mname),{
                             type: "DELETE",
                             complete: hideModal
                         });
                     }
-                },React_createElement("p",{},"Are you sure you want to delete all CCAs currently stored in the database? This will also delete all students’ CCA information.")),getModalWrapper());
+                },React_createElement("p",{},(((("Are you sure you want to delete all " + hnamepl) + " currently stored in the database? This will also delete all references to these ") + hnamepl) + ", if they exist."))),getModalWrapper());
             });
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        EntityPage: "displayName"
+    })));
+    var AdminCcasR = React_createClass(_.defaults({
+        render: function() {
+            return React_createElement(EntityPage,{});
         }
     },{
         render: function() {
@@ -782,47 +844,18 @@ $(function() {
     })));
     var AdminSubjectsR = React_createClass(_.defaults({
         render: function() {
-            return React_createElement("div",{},React_createElement("div",{
-                className: "pull-right btn-group",
-                role: "toolbar",
-                "aria-label": "Action Buttons"
-            },React_createElement("button",{
+            var customButtons = React_createElement("button",{
                 id: "testDecodeButton",
                 type: "button",
                 className: "btn btn-default"
-            },"Test Decode"),React_createElement("button",{
-                id: "addButton",
-                type: "button",
-                className: "btn btn-default"
-            },"Add New"),React_createElement("button",{
-                id: "removeAllButton",
-                type: "button",
-                className: "btn btn-default"
-            },"Remove All")),React_createElement("h2",{},"All Subjects"),React_createElement(EntityTable,{
-                conn: APIConnection("/api/subjects"),
-                entityEditor: SubjectEditor,
-                deleteConfirmation: SubjectDeleteConfirmation
-            }));
+            },"Test Decode");
+            return React_createElement(EntityPage,{
+                customButtons: customButtons
+            });
         },
         componentDidMount: function() {
-            ($("#testDecodeButton")).on("click",function() {
+            return ($("#testDecodeButton")).on("click",function() {
                 return React.render(React_createElement(TestDecoder,{}),getModalWrapper());
-            });
-            ($("#addButton")).on("click",function() {
-                return React.render(React_createElement(SubjectEditor,{}),getModalWrapper());
-            });
-            return ($("#removeAllButton")).on("click",function() {
-                return React.render(React_createElement(ActionModal,{
-                    title: "Deleting All Subjects",
-                    actionButtonLabel: "Yes, Delete All",
-                    actionButtonStyle: "danger",
-                    next: function(hideModal) {
-                        return $.ajax("/api/subjects",{
-                            type: "DELETE",
-                            complete: hideModal
-                        });
-                    }
-                },React_createElement("p",{},"Are you sure you want to delete all subjects currently stored in the database? This will also delete all students’ subject information.")),getModalWrapper());
             });
         }
     },{
@@ -832,7 +865,11 @@ $(function() {
     },_.invert({
         AdminSubjectsR: "displayName"
     })));
-    var AdminTeachersR = React_createClass(_.defaults({},{
+    var AdminTeachersR = React_createClass(_.defaults({
+        render: function() {
+            return React_createElement(EntityPage,{});
+        }
+    },{
         render: function() {
             return false;
         }
@@ -856,6 +893,10 @@ $(function() {
             pageName: "Manage CCAs",
             component: AdminCcasR,
             dataSpec: {
+                humanName: "CCA",
+                humanNamePlural: "CCAs",
+                machineName: "ccas",
+                editor: CcaEditor,
                 categoryColumn: [
                     "category",
                     _.identity,
@@ -874,6 +915,10 @@ $(function() {
             pageName: "Manage Subjects",
             component: AdminSubjectsR,
             dataSpec: {
+                humanName: "Subject",
+                humanNamePlural: "Subjects",
+                machineName: "subjects",
+                editor: SubjectEditor,
                 categoryColumn: [
                     "level",
                     function(ls) {
@@ -913,7 +958,44 @@ $(function() {
         "/admin/teachers": {
             pageName: "Manage Teachers",
             component: AdminTeachersR,
-            dataSpec: null
+            dataSpec: {
+                humanName: "Teacher",
+                humanNamePlural: "Teachers",
+                machineName: "teachers",
+                editor: TeacherEditor,
+                categoryColumn: null,
+                columns: [
+                    [
+                        "name",
+                        _.identity,
+                        "Name"
+                    ],
+                    [
+                        "unit",
+                        _.identity,
+                        "Unit"
+                    ],
+                    [
+                        "email",
+                        _.identity,
+                        "Email Address"
+                    ],
+                    [
+                        "is_admin",
+                        function(b) {
+                            return (b ?
+                                "Yes" :
+                                "No");
+                        },
+                        "Administrator?"
+                    ],
+                    [
+                        "witness_name",
+                        _.identity,
+                        "Witness Name"
+                    ]
+                ]
+            }
         },
         "/admin/students": {
             pageName: "Manage Students",
