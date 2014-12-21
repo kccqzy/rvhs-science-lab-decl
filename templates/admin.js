@@ -3,6 +3,8 @@
 $(function() {
     var React_createElement = React.createElement;
     var React_createClass = React.createClass;
+    var React_PropTypes = React.PropTypes;
+    var __map = _.map;
     var APIConnection = function(pathname) {
         var wsUrl = ((((window.location.protocol === "https:") ?
             "wss://" :
@@ -49,8 +51,8 @@ $(function() {
     };
     var EntityRow = React_createClass(_.defaults({
         propTypes: {
-            firstRowSpan: React.PropTypes.number.isRequired,
-            entity: React.PropTypes.object.isRequired
+            firstRowSpan: React_PropTypes.number.isRequired,
+            entity: React_PropTypes.object.isRequired
         },
         render: function() {
             var that = this;
@@ -60,7 +62,7 @@ $(function() {
                     rowSpan: this.props.firstRowSpan
                 },dataSpec.categoryColumn[1](this.props.entity[dataSpec.categoryColumn[0]])) :
                 null);
-            return React_createElement("tr",{},firstCell,_.map(dataSpec.columns,function(spec,idx) {
+            return React_createElement("tr",{},firstCell,__map(dataSpec.columns,function(spec,idx) {
                 var value = that.props.entity[spec[0]];
                 var mapper = spec[1];
                 return React_createElement("td",{
@@ -101,10 +103,10 @@ $(function() {
     })));
     var EntityCategory = React_createClass(_.defaults({
         propTypes: {
-            entities: React.PropTypes.array.isRequired
+            entities: React_PropTypes.array.isRequired
         },
         render: function() {
-            return React_createElement("tbody",{},_.map(this.props.entities,function(entity,i,entities) {
+            return React_createElement("tbody",{},__map(this.props.entities,function(entity,i,entities) {
                 return React_createElement(EntityRow,{
                     key: entity.id,
                     entity: entity,
@@ -123,8 +125,8 @@ $(function() {
     })));
     var EntityTable = React_createClass(_.defaults({
         propTypes: {
-            conn: React.PropTypes.object.isRequired,
-            entityEditor: React.PropTypes.any.isRequired
+            conn: React_PropTypes.object.isRequired,
+            entityEditor: React_PropTypes.any.isRequired
         },
         getInitialState: function() {
             return {
@@ -140,21 +142,19 @@ $(function() {
                     tableData: JSON.parse(e.data)
                 });
             });
-            return (($(this.getDOMNode())).on("click","button[data-action=\"edit\"]",function() {
-                var entityid = ($(this)).data("entityid");
-                var entity = _.find(that.state.tableData.data,function(d) {
+            var findEntity = function(ceci) {
+                var entityid = ($(ceci)).data("entityid");
+                return _.find(that.state.tableData.data,function(d) {
                     return (d.id === entityid);
                 });
+            };
+            return (($(this.getDOMNode())).on("click","button[data-action=\"edit\"]",function() {
                 return React.render(React_createElement(that.props.entityEditor,{
-                    entity: entity
+                    entity: findEntity(this)
                 }),getModalWrapper());
             })).on("click","button[data-action=\"delete\"]",function() {
-                var entityid = ($(this)).data("entityid");
-                var entity = _.find(that.state.tableData.data,function(d) {
-                    return (d.id === entityid);
-                });
                 return React.render(React_createElement(DeleteConfirmation,{
-                    entity: entity
+                    entity: findEntity(this)
                 }),getModalWrapper());
             });
         },
@@ -168,7 +168,7 @@ $(function() {
                 (function() {
                     var sortName = dataSpec.columns[0][0];
                     var massagedData = _.sortBy(rawData,sortName);
-                    return React_createElement("tbody",{},_.map(massagedData,function(entity) {
+                    return React_createElement("tbody",{},__map(massagedData,function(entity) {
                         return React_createElement(EntityRow,{
                             firstRowSpan: 1,
                             entity: entity,
@@ -179,7 +179,7 @@ $(function() {
                 (function() {
                     var categoryName = dataSpec.categoryColumn[0];
                     var sortName = dataSpec.columns[0][0];
-                    var massagedData = _.map(_.sortBy(_.map(_.groupBy(rawData,categoryName),function(v,k) {
+                    var massagedData = __map(_.sortBy(__map(_.groupBy(rawData,categoryName),function(v,k) {
                         return {
                             k: k,
                             v: _.sortBy(v,sortName)
@@ -187,7 +187,7 @@ $(function() {
                     }),"k"),function(d) {
                         return (d).v;
                     });
-                    return _.map(massagedData,function(entities) {
+                    return __map(massagedData,function(entities) {
                         var category = entities[0][categoryName];
                         return React_createElement(EntityCategory,{
                             entities: entities,
@@ -195,11 +195,11 @@ $(function() {
                         });
                     });
                 })());
-            var headers = _.map((((dataSpec.categoryColumn === null) ?
+            var headers = __map((((dataSpec.categoryColumn === null) ?
                 [] :
                 [
                     dataSpec.categoryColumn[2]
-                ])).concat(_.map(dataSpec.columns,function(v) {
+                ])).concat(__map(dataSpec.columns,function(v) {
                 return v[2];
             })),function(label,idx) {
                 return React_createElement("th",{
@@ -221,10 +221,10 @@ $(function() {
     })));
     var Modal = React_createClass(_.defaults({
         propTypes: {
-            canClose: React.PropTypes.bool.isRequired,
-            title: React.PropTypes.node.isRequired,
-            buttons: React.PropTypes.node,
-            children: React.PropTypes.node.isRequired
+            canClose: React_PropTypes.bool.isRequired,
+            title: React_PropTypes.node.isRequired,
+            buttons: React_PropTypes.node,
+            children: React_PropTypes.node.isRequired
         },
         render: function() {
             var header = React_createElement("div",{
@@ -279,12 +279,12 @@ $(function() {
     };
     var ActionModal = React_createClass(_.defaults({
         propTypes: {
-            actionButtonType: React.PropTypes.string,
-            actionButtonStyle: React.PropTypes.string.isRequired,
-            actionButtonLabel: React.PropTypes.node.isRequired,
-            title: React.PropTypes.node.isRequired,
-            children: React.PropTypes.node.isRequired,
-            next: React.PropTypes.func.isRequired
+            actionButtonType: React_PropTypes.string,
+            actionButtonStyle: React_PropTypes.string.isRequired,
+            actionButtonLabel: React_PropTypes.node.isRequired,
+            title: React_PropTypes.node.isRequired,
+            children: React_PropTypes.node.isRequired,
+            next: React_PropTypes.func.isRequired
         },
         getInitialState: function() {
             return {
@@ -345,10 +345,10 @@ $(function() {
     })));
     var RecordEditor = React_createClass(_.defaults({
         propTypes: {
-            entityTypeHumanName: React.PropTypes.string.isRequired,
-            entityTypeMachineName: React.PropTypes.string.isRequired,
-            entity: React.PropTypes.object,
-            children: React.PropTypes.node.isRequired
+            entityTypeHumanName: React_PropTypes.string.isRequired,
+            entityTypeMachineName: React_PropTypes.string.isRequired,
+            entity: React_PropTypes.object,
+            children: React_PropTypes.node.isRequired
         },
         getInitialState: function() {
             return {
@@ -416,7 +416,7 @@ $(function() {
     })));
     var CcaEditor = React_createClass(_.defaults({
         propTypes: {
-            entity: React.PropTypes.object
+            entity: React_PropTypes.object
         },
         render: function() {
             return React_createElement(RecordEditor,{
@@ -458,7 +458,7 @@ $(function() {
     })));
     var SubjectEditor = React_createClass(_.defaults({
         propTypes: {
-            entity: React.PropTypes.object
+            entity: React_PropTypes.object
         },
         getInitialState: function() {
             return {
@@ -533,7 +533,7 @@ $(function() {
                 htmlFor: "level"
             },"Applies To"),React_createElement("div",{
                 className: "checkbox"
-            },_.map([
+            },__map([
                 1,
                 2,
                 3,
@@ -587,7 +587,7 @@ $(function() {
                 });
             };
             var subjectsToString = function(ss) {
-                return (_.map(ss,function(s) {
+                return (__map(ss,function(s) {
                     return s.name;
                 })).join(", ");
             };
@@ -608,7 +608,7 @@ $(function() {
                     ((1 === this.state.decodeResult.length) ?
                         React_createElement("div",{},"The subject codes could be unambiguously decoded: ",React_createElement("br",{}),subjectsToString(this.state.decodeResult[0])) :
                         (true ?
-                            React_createElement("div",{},"The subject codes could not be unambiguously decoded; here are the possibilities:",React_createElement("ul",{},_.map(this.state.decodeResult,function(ss) {
+                            React_createElement("div",{},"The subject codes could not be unambiguously decoded; here are the possibilities:",React_createElement("ul",{},__map(this.state.decodeResult,function(ss) {
                                 return React_createElement("li",{},subjectsToString(ss));
                             }))) :
                             undefined))))) :
@@ -623,7 +623,7 @@ $(function() {
                 htmlFor: "level"
             },"Year"),React_createElement("div",{
                 className: "radio"
-            },_.map([
+            },__map([
                 1,
                 2,
                 3,
@@ -660,7 +660,7 @@ $(function() {
     })));
     var TeacherEditor = React_createClass(_.defaults({
         propTypes: {
-            entity: React.PropTypes.object
+            entity: React_PropTypes.object
         },
         render: function() {
             return React_createElement(RecordEditor,{
@@ -734,7 +734,7 @@ $(function() {
     })));
     var DeleteConfirmation = React_createClass(_.defaults({
         propTypes: {
-            entity: React.PropTypes.object.isRequired
+            entity: React_PropTypes.object.isRequired
         },
         render: function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -922,7 +922,7 @@ $(function() {
                 categoryColumn: [
                     "level",
                     function(ls) {
-                        return (_.map(ls,function(l) {
+                        return (__map(ls,function(l) {
                             return ("Year " + l);
                         })).join(", ");
                     },
@@ -1006,7 +1006,7 @@ $(function() {
     var Page = React_createClass(_.defaults({
         render: function() {
             var pathname = window.location.pathname;
-            var tabs = _.map(pageSpec,function(page,route) {
+            var tabs = __map(pageSpec,function(page,route) {
                 return React_createElement("li",{
                     key: route,
                     role: "presentation",

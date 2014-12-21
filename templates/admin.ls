@@ -20,6 +20,8 @@
    ;; Aliases to help minification and macros to save typing.
    (defvar React_createElement React.createElement)
    (defvar React_createClass React.createClass)
+   (defvar React_PropTypes React.PropTypes)
+   (defvar __map _.map)
    (macro e (name attrs rest...)
           (React_createElement ~name (obj ~@attrs) ~rest...))
    (macro defcomponent (name rest...)
@@ -63,8 +65,8 @@
    (defcomponent EntityRow
      propTypes
      (obj
-      firstRowSpan React.PropTypes.number.isRequired
-      entity React.PropTypes.object.isRequired)
+      firstRowSpan React_PropTypes.number.isRequired
+      entity React_PropTypes.object.isRequired)
 
      render
      (fn ()
@@ -77,7 +79,7 @@
                            null))
        (e "tr" ()
          firstCell
-         (_.map dataSpec.columns
+         (__map dataSpec.columns
                 (fn (spec idx)
                   (defvar value (get (get 0 spec) that.props.entity))
                   (defvar mapper (get 1 spec))
@@ -94,11 +96,11 @@
    (defcomponent EntityCategory
      propTypes
      (obj
-      entities React.PropTypes.array.isRequired)
+      entities React_PropTypes.array.isRequired)
      render
      (fn ()
        (e "tbody" ()
-         (_.map this.props.entities
+         (__map this.props.entities
                 (fn (entity i entities)
                   (e EntityRow
                       (key entity.id entity entity firstRowSpan (if i 0 entities.length))))))))
@@ -108,8 +110,8 @@
    (defcomponent EntityTable
      propTypes
      (obj
-      conn React.PropTypes.object.isRequired
-      entityEditor React.PropTypes.any.isRequired)
+      conn React_PropTypes.object.isRequired
+      entityEditor React_PropTypes.any.isRequired)
 
      ;; Assume no data for initial state.
      getInitialState
@@ -122,20 +124,19 @@
        (this.props.conn.registerCallback
         (fn (e)
           (that.setState (obj tableData (JSON.parse e.data)))))
+       (defun findEntity (ceci)
+         (defvar entityid (-> ($ ceci) (.data "entityid")))
+         (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
        (-> ($ (this.getDOMNode))
            (.on "click" "button[data-action=\"edit\"]"
                 (fn ()
-                  (defvar entityid (-> ($ this) (.data "entityid")))
-                  (defvar entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
                   (React.render
-                   (e that.props.entityEditor (entity entity))
+                   (e that.props.entityEditor (entity (findEntity this)))
                    (getModalWrapper))))
            (.on "click" "button[data-action=\"delete\"]"
                 (fn ()
-                  (defvar entityid (-> ($ this) (.data "entityid")))
-                  (defvar entity (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
                   (React.render
-                   (e DeleteConfirmation (entity entity))
+                   (e DeleteConfirmation (entity (findEntity this)))
                    (getModalWrapper))))))
 
      ;; Close connection when unmounted. This is paranoia because
@@ -157,7 +158,7 @@
                         (defvar sortName (get 0 (get 0 dataSpec.columns)))
                         (defvar massagedData (_.sortBy rawData sortName))
                         (e "tbody" ()
-                          (_.map massagedData
+                          (__map massagedData
                                  (fn (entity)
                                    (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
                       (do ; there is a category column, so group by
@@ -170,19 +171,19 @@
                         ;; map :: {v} -> (v -> String -> a) -> [a]
                         ;; sortBy :: [{a}] -> String -> [{a}]
                         (defvar massagedData
-                          (_.map (_.sortBy (_.map (_.groupBy rawData categoryName)
+                          (__map (_.sortBy (__map (_.groupBy rawData categoryName)
                                                   (fn (v k) (obj k k v (_.sortBy v sortName))))
                                            "k")
                                  (fn (d) (.v d))))
-                        (_.map massagedData
+                        (__map massagedData
                                (fn (entities)
                                  (defvar category (get categoryName (get 0 entities)))
                                  (e EntityCategory (entities entities key category)))))))
 
-       (defvar headers (_.map (-> (if (null? dataSpec.categoryColumn)
+       (defvar headers (__map (-> (if (null? dataSpec.categoryColumn)
                                     (array)
                                     (array (get 2 dataSpec.categoryColumn)))
-                                  (.concat (_.map dataSpec.columns (fn (v) (get 2 v)))))
+                                  (.concat (__map dataSpec.columns (fn (v) (get 2 v)))))
                               (fn (label idx) (e "th" (key idx) label))))
        (e "div" (className "table-responsive")
          (e "table" (className "table")
@@ -197,10 +198,10 @@
    (defcomponent Modal
      propTypes
      (obj
-      canClose React.PropTypes.bool.isRequired
-      title React.PropTypes.node.isRequired
-      buttons React.PropTypes.node
-      children React.PropTypes.node.isRequired)
+      canClose React_PropTypes.bool.isRequired
+      title React_PropTypes.node.isRequired
+      buttons React_PropTypes.node
+      children React_PropTypes.node.isRequired)
 
      ;; Modal rendering.
      render
@@ -238,12 +239,12 @@
    (defcomponent ActionModal
      propTypes
      (obj
-      actionButtonType React.PropTypes.string
-      actionButtonStyle React.PropTypes.string.isRequired
-      actionButtonLabel React.PropTypes.node.isRequired
-      title React.PropTypes.node.isRequired
-      children React.PropTypes.node.isRequired
-      next React.PropTypes.func.isRequired)
+      actionButtonType React_PropTypes.string
+      actionButtonStyle React_PropTypes.string.isRequired
+      actionButtonLabel React_PropTypes.node.isRequired
+      title React_PropTypes.node.isRequired
+      children React_PropTypes.node.isRequired
+      next React_PropTypes.func.isRequired)
 
      getInitialState
      (fn () (obj spinner 0))
@@ -275,10 +276,10 @@
    (defcomponent RecordEditor
      propTypes
      (obj
-      entityTypeHumanName React.PropTypes.string.isRequired
-      entityTypeMachineName React.PropTypes.string.isRequired
-      entity React.PropTypes.object
-      children React.PropTypes.node.isRequired)
+      entityTypeHumanName React_PropTypes.string.isRequired
+      entityTypeMachineName React_PropTypes.string.isRequired
+      entity React_PropTypes.object
+      children React_PropTypes.node.isRequired)
 
      getInitialState
      (fn ()
@@ -319,7 +320,7 @@
    (defcomponent CcaEditor
      propTypes
      (obj
-      entity React.PropTypes.object)
+      entity React_PropTypes.object)
 
      render
      (fn ()
@@ -334,7 +335,7 @@
    (defcomponent SubjectEditor
      propTypes
      (obj
-      entity React.PropTypes.object)
+      entity React_PropTypes.object)
 
      getInitialState
      (fn ()
@@ -365,7 +366,7 @@
          (e "div" (className "form-group")
            (e "label" (htmlFor "level") "Applies To")
            (e "div" (className "checkbox")
-             (_.map (array 1 2 3 4 5 6)
+             (__map (array 1 2 3 4 5 6)
                     (fn (lv)
                       (defvar checked (if that.props.entity (!= -1 (_.indexOf that.props.entity.level lv)) false))
                       (e "label" (key lv className "checkbox-inline")
@@ -388,7 +389,7 @@
                     (fn (data)
                       (setSpinner 0)
                       (that.setState (obj decodeResult data.data)))))
-       (defun subjectsToString (ss) (-> (_.map ss (fn (s) s.name)) (.join ", ")))
+       (defun subjectsToString (ss) (-> (__map ss (fn (s) s.name)) (.join ", ")))
        (e ActionModal (actionButtonStyle "primary" actionButtonLabel "Decode" title "Test Decode Subject Codes" next next)
          (if this.state.decodeResult
            (e "div" (className "panel panel-default")
@@ -405,7 +406,7 @@
                      (e "div" ()
                        "The subject codes could not be unambiguously decoded; here are the possibilities:"
                        (e "ul" ()
-                         (_.map this.state.decodeResult
+                         (__map this.state.decodeResult
                                 (fn (ss) (e "li" () (subjectsToString ss)))))))))
            null)
          (e "form" (id "decoderForm" role "form")
@@ -413,7 +414,7 @@
            (e "div" (className "form-group")
              (e "label" (htmlFor "level") "Year")
              (e "div" (className "radio")
-               (_.map (array 1 2 3 4 5 6)
+               (__map (array 1 2 3 4 5 6)
                       (fn (lv)
                         (e "label" (key lv className "checkbox-inline")
                           (e "input" (type "radio" name "level" value lv defaultChecked (= 1 lv))) "Year " lv)))))
@@ -424,7 +425,7 @@
    (defcomponent TeacherEditor
      propTypes
      (obj
-      entity React.PropTypes.object)
+      entity React_PropTypes.object)
 
      render
      (fn ()
@@ -449,7 +450,7 @@
    (defcomponent DeleteConfirmation
      propTypes
      (obj
-      entity React.PropTypes.object.isRequired)
+      entity React_PropTypes.object.isRequired)
 
      render
      (fn ()
@@ -557,7 +558,7 @@
                                                               humanNamePlural "Subjects"
                                                               machineName "subjects"
                                                               editor SubjectEditor
-                                                              categoryColumn (array "level" (fn (ls) (-> (_.map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
+                                                              categoryColumn (array "level" (fn (ls) (-> (__map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
                                                               columns (array
                                                                        (array "name" _.identity "Subject Name")
                                                                        (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
@@ -585,7 +586,7 @@
      (fn ()
        (defvar pathname window.location.pathname)
        (defvar tabs
-         (_.map pageSpec
+         (__map pageSpec
                 (fn (page route)
                   (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
                     (e "a" (href (if (= route pathname) "#" route))
