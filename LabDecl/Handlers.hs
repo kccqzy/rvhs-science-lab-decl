@@ -5,6 +5,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TupleSections #-}
 module LabDecl.Handlers where
 
 import Control.Applicative
@@ -45,7 +47,7 @@ import Text.Hamlet (hamletFile, hamletFileReload)
 import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
 import Yesod.Core
-import Yesod.Form
+import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData)
 import Yesod.EmbeddedStatic
 
@@ -179,19 +181,6 @@ acidUpdateHandler event = do
 checkMMapOk :: a -> Handler (Either T.Text a)
 checkMMapOk = return . return
 
--- | Validate an email address, the format of which follows WHATWG
--- HTML5.
-validateEmailBS :: C.ByteString -> Bool
-validateEmailBS = (isRight .) . PC.parseOnly $ do
-  username
-  PC.char '@'
-  domainPart `PC.sepBy1` PC.char '.'
-  PC.endOfInput
-  where username = PC.takeWhile1 $ PC.inClass "a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-"
-        domainPart = do
-          r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
-          guard $ C.length (C.intercalate "-" r) <= 63
-
 -- | Parses a subject code string into a set of subjects.
 parseSubjectCode :: Map T.Text Subject -> T.Text -> [Set Subject]
 parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (parseSubjects allSubjects) . (,Set.empty)
@@ -228,6 +217,12 @@ instance (Monad m) => Applicative (MFormInput m) where
 runMInputPost :: MonadHandler m => MFormInput m a -> m a
 runMInputPost = runInputPost . unMFormInput
 
+mireq :: Field Handler a -> T.Text -> MFormInput Handler a
+mireq = (MFormInput .) . ireq
+
+miopt :: Field Handler a -> T.Text -> MFormInput Handler (Maybe a)
+miopt = (MFormInput .) . iopt
+
 -- | The CCA form request expected by POST and PUT. No validation
 -- here.
 ccaForm :: CcaId -> FormInput Handler Cca
@@ -245,9 +240,11 @@ subjectForm sid = Subject
                   <*> ireq textField "name"
                   <*> ireq checkBoxField "science"
                   <*> ireq levelField "level"
-  where levelField = checkMMap fw bw $ checkboxesFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
-          where fw = checkMMapOk . IntSet.fromList
-                bw = IntSet.toList
+
+levelField :: Field Handler IntSet
+levelField = checkMMap fw bw $ checkboxesFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
+  where fw = checkMMapOk . IntSet.fromList
+        bw = IntSet.toList
 
 teacherForm :: TeacherId -> FormInput Handler Teacher
 teacherForm tid = Teacher
@@ -257,10 +254,22 @@ teacherForm tid = Teacher
                   <*> ireq textField "name"
                   <*> ireq textField "witness"
                   <*> ireq emailField "email"
-  where emailField = checkMMap fw bw (checkBool validateEmail ("email wrong format" :: T.Text) textField)
-          where fw = checkMMapOk . Email
-                bw (Email e) = e
-                validateEmail = validateEmailBS . T.encodeUtf8
+
+emailField :: Field Handler Email
+emailField = checkMMap fw bw (checkBool validateEmail ("email wrong format" :: T.Text) textField)
+  where fw = checkMMapOk . Email
+        bw (Email e) = e
+        validateEmail = validateEmailBS . T.encodeUtf8
+        validateEmailBS :: C.ByteString -> Bool
+        validateEmailBS = (isRight .) . PC.parseOnly $ do
+          username
+          PC.char '@'
+          domainPart `PC.sepBy1` PC.char '.'
+          PC.endOfInput
+          where username = PC.takeWhile1 $ PC.inClass "a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-"
+                domainPart = do
+                  r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
+                  guard $ C.length (C.intercalate "-" r) <= 63
 
 studentForm :: StudentId -> FormInput Handler Student
 studentForm sid = unMFormInput $ do
@@ -269,47 +278,54 @@ studentForm sid = unMFormInput $ do
                   c <- miopt teacherIdField "witness"
                   d <- mireq classField "class"
                   e <- mireq intField "indexno"
-                  f <- mireq (subjCombiField d) "subj"
+                  f <- miopt (subjCombiField d) "subj"
+                  let f' = maybe Set.empty id f
                   g <- mireq nricField "nric"
-                  return $ Student sid a b c d e f g SubmissionNotOpen
-  where mireq = (MFormInput .) . ireq
-        miopt = (MFormInput .) . iopt
-        classField = checkMMap fw bw textField
-          where bw (Class (l, c)) = T.pack $ show l ++ [c]
-                fw = return . parseClass . T.encodeUtf8
-                parseClass :: C.ByteString -> Either T.Text Class
-                parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
-                  l <- Char.digitToInt <$> PC.digit
-                  guard $ 1 <= l && l <= 6
-                  c <- PC.satisfy $ PC.inClass "A-NP-Z"
-                  PC.endOfInput
-                  return $ Class (l, c)
-        nricField = checkMMap fw bw (checkBool validatePartialNric ("wrong nric format" :: T.Text) textField)
-          where bw (Nric s) = s
-                fw = checkMMapOk . Nric
-                validatePartialNric = validatePartialNricBS . T.encodeUtf8
-                validatePartialNricBS = (isRight .) . PC.parseOnly $ do
-                  PC.count 4 PC.digit
-                  PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
-                  PC.endOfInput
-        teacherIdField = checkMMap fw bw intField
-          where bw (TeacherId i) = i
-                fw i = do
-                  acid <- getAcid <$> ask
-                  let rv = TeacherId i
-                  e <- liftIO $ Acid.query acid $ LookupTeacherById (TeacherId i)
-                  case e of
-                   Nothing -> return . Left $ ("no such teacher" :: T.Text)
-                   Just _ -> return . Right $ rv
-        subjCombiField klass = checkMMap fw bw (checkboxesField optlist)
-          where fw = checkMMapOk . Set.fromList
-                bw = Set.toList
-                optlist = do
-                  acid <- getAcid <$> ask
-                  let (Class (level, _)) = klass
-                  e <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
-                  optionsPairs . map (liftM2 (,) (T.pack . show . unSubjectId) id . (^. subjectId)) . Set.toList $ e
-                unSubjectId (SubjectId i) = i
+                  return $ Student sid a b c d e f' g SubmissionNotOpen
+
+classField :: Field Handler Class
+classField = checkMMap fw bw textField
+  where bw (Class (l, c)) = T.pack $ show l ++ [c]
+        fw = return . parseClass . T.encodeUtf8
+        parseClass :: C.ByteString -> Either T.Text Class
+        parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
+          l <- Char.digitToInt <$> PC.digit
+          guard $ 1 <= l && l <= 6
+          c <- PC.satisfy $ PC.inClass "A-NP-Z"
+          PC.endOfInput
+          return $ Class (l, c)
+
+nricField :: Field Handler Nric
+nricField = checkMMap fw bw (checkBool validatePartialNric ("wrong nric format" :: T.Text) textField)
+  where bw (Nric s) = s
+        fw = checkMMapOk . Nric
+        validatePartialNric = validatePartialNricBS . T.encodeUtf8
+        validatePartialNricBS = (isRight .) . PC.parseOnly $ do
+          PC.count 4 PC.digit
+          PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
+          PC.endOfInput
+
+teacherIdField :: Field Handler TeacherId
+teacherIdField = checkMMap fw bw intField
+  where bw (TeacherId i) = i
+        fw i = do
+          acid <- getAcid <$> ask
+          let rv = TeacherId i
+          e <- liftIO $ Acid.query acid $ LookupTeacherById (TeacherId i)
+          case e of
+           Nothing -> return . Left $ ("no such teacher" :: T.Text)
+           Just _ -> return . Right $ rv
+
+subjCombiField :: Class -> Field Handler (Set SubjectId)
+subjCombiField klass = checkMMap fw bw (checkboxesField optlist)
+  where fw = checkMMapOk . Set.fromList
+        bw = Set.toList
+        optlist = do
+          acid <- getAcid <$> ask
+          let (Class (level, _)) = klass
+          e <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
+          optionsPairs . map (liftM2 (,) (T.pack . show . unSubjectId) id . (^. subjectId)) . Set.toList $ e
+        unSubjectId (SubjectId i) = i
 
 -- | Generically parses forms and handles a database update.
 acidFormUpdateHandler :: (Acid.UpdateEvent ev,
@@ -393,20 +409,48 @@ deleteTeacherR = acidUpdateHandler . RemoveTeacher
 deleteTeachersR :: Handler Value
 deleteTeachersR = acidUpdateHandler RemoveAllTeachers
 
+data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),
+                              Acid.QueryEvent ev,
+                              ToJSON (Acid.MethodResult ev),
+                              Acid.MethodState ev ~ Database) => QueryEvent T.Text ev
+
+searchByField :: Field Handler QueryEvent
+searchByField = checkMMap fw bw textField
+  where bw :: QueryEvent -> T.Text
+        bw (QueryEvent tag _) = tag
+        fw crit = do
+          case crit of
+           "all" -> checkMMapOk . QueryEvent crit $ ListStudents
+           "class" -> do
+             klass <- runInputGet (ireq classField "class")
+             checkMMapOk . QueryEvent crit $ ListStudentsFromClass klass
+           "cca" -> do
+             cid <- runInputGet (ireq intField "id")
+             checkMMapOk . QueryEvent crit $ ListStudentsFromCca (CcaId cid)
+           "subject" -> do
+             sid <- runInputGet (ireq intField "id")
+             checkMMapOk . QueryEvent crit $ ListStudentsWithSubject (SubjectId sid)
+           "teacher" -> do
+             tid <- runInputGet (ireq intField "id")
+             checkMMapOk . QueryEvent crit $ ListStudentsWithWitnesser (TeacherId tid)
+           _ -> return $ Left ("no such criteria" :: T.Text)
+
 getStudentsR :: Handler Value
-getStudentsR = undefined
+getStudentsR = do
+  QueryEvent _ ev <- runInputGet (ireq searchByField "searchby")
+  acidQueryHandler ev
 
 postStudentsR :: Handler Value
-postStudentsR = undefined
+postStudentsR = acidFormUpdateHandler studentForm AddStudent (StudentId 0)
 
 getStudentR :: StudentId -> Handler Value
-getStudentR = undefined
+getStudentR = acidQueryHandler . LookupStudentById
 
 putStudentR :: StudentId -> Handler Value
-putStudentR = undefined
+putStudentR = acidFormUpdateHandler studentForm ReplaceStudent
 
 deleteStudentR :: StudentId -> Handler Value
-deleteStudentR = undefined
+deleteStudentR = acidUpdateHandler . RemoveStudent
 
 deleteStudentsR :: Handler Value
 deleteStudentsR = acidUpdateHandler RemoveAllStudents
