@@ -41,6 +41,7 @@ import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.WebSockets as WS
+import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
 import Text.Cassius (cassiusFile, cassiusFileReload)
 import Text.Hamlet (hamletFile, hamletFileReload)
@@ -81,7 +82,8 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/teachers             TeachersR      GET POST DELETE
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
 /api/students             StudentsR      GET POST DELETE
-/api/students/#StudentId  StudentR       GET PUT DELETE
+/api/students/submit      StudentSubmitR POST
+!/api/students/#StudentId StudentR       GET PUT DELETE
 /admin                    AdminHomeR     GET
 /admin/ccas               AdminCcasR     GET
 /admin/subjects           AdminSubjectsR GET
@@ -454,6 +456,14 @@ deleteStudentR = acidUpdateHandler . RemoveStudent
 
 deleteStudentsR :: Handler Value
 deleteStudentsR = acidUpdateHandler RemoveAllStudents
+
+postStudentSubmitR :: Handler Value
+postStudentSubmitR = do
+  req <- waiRequest
+  body <- liftIO $ Wai.strictRequestBody req
+  case JSON.decode body of
+   Nothing -> invalidArgs ["no parse"]
+   Just s -> acidUpdateHandler $ PublicStudentDoSubmission s
 
 -- |
 -- = HTML handlers
