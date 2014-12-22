@@ -6,7 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module LabDecl.Models where
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (*>))
 import Control.Monad
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader
@@ -23,6 +23,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Attoparsec.ByteString.Char8 as PC
+import qualified Data.Attoparsec.Text as PT
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.IxSet as IxSet
@@ -35,6 +37,7 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Typeable (Typeable, typeOf)
 import qualified Data.Acid as Acid
+import qualified Codec.Picture.Png as Png
 
 import LabDecl.Types
 import LabDecl.Utilities
@@ -320,20 +323,30 @@ publicLookupStudentByClassIndexNumber klass indexNumber nric = do
 -- take the updated fields as arguments, but rather take a full
 -- student and then compare. This is more work but it will be worth it
 -- (at least I hope so).
+-- XXX This kind of validation should happen in Handlers not here.
 publicStudentDoSubmission :: Student -> IUpdate
 publicStudentDoSubmission newStudent = do
   maybeStudent <- liftQuery $ lookupStudentById (newStudent ^. studentId)
   validCcas <- liftQuery $ Set.map (^. ccaId) <$> listCcas
-  lift . note errInvalidPublicSubmission $ do
+  changedStudent <- lift . note errInvalidPublicSubmission $ do
     student <- maybeStudent
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
     guard . not $ (_SubmissionCompleted `isn't` (newStudent ^. studentSubmission))
-    guard . isJust . join $ newStudent ^? studentSubmission . ssSignature
     guard $ Just Nothing == newStudent ^? studentSubmission . ssFinalDeclaration
     guard $ maybe False (all (`Set.member` validCcas)) (newStudent ^? studentSubmission . ssCca)
-    let changedStudent = student & studentSubmission .~ newStudent ^. studentSubmission
-    guard $ changedStudent == newStudent
-  replaceEntity True newStudent
+    guard $ newStudent == (student & studentSubmission .~ newStudent ^. studentSubmission)
+    case join $ newStudent ^? studentSubmission . ssSignature of
+     Nothing -> mzero
+     Just sigdataurl -> do
+       sigdata <- decodePngBase64 sigdataurl
+       return . (studentSubmission . ssSignature .~ Just sigdata) $ student
+  replaceEntity True changedStudent
+  where decodePngBase64 :: ByteString64 -> Maybe ByteString64
+        decodePngBase64 (ByteString64 bs) = fmap ByteString64 . hush $ do
+          data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
+          d <- C64.decode data64
+          Png.decodePng d
+          return d
 
 -- |
 -- = Internal Operations
