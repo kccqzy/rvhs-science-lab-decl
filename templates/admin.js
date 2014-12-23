@@ -36,8 +36,11 @@ $(function() {
         });
         return {
             registerCallback: function(func) {
-                conn.onmessage = func;
-                callback = func;
+                var wrapFunc = function(e) {
+                    return func(JSON.parse(e.data));
+                };
+                conn.onmessage = wrapFunc;
+                callback = wrapFunc;
             },
             readyState: function() {
                 return (conn ?
@@ -137,9 +140,9 @@ $(function() {
         },
         componentDidMount: function() {
             var that = this;
-            this.props.conn.registerCallback(function(e) {
+            this.props.conn.registerCallback(function(d) {
                 return that.setState({
-                    tableData: JSON.parse(e.data)
+                    tableData: d
                 });
             });
             var findEntity = function(ceci) {
@@ -158,7 +161,19 @@ $(function() {
                 }),getModalWrapper());
             });
         },
+        componentDidUpdate: function() {
+            var that = this;
+            return this.props.conn.registerCallback(function(d) {
+                return that.setState({
+                    tableData: d
+                });
+            });
+        },
         componentWillUnmount: function() {
+            return this.props.conn.close();
+        },
+        componentWillReceiveProps: function() {
+            console.log("EntityTable: componentWillReceiveProps");
             return this.props.conn.close();
         },
         render: function() {
@@ -732,6 +747,13 @@ $(function() {
     },_.invert({
         TeacherEditor: "displayName"
     })));
+    var StudentEditor = React_createClass(_.defaults({},{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        StudentEditor: "displayName"
+    })));
     var DeleteConfirmation = React_createClass(_.defaults({
         propTypes: {
             entity: React_PropTypes.object.isRequired
@@ -778,6 +800,10 @@ $(function() {
         AdminHomeR: "displayName"
     })));
     var EntityPage = React_createClass(_.defaults({
+        propTypes: {
+            customButtons: React_PropTypes.node,
+            wsUrl: React_PropTypes.string
+        },
         render: function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var hnamepl = dataSpec.humanNamePlural;
@@ -797,8 +823,8 @@ $(function() {
                 id: "removeAllButton",
                 type: "button",
                 className: "btn btn-default"
-            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),React_createElement(EntityTable,{
-                conn: APIConnection(("/api/" + mname)),
+            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
+                conn: APIConnection((this.props.wsUrl || ("/api/" + mname))),
                 entityEditor: editor
             }));
         },
@@ -876,7 +902,98 @@ $(function() {
     },_.invert({
         AdminTeachersR: "displayName"
     })));
-    var AdminStudentsR = React_createClass(_.defaults({},{
+    var AdminStudentsR = React_createClass(_.defaults({
+        getInitialState: function() {
+            return {
+                queryString: null,
+                selected: "class"
+            };
+        },
+        shouldComponentUpdate: function(nextProps,nextState) {
+            return (nextState.queryString !== this.state.queryString);
+        },
+        render: function() {
+            var that = this;
+            var handleChange = function(e) {
+                return (e.target.checked ?
+                    that.setState({
+                        selected: e.target.value
+                    }) :
+                    undefined);
+            };
+            var buttonClick = function(e) {
+                e.preventDefault();
+                console.log(($("#searchbyForm")).serialize());
+                return that.setState({
+                    queryString: ($("#searchbyForm")).serialize()
+                });
+            };
+            return React_createElement("div",{},React_createElement("div",{
+                className: "row"
+            },React_createElement("div",{
+                className: "col-sm-11 col-md-8 col-lg-7"
+            },React_createElement("h4",{},"Which students would you like to see?"),React_createElement("form",{
+                role: "form",
+                id: "searchbyForm"
+            },React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
+                value: "class",
+                defaultChecked: true,
+                onChange: handleChange
+            }),"I’d like to view students from a particular class.",((this.state.selected === "class") ?
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    name: "class",
+                    placeholder: "Enter a class, e.g. 5N"
+                }) :
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    disabled: true,
+                    value: ""
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
+                value: "cca",
+                onChange: handleChange
+            }),"I’d like to view students from a particular CCA.",((this.state.selected === "cca") ?
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    disabled: true,
+                    value: "TODO"
+                }) :
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    disabled: true,
+                    value: ""
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
+                value: "all",
+                onChange: handleChange
+            }),"I’d like to view all students from all levels. (NOT RECOMMENDED; very taxing on the network)")),React_createElement("button",{
+                type: "submit",
+                className: "btn btn-primary",
+                onClick: buttonClick
+            },"View")))),React_createElement("div",{
+                className: "row"
+            },(this.state.queryString ?
+                React_createElement(EntityPage,{
+                    wsUrl: ("/api/students?" + this.state.queryString)
+                }) :
+                null)));
+        }
+    },{
         render: function() {
             return false;
         }
@@ -1000,7 +1117,44 @@ $(function() {
         "/admin/students": {
             pageName: "Manage Students",
             component: AdminStudentsR,
-            dataSpec: null
+            dataSpec: {
+                humanName: "Student",
+                humanNamePlural: "Students",
+                machineName: "students",
+                editor: StudentEditor,
+                categoryColumn: [
+                    "class",
+                    _.identity,
+                    "Class"
+                ],
+                columns: [
+                    [
+                        "index_number",
+                        _.identity,
+                        "Reg #"
+                    ],
+                    [
+                        "name",
+                        _.identity,
+                        "Name"
+                    ],
+                    [
+                        "chinese_name",
+                        _.identity,
+                        "Chinese Name"
+                    ],
+                    [
+                        "nric",
+                        function(v) {
+                            return React_createElement("span",{
+                                className: "hover-view",
+                                "data-text": v
+                            });
+                        },
+                        "NRIC"
+                    ]
+                ]
+            }
         }
     };
     var Page = React_createClass(_.defaults({

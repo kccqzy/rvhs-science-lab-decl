@@ -54,8 +54,9 @@
      (-> ($ window) (.on "beforeunload" (fn () (conn.close))))
      (obj
       registerCallback (fn (func)
-                         (set conn.onmessage func)
-                         (set callback func))
+                         (defun wrapFunc (e) (func (JSON.parse e.data)))
+                         (set conn.onmessage wrapFunc)
+                         (set callback wrapFunc))
       readyState (fn ()
                    (if conn conn.readyState -1))
       close (fn () (conn.close))))
@@ -117,13 +118,13 @@
      getInitialState
      (fn () (obj tableData (obj data (array))))
 
-     ;; When mounted, add event handlers.
+     ;; When mounted, add callback and event handlers.
      componentDidMount
      (fn ()
        (defvar that this)
        (this.props.conn.registerCallback
-        (fn (e)
-          (that.setState (obj tableData (JSON.parse e.data)))))
+        (fn (d)
+          (that.setState (obj tableData d))))
        (defun findEntity (ceci)
          (defvar entityid (-> ($ ceci) (.data "entityid")))
          (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
@@ -139,10 +140,20 @@
                    (e DeleteConfirmation (entity (findEntity this)))
                    (getModalWrapper))))))
 
-     ;; Close connection when unmounted. This is paranoia because
-     ;; currently there is no event to unmount them.
+     ;; When updated, it is because a new connection is here;
+     ;; re-register the callback.
+     componentDidUpdate
+     (fn ()
+       (defvar that this)
+       (this.props.conn.registerCallback
+        (fn (d)
+          (that.setState (obj tableData d)))))
+
+     ;; Close connection as appropriate.
      componentWillUnmount
      (fn () (this.props.conn.close))
+     componentWillReceiveProps
+     (fn () (console.log "EntityTable: componentWillReceiveProps") (this.props.conn.close))
 
      ;; Now we need to group the data according to the requirements
      ;; outlined in the dataSpec (a.k.a. massage) and then render
@@ -446,6 +457,8 @@
            (e "label" (htmlFor "unit") "Unit")
            (e "input" (type "email" className "form-control" name "unit" placeholder "e.g. Bio" defaultValue (if this.props.entity this.props.entity.unit "")))))))
 
+   (defcomponent StudentEditor)
+
    ;; The Delete Confirmation.
    (defcomponent DeleteConfirmation
      propTypes
@@ -480,6 +493,10 @@
            (e "p" () "If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")))))
 
    (defcomponent EntityPage
+     propTypes
+     (obj
+      customButtons React_PropTypes.node
+      wsUrl React_PropTypes.string)
      render
      (fn ()
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
@@ -492,7 +509,8 @@
            (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
            (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
          (e "h2" () (+ "View " hnamepl))
-         (e EntityTable (conn (APIConnection (+ "/api/" mname)) entityEditor editor))))
+         this.props.children
+         (e EntityTable (conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname))) entityEditor editor))))
 
      componentDidMount
      (fn ()
@@ -539,7 +557,54 @@
      render
      (fn () (e EntityPage ())))
 
-   (defcomponent AdminStudentsR)
+   (defcomponent AdminStudentsR
+     getInitialState
+     (fn ()
+       (obj queryString null
+            selected "class"))
+
+     shouldComponentUpdate
+     (fn (nextProps nextState)
+       (!= nextState.queryString this.state.queryString))
+
+     render
+     (fn ()
+       (defvar that this)
+       (defun handleChange (e)
+         (if e.target.checked
+           (that.setState (obj selected e.target.value))))
+       (defun buttonClick (e)
+         (e.preventDefault)
+         (console.log (-> ($ "#searchbyForm") (.serialize)))
+         (that.setState (obj queryString (-> ($ "#searchbyForm") (.serialize)))))
+       (e "div" ()
+         (e "div" (className "row")
+           (e "div" (className "col-sm-11 col-md-8 col-lg-7")
+             (e "h4" () "Which students would you like to see?")
+             (e "form" (role "form" id "searchbyForm")
+               (e "div" (className "radio")
+                 (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "class" defaultChecked true onChange handleChange))
+                   "I’d like to view students from a particular class."
+                   (if (= this.state.selected "class")
+                     (e "input" (type "text" className "form-control" name "class" placeholder "Enter a class, e.g. 5N"))
+                     (e "input" (type "text" className "form-control" disabled true value "")))))
+               (e "div" (className "radio")
+                 (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "cca" onChange handleChange))
+                   "I’d like to view students from a particular CCA."
+                   (if (= this.state.selected "cca")
+                     (e "input" (type "text" className "form-control" disabled true value "TODO"))
+                     (e "input" (type "text" className "form-control" disabled true value "")))))
+               (e "div" (className "radio")
+                 (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "all" onChange handleChange))
+                   "I’d like to view all students from all levels. (NOT RECOMMENDED; very taxing on the network)"))
+               (e "button" (type "submit" className "btn btn-primary" onClick buttonClick) "View"))))
+         (e "div" (className "row")
+           (if this.state.queryString
+             (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString)))
+             null)))))
 
    (defvar pageSpec (obj "/admin" (obj pageName "Home"
                                        component AdminHomeR
@@ -579,7 +644,17 @@
                                                                        (array "witness_name" _.identity "Witness Name"))))
                          "/admin/students" (obj pageName "Manage Students"
                                                 component AdminStudentsR
-                                                dataSpec null)))
+                                                dataSpec (obj humanName "Student"
+                                                              humanNamePlural "Students"
+                                                              machineName "students"
+                                                              editor StudentEditor
+                                                              categoryColumn (array "class" _.identity "Class")
+                                                              columns (array
+                                                                       (array "index_number" _.identity "Reg #")
+                                                                       (array "name" _.identity "Name")
+                                                                       (array "chinese_name" _.identity "Chinese Name")
+                                                                       (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" v))) "NRIC")
+                                                                       )))))
 
    (defcomponent Page
      render

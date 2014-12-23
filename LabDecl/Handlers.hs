@@ -501,4 +501,5 @@ getAdminSubjectsR = defaultLayout $ do
 getAdminStudentsR :: Handler Html
 getAdminStudentsR = defaultLayout $ do
   setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
+  toWidget $(cassiusFile "templates/hover.cassius")
   adminSite
