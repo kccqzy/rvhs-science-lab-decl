@@ -56,6 +56,7 @@ $(function() {
         propTypes: {
             firstRowSpan: React_PropTypes.number.isRequired,
             entity: React_PropTypes.object.isRequired,
+            entityEditor: React_PropTypes.any.isRequired,
             auxiliary: React_PropTypes.object
         },
         render: function() {
@@ -72,6 +73,18 @@ $(function() {
                     ]));
                 })() :
                 null);
+            var onEditButtonClick = function() {
+                return React.render(React_createElement(that.props.entityEditor,{
+                    auxiliary: that.props.auxiliary,
+                    entity: that.props.entity
+                }),getModalWrapper());
+            };
+            var onDeleteButtonClick = function() {
+                return React.render(React_createElement(DeleteConfirmation,{
+                    auxiliary: that.props.auxiliary,
+                    entity: that.props.entity
+                }),getModalWrapper());
+            };
             return React_createElement("tr",{},firstCell,__map(dataSpec.columns,function(spec,idx) {
                 var value = that.props.entity[spec[0]];
                 var mapper = spec[1];
@@ -90,8 +103,7 @@ $(function() {
                 type: "button",
                 className: "btn btn-default btn-xs",
                 "aria-label": "Edit",
-                "data-action": "edit",
-                "data-entityid": this.props.entity.id
+                onClick: onEditButtonClick
             },React_createElement("span",{
                 className: "glyphicon glyphicon-pencil",
                 "aria-hidden": "true"
@@ -99,8 +111,7 @@ $(function() {
                 type: "button",
                 className: "btn btn-default btn-xs",
                 "aria-label": "Delete",
-                "data-action": "delete",
-                "data-entityid": this.props.entity.id
+                onClick: onDeleteButtonClick
             },React_createElement("span",{
                 className: "glyphicon glyphicon-trash",
                 "aria-hidden": "true"
@@ -116,6 +127,7 @@ $(function() {
     var EntityCategory = React_createClass(_.defaults({
         propTypes: {
             entities: React_PropTypes.array.isRequired,
+            entityEditor: React_PropTypes.any.isRequired,
             auxiliary: React_PropTypes.object
         },
         render: function() {
@@ -123,6 +135,7 @@ $(function() {
             return React_createElement("tbody",{},__map(this.props.entities,function(entity,i,entities) {
                 return React_createElement(EntityRow,{
                     key: entity.id,
+                    entityEditor: that.props.entityEditor,
                     auxiliary: that.props.auxiliary,
                     entity: entity,
                     firstRowSpan: (i ?
@@ -153,27 +166,10 @@ $(function() {
         },
         componentDidMount: function() {
             var that = this;
-            this.props.conn.registerCallback(function(d) {
+            return this.props.conn.registerCallback(function(d) {
                 return that.setState({
                     tableData: d
                 });
-            });
-            var findEntity = function(ceci) {
-                var entityid = ($(ceci)).data("entityid");
-                return _.find(that.state.tableData.data,function(d) {
-                    return (d.id === entityid);
-                });
-            };
-            return (($(this.getDOMNode())).on("click","button[data-action=\"edit\"]",function() {
-                return React.render(React_createElement(that.props.entityEditor,{
-                    auxiliary: that.props.auxiliary,
-                    entity: findEntity(this)
-                }),getModalWrapper());
-            })).on("click","button[data-action=\"delete\"]",function() {
-                return React.render(React_createElement(DeleteConfirmation,{
-                    auxiliary: that.props.auxiliary,
-                    entity: findEntity(this)
-                }),getModalWrapper());
             });
         },
         componentDidUpdate: function() {
@@ -203,6 +199,7 @@ $(function() {
                     return React_createElement("tbody",{},__map(massagedData,function(entity) {
                         return React_createElement(EntityRow,{
                             firstRowSpan: 1,
+                            entityEditor: that.props.entityEditor,
                             auxiliary: that.props.auxiliary,
                             entity: entity,
                             key: entity.id
@@ -224,6 +221,7 @@ $(function() {
                         var category = entities[0][categoryName];
                         return React_createElement(EntityCategory,{
                             entities: entities,
+                            entityEditor: that.props.entityEditor,
                             auxiliary: that.props.auxiliary,
                             key: category
                         });
@@ -326,6 +324,18 @@ $(function() {
             };
         },
         render: function() {
+            var that = this;
+            var onActionButtonClick = function(e) {
+                e.preventDefault();
+                var setSpinner = function(v) {
+                    return that.setState({
+                        spinner: v
+                    });
+                };
+                return that.props.next(function() {
+                    return ($("#modal")).modal("hide");
+                },setSpinner);
+            };
             var buttons = React_createElement("div",{},React_createElement("img",{
                 width: 16,
                 height: 16,
@@ -348,27 +358,13 @@ $(function() {
             },"Cancel"),React_createElement("button",{
                 type: (this.props.actionButtonType || "button"),
                 className: ("btn btn-" + this.props.actionButtonStyle),
-                id: "actionButton"
+                onClick: onActionButtonClick
             },this.props.actionButtonLabel)));
             return React_createElement(Modal,{
                 canClose: true,
                 title: this.props.title,
                 buttons: buttons
             },this.props.children);
-        },
-        componentDidMount: function() {
-            var that = this;
-            var setSpinner = function(v) {
-                return that.setState({
-                    spinner: v
-                });
-            };
-            return ($("#actionButton")).on("click",function(e) {
-                e.preventDefault();
-                return that.props.next(function() {
-                    return ($("#modal")).modal("hide");
-                },setSpinner);
-            });
         }
     },{
         render: function() {
@@ -412,7 +408,6 @@ $(function() {
                 });
             };
             var next = function(hideModal,setSpinner) {
-                console.log(($("#editorForm")).serialize());
                 setSpinner(1);
                 return $.ajax(endpoint,{
                     type: method,
@@ -467,7 +462,7 @@ $(function() {
                 name: "name",
                 placeholder: "e.g. Infocomm Club",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.name :
+                    (this.props.entity).name :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -479,7 +474,7 @@ $(function() {
                 name: "category",
                 placeholder: "e.g. Clubs and Societies",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.category :
+                    (this.props.entity).category :
                     "")
             })));
         }
@@ -502,9 +497,8 @@ $(function() {
             };
         },
         render: function() {
-            console.log(this.props.entity);
             var that = this;
-            var compulsoryChanged = function(event) {
+            var onCompulsoryChanged = function(event) {
                 return that.setState({
                     compulsory: event.target.checked
                 });
@@ -523,13 +517,13 @@ $(function() {
                 name: "name",
                 placeholder: "e.g. Mathematics (H3)",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.name :
+                    (this.props.entity).name :
                     "")
             }),React_createElement("div",{
                 className: "checkbox"
             },React_createElement("label",{},React_createElement("input",{
                 type: "checkbox",
-                onChange: compulsoryChanged,
+                onChange: onCompulsoryChanged,
                 checked: this.state.compulsory
             }),"This is a compulsory subject.")),React_createElement("div",{
                 className: "checkbox"
@@ -557,7 +551,7 @@ $(function() {
                     name: "code",
                     placeholder: "e.g. MA(H3)",
                     defaultValue: (this.props.entity ?
-                        this.props.entity.code :
+                        (this.props.entity).code :
                         "")
                 })),React_createElement("p",{
                 className: "help-block"
@@ -611,7 +605,6 @@ $(function() {
         render: function() {
             var that = this;
             var next = function(hideModal,setSpinner) {
-                console.log(($("#decoderForm")).serialize());
                 setSpinner(1);
                 return $.getJSON("/api/subjects/test-decode",($("#decoderForm")).serialize(),function(data) {
                     setSpinner(0);
@@ -711,7 +704,7 @@ $(function() {
                 name: "name",
                 placeholder: "e.g. Chow Ban Hoe",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.name :
+                    (this.props.entity).name :
                     "")
             }),React_createElement("div",{
                 className: "checkbox"
@@ -731,7 +724,7 @@ $(function() {
                 name: "witness",
                 placeholder: "e.g. MR CHOW BAN HOE",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.witness_name :
+                    (this.props.entity).witness_name :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -743,7 +736,7 @@ $(function() {
                 name: "email",
                 placeholder: "e.g. chow_ban_hoe@moe.edu.sg",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.email :
+                    (this.props.entity).email :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -755,7 +748,7 @@ $(function() {
                 name: "unit",
                 placeholder: "e.g. Bio",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.unit :
+                    (this.props.entity).unit :
                     "")
             })));
         }
@@ -813,7 +806,7 @@ $(function() {
                 name: "indexno",
                 placeholder: "e.g. 22",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.index_number :
+                    (this.props.entity).index_number :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -825,7 +818,7 @@ $(function() {
                 name: "name",
                 inputmode: "latin-name",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.name :
+                    (this.props.entity).name :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -837,7 +830,7 @@ $(function() {
                 name: "chinesename",
                 inputmode: "kana",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.chinese_name :
+                    (this.props.entity).chinese_name :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -849,7 +842,7 @@ $(function() {
                 name: "nric",
                 inputmode: "verbatim",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.nric :
+                    (this.props.entity).nric :
                     "")
             })),React_createElement("div",{
                 className: "form-group"
@@ -859,7 +852,7 @@ $(function() {
                 className: "form-control",
                 name: "witnesser",
                 defaultValue: (this.props.entity ?
-                    this.props.entity.witnesser :
+                    (this.props.entity).witnesser :
                     "")
             },__map(this.props.auxiliary.teacherInfo.data,function(teacher) {
                 return React_createElement("option",{
@@ -951,45 +944,17 @@ $(function() {
             auxiliary: React_PropTypes.object
         },
         render: function() {
-            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var hnamepl = dataSpec.humanNamePlural;
-            var mname = dataSpec.machineName;
-            var editor = dataSpec.editor;
-            return React_createElement("div",{},React_createElement("div",{
-                className: "pull-right btn-group",
-                role: "toolbar",
-                "aria-label": "Action Buttons"
-            },(this.props.customButtons ?
-                this.props.customButtons :
-                null),React_createElement("button",{
-                id: "addButton",
-                type: "button",
-                className: "btn btn-default"
-            },"Add New"),React_createElement("button",{
-                id: "removeAllButton",
-                type: "button",
-                className: "btn btn-default"
-            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
-                conn: APIConnection((this.props.wsUrl || ("/api/" + mname))),
-                entityEditor: editor,
-                auxiliary: this.props.auxiliary
-            }));
-        },
-        shouldComponentUpdate: function(newProps) {
-            return (!_.isEqual(this.props,newProps));
-        },
-        componentDidMount: function() {
-            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var hnamepl = dataSpec.humanNamePlural;
-            var mname = dataSpec.machineName;
-            var editor = dataSpec.editor;
             var that = this;
-            ($("#addButton")).on("click",function() {
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var hnamepl = dataSpec.humanNamePlural;
+            var mname = dataSpec.machineName;
+            var editor = dataSpec.editor;
+            var onAddButtonClick = function() {
                 return React.render(React_createElement(editor,{
                     auxiliary: that.props.auxiliary
                 }),getModalWrapper());
-            });
-            return ($("#removeAllButton")).on("click",function() {
+            };
+            var onRemoveAllButtonClick = function() {
                 return React.render(React_createElement(ActionModal,{
                     title: ("Deleting All " + hnamepl),
                     actionButtonLabel: "Yes, Delete All",
@@ -1001,7 +966,29 @@ $(function() {
                         });
                     }
                 },React_createElement("p",{},(((("Are you sure you want to delete all " + hnamepl) + " currently stored in the database? This will also delete all references to these ") + hnamepl) + ", if they exist."))),getModalWrapper());
-            });
+            };
+            return React_createElement("div",{},React_createElement("div",{
+                className: "pull-right btn-group",
+                role: "toolbar",
+                "aria-label": "Action Buttons"
+            },(this.props.customButtons ?
+                this.props.customButtons :
+                null),React_createElement("button",{
+                type: "button",
+                className: "btn btn-default",
+                onClick: onAddButtonClick
+            },"Add New"),React_createElement("button",{
+                type: "button",
+                className: "btn btn-default",
+                onClick: onRemoveAllButtonClick
+            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
+                conn: APIConnection((this.props.wsUrl || ("/api/" + mname))),
+                entityEditor: editor,
+                auxiliary: this.props.auxiliary
+            }));
+        },
+        shouldComponentUpdate: function(newProps) {
+            return (!_.isEqual(this.props,newProps));
         }
     },{
         render: function() {
@@ -1023,18 +1010,16 @@ $(function() {
     })));
     var AdminSubjectsR = React_createClass(_.defaults({
         render: function() {
+            var onTestDecodeButtonClick = function() {
+                return React.render(React_createElement(TestDecoder,{}),getModalWrapper());
+            };
             var customButtons = React_createElement("button",{
-                id: "testDecodeButton",
+                onClick: onTestDecodeButtonClick,
                 type: "button",
                 className: "btn btn-default"
             },"Test Decode");
             return React_createElement(EntityPage,{
                 customButtons: customButtons
-            });
-        },
-        componentDidMount: function() {
-            return ($("#testDecodeButton")).on("click",function() {
-                return React.render(React_createElement(TestDecoder,{}),getModalWrapper());
             });
         }
     },{
@@ -1097,16 +1082,15 @@ $(function() {
         },
         render: function() {
             var that = this;
-            var handleChange = function(e) {
+            var onRadioChange = function(e) {
                 return (e.target.checked ?
                     that.setState({
                         selected: e.target.value
                     }) :
                     undefined);
             };
-            var buttonClick = function(e) {
+            var onViewButtonClick = function(e) {
                 e.preventDefault();
-                console.log(($("#searchbyForm")).serialize());
                 return that.setState({
                     queryString: ($("#searchbyForm")).serialize()
                 });
@@ -1130,7 +1114,7 @@ $(function() {
                 name: "searchby",
                 value: "class",
                 defaultChecked: true,
-                onChange: handleChange
+                onChange: onRadioChange
             }),"I’d like to view students from a particular class.",((this.state.selected === "class") ?
                 React_createElement("input",{
                     type: "text",
@@ -1149,7 +1133,7 @@ $(function() {
                 type: "radio",
                 name: "searchby",
                 value: "teacher",
-                onChange: handleChange
+                onChange: onRadioChange
             }),"I’d like to view students whose witness is a particular teacher.",((this.state.selected === "teacher") ?
                 React_createElement("select",{
                     className: "form-control",
@@ -1169,7 +1153,7 @@ $(function() {
                 type: "radio",
                 name: "searchby",
                 value: "subject",
-                onChange: handleChange
+                onChange: onRadioChange
             }),"I’d like to view students who takes a particular subject.",((this.state.selected === "subject") ?
                 React_createElement("select",{
                     className: "form-control",
@@ -1191,7 +1175,7 @@ $(function() {
                 type: "radio",
                 name: "searchby",
                 value: "cca",
-                onChange: handleChange
+                onChange: onRadioChange
             }),"I’d like to view students from a particular CCA.",((this.state.selected === "cca") ?
                 React_createElement("select",{
                     className: "form-control",
@@ -1211,11 +1195,11 @@ $(function() {
                 type: "radio",
                 name: "searchby",
                 value: "all",
-                onChange: handleChange
+                onChange: onRadioChange
             }),"I’d like to view ",React_createElement("em",{},"all")," students. (",React_createElement("strong",{},"NOT RECOMMENDED:")," very taxing on the network)")),React_createElement("button",{
                 type: "submit",
                 className: "btn btn-primary",
-                onClick: buttonClick
+                onClick: onViewButtonClick
             },"View")))),React_createElement("div",{
                 className: "row"
             },React_createElement(EntityPage,{

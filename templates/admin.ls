@@ -28,6 +28,8 @@
           (var ~name (React_createClass (_.defaults (obj ~rest...)
                                                     (obj render (fn () false))
                                                     (_.invert (obj ~name "displayName"))))))
+   (macro ifentity (attr)
+          (if this.props.entity (~attr this.props.entity) ""))
 
    ;; An APIConnection is a wrapper around WebSocket.
    (defun APIConnection (pathname)
@@ -67,6 +69,7 @@
      (obj
       firstRowSpan React_PropTypes.number.isRequired
       entity React_PropTypes.object.isRequired
+      entityEditor React_PropTypes.any.isRequired
       auxiliary React_PropTypes.object)
 
      render
@@ -81,6 +84,14 @@
                              (e "td" (rowSpan that.props.firstRowSpan)
                                (mapper.apply that.props.auxiliary (array value))))
                            null))
+       (defun onEditButtonClick ()
+         (React.render
+          (e that.props.entityEditor (auxiliary that.props.auxiliary entity that.props.entity))
+          (getModalWrapper)))
+       (defun onDeleteButtonClick ()
+         (React.render
+          (e DeleteConfirmation (auxiliary that.props.auxiliary entity that.props.entity))
+          (getModalWrapper)))
        (e "tr" ()
          firstCell
          (__map dataSpec.columns
@@ -90,9 +101,9 @@
                   (e "td" (key idx) (mapper.apply that.props.auxiliary (array value)))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" "data-action" "edit" "data-entityid" this.props.entity.id)
+             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" onClick onEditButtonClick)
                (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete" "data-action" "delete" "data-entityid" this.props.entity.id)
+             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete" onClick onDeleteButtonClick)
                (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
 
    ;; An EntityCategory is a group of data shared under a category,
@@ -101,6 +112,7 @@
      propTypes
      (obj
       entities React_PropTypes.array.isRequired
+      entityEditor React_PropTypes.any.isRequired
       auxiliary React_PropTypes.object)
      render
      (fn ()
@@ -109,7 +121,7 @@
          (__map this.props.entities
                 (fn (entity i entities)
                   (e EntityRow
-                      (key entity.id auxiliary that.props.auxiliary entity entity firstRowSpan (if i 0 entities.length))))))))
+                      (key entity.id entityEditor that.props.entityEditor auxiliary that.props.auxiliary entity entity firstRowSpan (if i 0 entities.length))))))))
 
    ;; An EntityTable is the entire table for holding the data. It
    ;; receives events from the two action buttons on each row.
@@ -130,23 +142,9 @@
        (defvar that this)
        (this.props.conn.registerCallback
         (fn (d)
-          (that.setState (obj tableData d))))
-       (defun findEntity (ceci)
-         (defvar entityid (-> ($ ceci) (.data "entityid")))
-         (_.find that.state.tableData.data (fn (d) (= d.id entityid))))
-       (-> ($ (this.getDOMNode))
-           (.on "click" "button[data-action=\"edit\"]"
-                (fn ()
-                  (React.render
-                   (e that.props.entityEditor (auxiliary that.props.auxiliary entity (findEntity this)))
-                   (getModalWrapper))))
-           (.on "click" "button[data-action=\"delete\"]"
-                (fn ()
-                  (React.render
-                   (e DeleteConfirmation (auxiliary that.props.auxiliary entity (findEntity this)))
-                   (getModalWrapper))))))
+          (that.setState (obj tableData d)))))
 
-     ;; When updated, it is because a new connection is here;
+     ;; When updated, it is probably because a new connection is here;
      ;; re-register the callback.
      componentDidUpdate
      (fn ()
@@ -178,7 +176,7 @@
                         (e "tbody" ()
                           (__map massagedData
                                  (fn (entity)
-                                   (e EntityRow (firstRowSpan 1 auxiliary that.props.auxiliary entity entity key entity.id))))))
+                                   (e EntityRow (firstRowSpan 1 entityEditor that.props.entityEditor auxiliary that.props.auxiliary entity entity key entity.id))))))
                       (do ; there is a category column, so group by
                           ; that first
                         (defvar categoryName (get 0 dataSpec.categoryColumn))
@@ -196,7 +194,7 @@
                         (__map massagedData
                                (fn (entities)
                                  (defvar category (get categoryName (get 0 entities)))
-                                 (e EntityCategory (entities entities auxiliary that.props.auxiliary key category)))))))
+                                 (e EntityCategory (entities entities entityEditor that.props.entityEditor auxiliary that.props.auxiliary key category)))))))
 
        (defvar headers (__map (-> (if (null? dataSpec.categoryColumn)
                                     (array)
@@ -268,6 +266,11 @@
      (fn () (obj spinner 0))
      render
      (fn ()
+       (defvar that this)
+       (defun onActionButtonClick (e)
+         (e.preventDefault)
+         (defun setSpinner (v) (that.setState (obj spinner v)))
+         (that.props.next (fn () (-> ($ "#modal") (.modal "hide"))) setSpinner))
        (defvar buttons
          (e "div" ()
            ;; Note that we must render both elements in both cases
@@ -276,19 +279,9 @@
            (e "img" (width 16 height 16 src "/static/res/loading.gif" style (obj display (if this.state.spinner "inline" "none"))))
            (e "div" (style (obj display (if this.state.spinner "none" "block")))
              (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "Cancel")
-             (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) id "actionButton") this.props.actionButtonLabel))))
+             (e "button" (type (|| this.props.actionButtonType "button") className (+ "btn btn-" this.props.actionButtonStyle) onClick onActionButtonClick) this.props.actionButtonLabel))))
        (e Modal (canClose true title this.props.title buttons buttons)
-         this.props.children))
-
-     ;; Register click handler.
-     componentDidMount
-     (fn ()
-       (defvar that this)
-       (defun setSpinner (v) (that.setState (obj spinner v)))
-       (-> ($ "#actionButton")
-           (.on "click" (fn (e)
-                          (e.preventDefault)
-                          (that.props.next (fn () (-> ($ "#modal") (.modal "hide"))) setSpinner))))))
+         this.props.children)))
 
    ;; An editor for records.
    (defcomponent RecordEditor
@@ -318,7 +311,6 @@
          (defvar resp (JSON.parse jqxhr.responseText))
          (that.setState (obj err resp.meta.details)))
        (defun next (hideModal setSpinner)
-         (console.log (-> ($ "#editorForm") (.serialize)))
          (setSpinner 1)
          ($.ajax endpoint (obj type method
                                data (-> ($ "#editorForm") (.serialize))
@@ -345,10 +337,10 @@
        (e RecordEditor (entity this.props.entity entityTypeHumanName "CCA" entityTypeMachineName "ccas")
          (e "div" (className "form-group")
            (e "label" (htmlFor "name") "CCA Name")
-           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Infocomm Club" defaultValue (if this.props.entity this.props.entity.name ""))))
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Infocomm Club" defaultValue (ifentity .name))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "category") "CCA Category")
-           (e "input" (type "text" className "form-control" name "category" placeholder "e.g. Clubs and Societies" defaultValue (if this.props.entity this.props.entity.category "")))))))
+           (e "input" (type "text" className "form-control" name "category" placeholder "e.g. Clubs and Societies" defaultValue (ifentity .category)))))))
 
    (defcomponent SubjectEditor
      propTypes
@@ -361,17 +353,16 @@
 
      render
      (fn ()
-       (console.log this.props.entity)
        (var that this)
-       (defun compulsoryChanged (event)
+       (defun onCompulsoryChanged (event)
          (that.setState (obj compulsory event.target.checked)))
        (e RecordEditor (entity this.props.entity entityTypeHumanName "Subject" entityTypeMachineName "subjects")
          (e "div" (className "form-group")
            (e "label" (htmlFor "name") "Subject Name")
-           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Mathematics (H3)" defaultValue (if this.props.entity this.props.entity.name "")))
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Mathematics (H3)" defaultValue (ifentity .name)))
            (e "div" (className "checkbox")
              (e "label" ()
-               (e "input" (type "checkbox" onChange compulsoryChanged checked this.state.compulsory)) "This is a compulsory subject."))
+               (e "input" (type "checkbox" onChange onCompulsoryChanged checked this.state.compulsory)) "This is a compulsory subject."))
            (e "div" (className "checkbox")
              (e "label" ()
                (e "input" (type "checkbox" name "science" defaultChecked (if this.props.entity this.props.entity.is_science false))) "This is a science subject.")))
@@ -379,7 +370,7 @@
            (e "label" (htmlFor "code") "Subject Code")
            (if this.state.compulsory
              (e "input" (type "text" className "form-control" disabled true value "" placeholder "None"))
-             (e "input" (type "text" className "form-control" name "code" placeholder "e.g. MA(H3)" defaultValue (if this.props.entity this.props.entity.code ""))))
+             (e "input" (type "text" className "form-control" name "code" placeholder "e.g. MA(H3)" defaultValue (ifentity .code))))
           (e "p" (className "help-block") "Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects."))
          (e "div" (className "form-group")
            (e "label" (htmlFor "level") "Applies To")
@@ -400,7 +391,6 @@
      (fn ()
        (defvar that this)
        (defun next (hideModal setSpinner)
-         (console.log (-> ($ "#decoderForm") (.serialize)))
          (setSpinner 1)
          ($.getJSON "/api/subjects/test-decode"
                     (-> ($ "#decoderForm") (.serialize))
@@ -450,19 +440,19 @@
        (e RecordEditor (entity this.props.entity entityTypeHumanName "Teacher" entityTypeMachineName "teachers")
          (e "div" (className "form-group")
            (e "label" (htmlFor "name") "Teacher Name")
-           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Chow Ban Hoe" defaultValue (if this.props.entity this.props.entity.name "")))
+           (e "input" (type "text" className "form-control" name "name" placeholder "e.g. Chow Ban Hoe" defaultValue (ifentity .name)))
            (e "div" (className "checkbox")
              (e "label" ()
                (e "input" (type "checkbox" name "admin" defaultChecked (if this.props.entity this.props.entity.is_admin false))) "This teacher is an administrator.")))
          (e "div" (className "form-group")
            (e "label" (htmlFor "witness") "Witness Name (Capital, with Salutation)")
-           (e "input" (type "text" className "form-control" name "witness" placeholder "e.g. MR CHOW BAN HOE" defaultValue (if this.props.entity this.props.entity.witness_name ""))))
+           (e "input" (type "text" className "form-control" name "witness" placeholder "e.g. MR CHOW BAN HOE" defaultValue (ifentity .witness_name))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "email") "Email Address")
-           (e "input" (type "email" className "form-control" name "email" placeholder "e.g. chow_ban_hoe@moe.edu.sg" defaultValue (if this.props.entity this.props.entity.email ""))))
+           (e "input" (type "email" className "form-control" name "email" placeholder "e.g. chow_ban_hoe@moe.edu.sg" defaultValue (ifentity .email))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "unit") "Unit")
-           (e "input" (type "email" className "form-control" name "unit" placeholder "e.g. Bio" defaultValue (if this.props.entity this.props.entity.unit "")))))))
+           (e "input" (type "email" className "form-control" name "unit" placeholder "e.g. Bio" defaultValue (ifentity .unit)))))))
 
    (defcomponent StudentEditor
      propTypes
@@ -486,19 +476,19 @@
            (e "input" (type "text" className "form-control" name "class" placeholder "e.g. 5N" defaultValue (if this.props.entity (-> (get "class" this.props.entity) (.join "")) "") onChange classChange)))
          (e "div" (className "form-group")
            (e "label" (htmlFor "indexno") "Register Number")
-           (e "input" (type "number" className "form-control" name "indexno" placeholder "e.g. 22" defaultValue (if this.props.entity this.props.entity.index_number ""))))
+           (e "input" (type "number" className "form-control" name "indexno" placeholder "e.g. 22" defaultValue (ifentity .index_number))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "name") "Full Name")
-           (e "input" (type "text" className "form-control" name "name" inputmode "latin-name" defaultValue (if this.props.entity this.props.entity.name ""))))
+           (e "input" (type "text" className "form-control" name "name" inputmode "latin-name" defaultValue (ifentity .name))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "chinesename") "Chinese Name")
-           (e "input" (type "text" className "form-control" name "chinesename" inputmode "kana" defaultValue (if this.props.entity this.props.entity.chinese_name ""))))
+           (e "input" (type "text" className "form-control" name "chinesename" inputmode "kana" defaultValue (ifentity .chinese_name))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "nric") "Partial NRIC")
-           (e "input" (type "text" className "form-control" name "nric" inputmode "verbatim" defaultValue (if this.props.entity this.props.entity.nric ""))))
+           (e "input" (type "text" className "form-control" name "nric" inputmode "verbatim" defaultValue (ifentity .nric))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "witnesser") "Witness")
-           (e "select" (className "form-control" name "witnesser" defaultValue (if this.props.entity this.props.entity.witnesser ""))
+           (e "select" (className "form-control" name "witnesser" defaultValue (ifentity .witnesser))
              (__map this.props.auxiliary.teacherInfo.data
                     (fn (teacher)
                       (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")")))))
@@ -557,15 +547,26 @@
       auxiliary React_PropTypes.object)
      render
      (fn ()
+       (defvar that this)
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
        (defvar hnamepl dataSpec.humanNamePlural)
        (defvar mname dataSpec.machineName)
        (defvar editor dataSpec.editor)
+       (defun onAddButtonClick ()
+         (React.render
+          (e editor (auxiliary that.props.auxiliary))
+          (getModalWrapper)))
+       (defun onRemoveAllButtonClick ()
+         (React.render
+          (e ActionModal
+              (title (+ "Deleting All " hnamepl) actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax (+ "/api/" mname) (obj type "DELETE" complete hideModal))))
+            (e "p" () (+ (+ (+ (+ "Are you sure you want to delete all " hnamepl) " currently stored in the database? This will also delete all references to these ") hnamepl) ", if they exist.")))
+          (getModalWrapper)))
        (e "div" ()
          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
            (if this.props.customButtons this.props.customButtons null)
-           (e "button" (id "addButton" type "button" className "btn btn-default") "Add New")
-           (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
+           (e "button" (type "button" className "btn btn-default" onClick onAddButtonClick) "Add New")
+           (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All"))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
          (e EntityTable (conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname))) entityEditor editor auxiliary this.props.auxiliary))))
@@ -574,29 +575,7 @@
      ;; rerendered.
      shouldComponentUpdate
      (fn (newProps)
-       (! (_.isEqual this.props newProps)))
-
-     componentDidMount
-     (fn ()
-       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
-       (defvar hnamepl dataSpec.humanNamePlural)
-       (defvar mname dataSpec.machineName)
-       (defvar editor dataSpec.editor)
-       (defvar that this)
-       (-> ($ "#addButton")
-           (.on "click"
-                (fn ()
-                  (React.render
-                   (e editor (auxiliary that.props.auxiliary))
-                   (getModalWrapper)))))
-       (-> ($ "#removeAllButton")
-           (.on "click"
-                (fn ()
-                  (React.render
-                   (e ActionModal
-                       (title (+ "Deleting All " hnamepl) actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax (+ "/api/" mname) (obj type "DELETE" complete hideModal))))
-                     (e "p" () (+ (+ (+ (+ "Are you sure you want to delete all " hnamepl) " currently stored in the database? This will also delete all references to these ") hnamepl) ", if they exist.")))
-                   (getModalWrapper)))))))
+       (! (_.isEqual this.props newProps))))
 
    ;; The admin console CCA page.
    (defcomponent AdminCcasR
@@ -606,17 +585,12 @@
    (defcomponent AdminSubjectsR
      render
      (fn ()
-       (defvar customButtons (e "button" (id "testDecodeButton" type "button" className "btn btn-default") "Test Decode"))
-       (e EntityPage (customButtons customButtons)))
-
-     componentDidMount
-     (fn ()
-       (-> ($ "#testDecodeButton")
-           (.on "click"
-                (fn ()
-                  (React.render
-                   (e TestDecoder ())
-                   (getModalWrapper)))))))
+       (defun onTestDecodeButtonClick ()
+         (React.render
+          (e TestDecoder ())
+          (getModalWrapper)))
+       (defvar customButtons (e "button" (onClick onTestDecodeButtonClick type "button" className "btn btn-default") "Test Decode"))
+       (e EntityPage (customButtons customButtons))))
 
    (defcomponent AdminTeachersR
      render
@@ -652,12 +626,11 @@
      render
      (fn ()
        (defvar that this)
-       (defun handleChange (e)
+       (defun onRadioChange (e)
          (if e.target.checked
            (that.setState (obj selected e.target.value))))
-       (defun buttonClick (e)
+       (defun onViewButtonClick (e)
          (e.preventDefault)
-         (console.log (-> ($ "#searchbyForm") (.serialize)))
          (that.setState (obj queryString (-> ($ "#searchbyForm") (.serialize)))))
        (defvar auxiliary
          (obj teacherInfo that.state.teacherInfo
@@ -670,14 +643,14 @@
              (e "form" (role "form" id "searchbyForm")
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "class" defaultChecked true onChange handleChange))
+                   (e "input" (type "radio" name "searchby" value "class" defaultChecked true onChange onRadioChange))
                    "I’d like to view students from a particular class."
                    (if (= this.state.selected "class")
                      (e "input" (type "text" className "form-control" name "class" placeholder "Enter a class, e.g. 5N"))
                      (e "input" (type "text" className "form-control" disabled true value "")))))
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "teacher" onChange handleChange))
+                   (e "input" (type "radio" name "searchby" value "teacher" onChange onRadioChange))
                    "I’d like to view students whose witness is a particular teacher."
                    (if (= this.state.selected "teacher")
                      (e "select" (className "form-control" name "id")
@@ -687,7 +660,7 @@
                      (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "subject" onChange handleChange))
+                   (e "input" (type "radio" name "searchby" value "subject" onChange onRadioChange))
                    "I’d like to view students who takes a particular subject."
                    (if (= this.state.selected "subject")
                      (e "select" (className "form-control" name "id")
@@ -697,7 +670,7 @@
                      (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "cca" onChange handleChange))
+                   (e "input" (type "radio" name "searchby" value "cca" onChange onRadioChange))
                    "I’d like to view students from a particular CCA."
                    (if (= this.state.selected "cca")
                      (e "select" (className "form-control" name "id")
@@ -707,9 +680,9 @@
                      (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "all" onChange handleChange))
+                   (e "input" (type "radio" name "searchby" value "all" onChange onRadioChange))
                    "I’d like to view " (e "em" () "all") " students. (" (e "strong" () "NOT RECOMMENDED:") " very taxing on the network)"))
-               (e "button" (type "submit" className "btn btn-primary" onClick buttonClick) "View"))))
+               (e "button" (type "submit" className "btn btn-primary" onClick onViewButtonClick) "View"))))
          (e "div" (className "row")
            (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary))))))
 
