@@ -422,6 +422,7 @@ searchByField = checkMMap fw bw textField
         bw (QueryEvent tag _) = tag
         fw crit = do
           case crit of
+           "none" -> checkMMapOk . QueryEvent crit $ ListNothing
            "all" -> checkMMapOk . QueryEvent crit $ ListStudents
            "class" -> do
              klass <- runInputGet (ireq classField "class")

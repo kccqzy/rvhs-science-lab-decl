@@ -75,6 +75,9 @@ searchEntitiesEq prop = searchEntities [(@= prop)]
 searchUniqueEntityEq :: (HasPrimaryKey a i, Typeable k) => k -> IQuery (Maybe a)
 searchUniqueEntityEq = fmap unique . searchEntitiesEq
 
+listNothing  :: IQuery (Maybe ())
+listNothing  = return $ Just ()
+
 listCcas     :: IQuery (Set Cca)
 listSubjects :: IQuery (Set Subject)
 listTeachers :: IQuery (Set Teacher)
@@ -366,6 +369,7 @@ internalPhysicalDelete = lift $ Left "internalPhysicalDelete: unimplemented"
 eventNames = [
     'internalScrubDeadReferences,
     'internalPhysicalDelete,
+    'listNothing,
     'listCcas,
     'listSubjects,
     'listTeachers,
