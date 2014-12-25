@@ -30,22 +30,22 @@ $(function() {
                 })() :
                 setTimeout(connect,(Date.now() - timeConnected)));
         };
-        connect();
         ($(window)).on("beforeunload",function() {
             return conn.close();
         });
         return {
             registerCallback: function(func) {
+                ((!conn) ?
+                    connect() :
+                    _.noop());
                 var wrapFunc = function(e) {
                     return func(JSON.parse(e.data));
                 };
                 conn.onmessage = wrapFunc;
                 callback = wrapFunc;
             },
-            readyState: function() {
-                return (conn ?
-                    conn.readyState :
-                    -1);
+            pathname: function() {
+                return pathname;
             },
             close: function() {
                 return conn.close();
@@ -55,22 +55,31 @@ $(function() {
     var EntityRow = React_createClass(_.defaults({
         propTypes: {
             firstRowSpan: React_PropTypes.number.isRequired,
-            entity: React_PropTypes.object.isRequired
+            entity: React_PropTypes.object.isRequired,
+            auxiliary: React_PropTypes.object
         },
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var firstCell = (((!(dataSpec.categoryColumn === null)) && this.props.firstRowSpan) ?
-                React_createElement("td",{
-                    rowSpan: this.props.firstRowSpan
-                },dataSpec.categoryColumn[1](this.props.entity[dataSpec.categoryColumn[0]])) :
+            var firstCell = (((!(dataSpec.categoryColumn === null)) && that.props.firstRowSpan) ?
+                (function() {
+                    var value = that.props.entity[dataSpec.categoryColumn[0]];
+                    var mapper = dataSpec.categoryColumn[1];
+                    return React_createElement("td",{
+                        rowSpan: that.props.firstRowSpan
+                    },mapper.apply(that.props.auxiliary,[
+                        value
+                    ]));
+                })() :
                 null);
             return React_createElement("tr",{},firstCell,__map(dataSpec.columns,function(spec,idx) {
                 var value = that.props.entity[spec[0]];
                 var mapper = spec[1];
                 return React_createElement("td",{
                     key: idx
-                },mapper(value));
+                },mapper.apply(that.props.auxiliary,[
+                    value
+                ]));
             }),React_createElement("td",{
                 className: "text-right"
             },React_createElement("div",{
@@ -106,12 +115,15 @@ $(function() {
     })));
     var EntityCategory = React_createClass(_.defaults({
         propTypes: {
-            entities: React_PropTypes.array.isRequired
+            entities: React_PropTypes.array.isRequired,
+            auxiliary: React_PropTypes.object
         },
         render: function() {
+            var that = this;
             return React_createElement("tbody",{},__map(this.props.entities,function(entity,i,entities) {
                 return React_createElement(EntityRow,{
                     key: entity.id,
+                    auxiliary: that.props.auxiliary,
                     entity: entity,
                     firstRowSpan: (i ?
                         0 :
@@ -129,7 +141,8 @@ $(function() {
     var EntityTable = React_createClass(_.defaults({
         propTypes: {
             conn: React_PropTypes.object.isRequired,
-            entityEditor: React_PropTypes.any.isRequired
+            entityEditor: React_PropTypes.any.isRequired,
+            auxiliary: React_PropTypes.object
         },
         getInitialState: function() {
             return {
@@ -153,10 +166,12 @@ $(function() {
             };
             return (($(this.getDOMNode())).on("click","button[data-action=\"edit\"]",function() {
                 return React.render(React_createElement(that.props.entityEditor,{
+                    auxiliary: that.props.auxiliary,
                     entity: findEntity(this)
                 }),getModalWrapper());
             })).on("click","button[data-action=\"delete\"]",function() {
                 return React.render(React_createElement(DeleteConfirmation,{
+                    auxiliary: that.props.auxiliary,
                     entity: findEntity(this)
                 }),getModalWrapper());
             });
@@ -172,11 +187,13 @@ $(function() {
         componentWillUnmount: function() {
             return this.props.conn.close();
         },
-        componentWillReceiveProps: function() {
-            console.log("EntityTable: componentWillReceiveProps");
-            return this.props.conn.close();
+        componentWillReceiveProps: function(newProps) {
+            return ((this.props.conn.pathname() !== newProps.conn.pathname()) ?
+                this.props.conn.close() :
+                undefined);
         },
         render: function() {
+            var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var rawData = this.state.tableData.data;
             var rows = ((dataSpec.categoryColumn === null) ?
@@ -186,6 +203,7 @@ $(function() {
                     return React_createElement("tbody",{},__map(massagedData,function(entity) {
                         return React_createElement(EntityRow,{
                             firstRowSpan: 1,
+                            auxiliary: that.props.auxiliary,
                             entity: entity,
                             key: entity.id
                         });
@@ -206,6 +224,7 @@ $(function() {
                         var category = entities[0][categoryName];
                         return React_createElement(EntityCategory,{
                             entities: entities,
+                            auxiliary: that.props.auxiliary,
                             key: category
                         });
                     });
@@ -747,7 +766,133 @@ $(function() {
     },_.invert({
         TeacherEditor: "displayName"
     })));
-    var StudentEditor = React_createClass(_.defaults({},{
+    var StudentEditor = React_createClass(_.defaults({
+        propTypes: {
+            auxiliary: React_PropTypes.object.isRequired,
+            entity: React_PropTypes.object
+        },
+        getInitialState: function() {
+            return {
+                currentLevel: null
+            };
+        },
+        render: function() {
+            var that = this;
+            var classChange = function(e) {
+                var match = (/^([1-6])[A-NP-Z]$/).exec(e.target.value);
+                return that.setState({
+                    currentLevel: (match ?
+                        parseInt(match[1],10) :
+                        null)
+                });
+            };
+            return React_createElement(RecordEditor,{
+                entity: this.props.entity,
+                entityTypeHumanName: "Student",
+                entityTypeMachineName: "students"
+            },React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "class"
+            },"Class"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "class",
+                placeholder: "e.g. 5N",
+                defaultValue: (this.props.entity ?
+                    (this.props.entity["class"]).join("") :
+                    ""),
+                onChange: classChange
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "indexno"
+            },"Register Number"),React_createElement("input",{
+                type: "number",
+                className: "form-control",
+                name: "indexno",
+                placeholder: "e.g. 22",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.index_number :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "name"
+            },"Full Name"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "name",
+                inputmode: "latin-name",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.name :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "chinesename"
+            },"Chinese Name"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "chinesename",
+                inputmode: "kana",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.chinese_name :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "nric"
+            },"Partial NRIC"),React_createElement("input",{
+                type: "text",
+                className: "form-control",
+                name: "nric",
+                inputmode: "verbatim",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.nric :
+                    "")
+            })),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "witnesser"
+            },"Witness"),React_createElement("select",{
+                className: "form-control",
+                name: "witnesser",
+                defaultValue: (this.props.entity ?
+                    this.props.entity.witnesser :
+                    "")
+            },__map(this.props.auxiliary.teacherInfo.data,function(teacher) {
+                return React_createElement("option",{
+                    value: teacher.id,
+                    key: teacher.id
+                },teacher.name," (",teacher.witness_name,")");
+            }))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "subj"
+            },"Subject Combination"),React_createElement("div",{
+                className: "checkbox"
+            },(this.state.currentLevel ?
+                __map(_.filter(that.props.auxiliary.subjectInfo.data,function(subject) {
+                    return (_.contains(subject.level,that.state.currentLevel) && (!(subject.code === null)));
+                }),function(subject) {
+                    return React_createElement("label",{
+                        className: "checkbox-inline",
+                        key: subject.id
+                    },React_createElement("input",{
+                        type: "checkbox",
+                        name: "subj",
+                        value: subject.id,
+                        defaultChecked: (that.props.entity ?
+                            _.contains(that.props.entity.subject_combi,subject.id) :
+                            false)
+                    }),subject.name," (",subject.code,")");
+                }) :
+                React_createElement("p",{
+                    className: "help-block"
+                },"Subjects are not available for selection because you did not correctly enter a class.")))));
+        }
+    },{
         render: function() {
             return false;
         }
@@ -802,7 +947,8 @@ $(function() {
     var EntityPage = React_createClass(_.defaults({
         propTypes: {
             customButtons: React_PropTypes.node,
-            wsUrl: React_PropTypes.string
+            wsUrl: React_PropTypes.string,
+            auxiliary: React_PropTypes.object
         },
         render: function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -825,16 +971,23 @@ $(function() {
                 className: "btn btn-default"
             },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: APIConnection((this.props.wsUrl || ("/api/" + mname))),
-                entityEditor: editor
+                entityEditor: editor,
+                auxiliary: this.props.auxiliary
             }));
+        },
+        shouldComponentUpdate: function(newProps) {
+            return (!_.isEqual(this.props,newProps));
         },
         componentDidMount: function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var hnamepl = dataSpec.humanNamePlural;
             var mname = dataSpec.machineName;
             var editor = dataSpec.editor;
+            var that = this;
             ($("#addButton")).on("click",function() {
-                return React.render(React_createElement(editor,{}),getModalWrapper());
+                return React.render(React_createElement(editor,{
+                    auxiliary: that.props.auxiliary
+                }),getModalWrapper());
             });
             return ($("#removeAllButton")).on("click",function() {
                 return React.render(React_createElement(ActionModal,{
@@ -904,13 +1057,43 @@ $(function() {
     })));
     var AdminStudentsR = React_createClass(_.defaults({
         getInitialState: function() {
+            var that = this;
+            var ccaConn = APIConnection("/api/ccas");
+            var teacherConn = APIConnection("/api/teachers");
+            var subjectConn = APIConnection("/api/subjects");
+            ccaConn.registerCallback(function(d) {
+                return that.setState({
+                    ccaInfo: d
+                });
+            });
+            teacherConn.registerCallback(function(d) {
+                return that.setState({
+                    teacherInfo: d
+                });
+            });
+            subjectConn.registerCallback(function(d) {
+                return that.setState({
+                    subjectInfo: d
+                });
+            });
+            var emptyData = {
+                data: []
+            };
             return {
-                queryString: null,
-                selected: "class"
+                queryString: "searchby=none",
+                selected: "class",
+                ccaConn: ccaConn,
+                teacherConn: teacherConn,
+                subjectConn: subjectConn,
+                ccaInfo: emptyData,
+                teacherInfo: emptyData,
+                subjectInfo: emptyData
             };
         },
-        shouldComponentUpdate: function(nextProps,nextState) {
-            return (nextState.queryString !== this.state.queryString);
+        componentWillUnmount: function() {
+            this.state.ccaConn.close();
+            this.state.teacherConn.close();
+            return this.state.subjectConn.close();
         },
         render: function() {
             var that = this;
@@ -927,6 +1110,11 @@ $(function() {
                 return that.setState({
                     queryString: ($("#searchbyForm")).serialize()
                 });
+            };
+            var auxiliary = {
+                teacherInfo: that.state.teacherInfo,
+                ccaInfo: that.state.ccaInfo,
+                subjectInfo: that.state.subjectInfo
             };
             return React_createElement("div",{},React_createElement("div",{
                 className: "row"
@@ -960,20 +1148,63 @@ $(function() {
             },React_createElement("label",{},React_createElement("input",{
                 type: "radio",
                 name: "searchby",
+                value: "teacher",
+                onChange: handleChange
+            }),"I’d like to view students whose witness is a particular teacher.",((this.state.selected === "teacher") ?
+                React_createElement("select",{
+                    className: "form-control",
+                    name: "id"
+                },__map(auxiliary.teacherInfo.data,function(teacher) {
+                    return React_createElement("option",{
+                        value: teacher.id,
+                        key: teacher.id
+                    },teacher.name," (",teacher.witness_name,")");
+                })) :
+                React_createElement("select",{
+                    className: "form-control",
+                    disabled: true
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
+                value: "subject",
+                onChange: handleChange
+            }),"I’d like to view students who takes a particular subject.",((this.state.selected === "subject") ?
+                React_createElement("select",{
+                    className: "form-control",
+                    name: "id"
+                },__map(auxiliary.subjectInfo.data,function(subject) {
+                    return React_createElement("option",{
+                        value: subject.id,
+                        key: subject.id
+                    },subject.name," (",(__map(subject.level,function(l) {
+                        return ("Year " + l);
+                    })).join(", "),")");
+                })) :
+                React_createElement("select",{
+                    className: "form-control",
+                    disabled: true
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
                 value: "cca",
                 onChange: handleChange
             }),"I’d like to view students from a particular CCA.",((this.state.selected === "cca") ?
-                React_createElement("input",{
-                    type: "text",
+                React_createElement("select",{
                     className: "form-control",
-                    disabled: true,
-                    value: "TODO"
-                }) :
-                React_createElement("input",{
-                    type: "text",
+                    name: "id"
+                },__map(auxiliary.ccaInfo.data,function(cca) {
+                    return React_createElement("option",{
+                        value: cca.id,
+                        key: cca.id
+                    },cca.name," (",cca.category,")");
+                })) :
+                React_createElement("select",{
                     className: "form-control",
-                    disabled: true,
-                    value: ""
+                    disabled: true
                 })))),React_createElement("div",{
                 className: "radio"
             },React_createElement("label",{},React_createElement("input",{
@@ -981,17 +1212,16 @@ $(function() {
                 name: "searchby",
                 value: "all",
                 onChange: handleChange
-            }),"I’d like to view all students from all levels. (NOT RECOMMENDED; very taxing on the network)")),React_createElement("button",{
+            }),"I’d like to view ",React_createElement("em",{},"all")," students. (",React_createElement("strong",{},"NOT RECOMMENDED:")," very taxing on the network)")),React_createElement("button",{
                 type: "submit",
                 className: "btn btn-primary",
                 onClick: buttonClick
             },"View")))),React_createElement("div",{
                 className: "row"
-            },(this.state.queryString ?
-                React_createElement(EntityPage,{
-                    wsUrl: ("/api/students?" + this.state.queryString)
-                }) :
-                null)));
+            },React_createElement(EntityPage,{
+                wsUrl: ("/api/students?" + this.state.queryString),
+                auxiliary: auxiliary
+            })));
         }
     },{
         render: function() {
@@ -1000,6 +1230,11 @@ $(function() {
     },_.invert({
         AdminStudentsR: "displayName"
     })));
+    var lookupForeign = function(dataset,id) {
+        return (_.find(dataset.data,function(v) {
+            return (id === v.id);
+        }) || "??");
+    };
     var pageSpec = {
         "/admin": {
             pageName: "Home",
@@ -1141,7 +1376,7 @@ $(function() {
                     [
                         "chinese_name",
                         _.identity,
-                        "Chinese Name"
+                        "Chinese"
                     ],
                     [
                         "nric",
@@ -1152,6 +1387,38 @@ $(function() {
                             });
                         },
                         "NRIC"
+                    ],
+                    [
+                        "subject_combi",
+                        function(ss) {
+                            var that = this;
+                            return ((__map(ss,function(s) {
+                                return (lookupForeign(that.subjectInfo,s)).name;
+                            })).join(", ") || React_createElement("i",{},"—"));
+                        },
+                        "Subjects"
+                    ],
+                    [
+                        "witnesser",
+                        function(tid) {
+                            return ((tid === null) ?
+                                React_createElement("i",{},"None") :
+                                (lookupForeign(this.teacherInfo,tid)).name);
+                        },
+                        "Witness"
+                    ],
+                    [
+                        "submission",
+                        function(sub) {
+                            return ((sub.tag === "SubmissionNotOpen") ?
+                                "Locked" :
+                                ((sub.tag === "SubmissionOpen") ?
+                                    "Open" :
+                                    ((sub.tag === "SubmissionCompleted") ?
+                                        "Completed" :
+                                        undefined)));
+                        },
+                        "Status"
                     ]
                 ]
             }

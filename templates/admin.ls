@@ -50,15 +50,14 @@
            (set conn.onclose (fn ()
                                (console.log "WS connection closed; why?"))))
          (setTimeout connect (- (Date.now) timeConnected))))
-     (connect)
      (-> ($ window) (.on "beforeunload" (fn () (conn.close))))
      (obj
       registerCallback (fn (func)
+                         (if (! conn) (connect) (_.noop))
                          (defun wrapFunc (e) (func (JSON.parse e.data)))
                          (set conn.onmessage wrapFunc)
                          (set callback wrapFunc))
-      readyState (fn ()
-                   (if conn conn.readyState -1))
+      pathname (fn () pathname)
       close (fn () (conn.close))))
 
    ;; An EntityRow is a row of data in the table. Each row also has
@@ -67,16 +66,20 @@
      propTypes
      (obj
       firstRowSpan React_PropTypes.number.isRequired
-      entity React_PropTypes.object.isRequired)
+      entity React_PropTypes.object.isRequired
+      auxiliary React_PropTypes.object)
 
      render
      (fn ()
        (defvar that this)
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
        (defvar firstCell (if (&& (! (null? dataSpec.categoryColumn))
-                                 this.props.firstRowSpan)
-                           (e "td" (rowSpan this.props.firstRowSpan)
-                             ((get 1 dataSpec.categoryColumn) (get (get 0 dataSpec.categoryColumn) this.props.entity)))
+                                 that.props.firstRowSpan)
+                           (do
+                             (defvar value (get (get 0 dataSpec.categoryColumn) that.props.entity))
+                             (defvar mapper (get 1 dataSpec.categoryColumn))
+                             (e "td" (rowSpan that.props.firstRowSpan)
+                               (mapper.apply that.props.auxiliary (array value))))
                            null))
        (e "tr" ()
          firstCell
@@ -84,7 +87,7 @@
                 (fn (spec idx)
                   (defvar value (get (get 0 spec) that.props.entity))
                   (defvar mapper (get 1 spec))
-                  (e "td" (key idx) (mapper value))))
+                  (e "td" (key idx) (mapper.apply that.props.auxiliary (array value)))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
              (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" "data-action" "edit" "data-entityid" this.props.entity.id)
@@ -97,14 +100,16 @@
    (defcomponent EntityCategory
      propTypes
      (obj
-      entities React_PropTypes.array.isRequired)
+      entities React_PropTypes.array.isRequired
+      auxiliary React_PropTypes.object)
      render
      (fn ()
+       (defvar that this)
        (e "tbody" ()
          (__map this.props.entities
                 (fn (entity i entities)
                   (e EntityRow
-                      (key entity.id entity entity firstRowSpan (if i 0 entities.length))))))))
+                      (key entity.id auxiliary that.props.auxiliary entity entity firstRowSpan (if i 0 entities.length))))))))
 
    ;; An EntityTable is the entire table for holding the data. It
    ;; receives events from the two action buttons on each row.
@@ -112,7 +117,8 @@
      propTypes
      (obj
       conn React_PropTypes.object.isRequired
-      entityEditor React_PropTypes.any.isRequired)
+      entityEditor React_PropTypes.any.isRequired
+      auxiliary React_PropTypes.object)
 
      ;; Assume no data for initial state.
      getInitialState
@@ -132,12 +138,12 @@
            (.on "click" "button[data-action=\"edit\"]"
                 (fn ()
                   (React.render
-                   (e that.props.entityEditor (entity (findEntity this)))
+                   (e that.props.entityEditor (auxiliary that.props.auxiliary entity (findEntity this)))
                    (getModalWrapper))))
            (.on "click" "button[data-action=\"delete\"]"
                 (fn ()
                   (React.render
-                   (e DeleteConfirmation (entity (findEntity this)))
+                   (e DeleteConfirmation (auxiliary that.props.auxiliary entity (findEntity this)))
                    (getModalWrapper))))))
 
      ;; When updated, it is because a new connection is here;
@@ -153,7 +159,7 @@
      componentWillUnmount
      (fn () (this.props.conn.close))
      componentWillReceiveProps
-     (fn () (console.log "EntityTable: componentWillReceiveProps") (this.props.conn.close))
+     (fn (newProps) (if (!= (this.props.conn.pathname) (newProps.conn.pathname)) (this.props.conn.close)))
 
      ;; Now we need to group the data according to the requirements
      ;; outlined in the dataSpec (a.k.a. massage) and then render
@@ -161,6 +167,7 @@
      ;; [[Object]].
      render
      (fn ()
+       (defvar that this)
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
        (defvar rawData this.state.tableData.data)
        (defvar rows (if (null? dataSpec.categoryColumn)
@@ -171,7 +178,7 @@
                         (e "tbody" ()
                           (__map massagedData
                                  (fn (entity)
-                                   (e EntityRow (firstRowSpan 1 entity entity key entity.id))))))
+                                   (e EntityRow (firstRowSpan 1 auxiliary that.props.auxiliary entity entity key entity.id))))))
                       (do ; there is a category column, so group by
                           ; that first
                         (defvar categoryName (get 0 dataSpec.categoryColumn))
@@ -189,7 +196,7 @@
                         (__map massagedData
                                (fn (entities)
                                  (defvar category (get categoryName (get 0 entities)))
-                                 (e EntityCategory (entities entities key category)))))))
+                                 (e EntityCategory (entities entities auxiliary that.props.auxiliary key category)))))))
 
        (defvar headers (__map (-> (if (null? dataSpec.categoryColumn)
                                     (array)
@@ -457,7 +464,57 @@
            (e "label" (htmlFor "unit") "Unit")
            (e "input" (type "email" className "form-control" name "unit" placeholder "e.g. Bio" defaultValue (if this.props.entity this.props.entity.unit "")))))))
 
-   (defcomponent StudentEditor)
+   (defcomponent StudentEditor
+     propTypes
+     (obj
+      auxiliary React_PropTypes.object.isRequired
+      entity React_PropTypes.object)
+
+     getInitialState
+     (fn ()
+       (obj currentLevel null))
+
+     render
+     (fn ()
+       (defvar that this)
+       (defun classChange (e)
+         (defvar match (-> /^([1-6])[A-NP-Z]$/ (.exec e.target.value)))
+         (that.setState (obj currentLevel (if match (parseInt (get 1 match) 10) null))))
+       (e RecordEditor (entity this.props.entity entityTypeHumanName "Student" entityTypeMachineName "students")
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "class") "Class")
+           (e "input" (type "text" className "form-control" name "class" placeholder "e.g. 5N" defaultValue (if this.props.entity (-> (get "class" this.props.entity) (.join "")) "") onChange classChange)))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "indexno") "Register Number")
+           (e "input" (type "number" className "form-control" name "indexno" placeholder "e.g. 22" defaultValue (if this.props.entity this.props.entity.index_number ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "name") "Full Name")
+           (e "input" (type "text" className "form-control" name "name" inputmode "latin-name" defaultValue (if this.props.entity this.props.entity.name ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "chinesename") "Chinese Name")
+           (e "input" (type "text" className "form-control" name "chinesename" inputmode "kana" defaultValue (if this.props.entity this.props.entity.chinese_name ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "nric") "Partial NRIC")
+           (e "input" (type "text" className "form-control" name "nric" inputmode "verbatim" defaultValue (if this.props.entity this.props.entity.nric ""))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "witnesser") "Witness")
+           (e "select" (className "form-control" name "witnesser" defaultValue (if this.props.entity this.props.entity.witnesser ""))
+             (__map this.props.auxiliary.teacherInfo.data
+                    (fn (teacher)
+                      (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")")))))
+         (e "div" (className "form-group")
+           (e "label" (htmlFor "subj") "Subject Combination")
+           (e "div" (className "checkbox")
+             (if this.state.currentLevel
+               (__map (_.filter that.props.auxiliary.subjectInfo.data
+                                (fn (subject) (&& (_.contains subject.level that.state.currentLevel)
+                                                  (! (null? subject.code)))))
+                      (fn (subject)
+                        (e "label" (className "checkbox-inline" key subject.id)
+                          (e "input" (type "checkbox" name "subj" value subject.id
+                                           defaultChecked (if that.props.entity (_.contains that.props.entity.subject_combi subject.id) false)))
+                          subject.name " (" subject.code ")")))
+               (e "p" (className "help-block") "Subjects are not available for selection because you did not correctly enter a class.")))))))
 
    ;; The Delete Confirmation.
    (defcomponent DeleteConfirmation
@@ -496,7 +553,8 @@
      propTypes
      (obj
       customButtons React_PropTypes.node
-      wsUrl React_PropTypes.string)
+      wsUrl React_PropTypes.string
+      auxiliary React_PropTypes.object)
      render
      (fn ()
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
@@ -510,7 +568,13 @@
            (e "button" (id "removeAllButton" type "button" className "btn btn-default") "Remove All"))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
-         (e EntityTable (conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname))) entityEditor editor))))
+         (e EntityTable (conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname))) entityEditor editor auxiliary this.props.auxiliary))))
+
+     ;; Prevent establishing a new connection every time this is
+     ;; rerendered.
+     shouldComponentUpdate
+     (fn (newProps)
+       (! (_.isEqual this.props newProps)))
 
      componentDidMount
      (fn ()
@@ -518,11 +582,12 @@
        (defvar hnamepl dataSpec.humanNamePlural)
        (defvar mname dataSpec.machineName)
        (defvar editor dataSpec.editor)
+       (defvar that this)
        (-> ($ "#addButton")
            (.on "click"
                 (fn ()
                   (React.render
-                   (e editor ())
+                   (e editor (auxiliary that.props.auxiliary))
                    (getModalWrapper)))))
        (-> ($ "#removeAllButton")
            (.on "click"
@@ -560,12 +625,29 @@
    (defcomponent AdminStudentsR
      getInitialState
      (fn ()
-       (obj queryString null
-            selected "class"))
+       (defvar that this)
+       (defvar ccaConn (APIConnection "/api/ccas"))
+       (defvar teacherConn (APIConnection "/api/teachers"))
+       (defvar subjectConn (APIConnection "/api/subjects"))
+       ;; TODO what if the callback sets the state before this function returns?
+       (ccaConn.registerCallback (fn (d) (that.setState (obj ccaInfo d))))
+       (teacherConn.registerCallback (fn (d) (that.setState (obj teacherInfo d))))
+       (subjectConn.registerCallback (fn (d) (that.setState (obj subjectInfo d))))
+       (defvar emptyData (obj data (array)))
+       (obj queryString "searchby=none"
+            selected "class"
+            ccaConn ccaConn
+            teacherConn teacherConn
+            subjectConn subjectConn
+            ccaInfo emptyData
+            teacherInfo emptyData
+            subjectInfo emptyData))
 
-     shouldComponentUpdate
-     (fn (nextProps nextState)
-       (!= nextState.queryString this.state.queryString))
+     componentWillUnmount
+     (fn ()
+       (this.state.ccaConn.close)
+       (this.state.teacherConn.close)
+       (this.state.subjectConn.close))
 
      render
      (fn ()
@@ -577,6 +659,10 @@
          (e.preventDefault)
          (console.log (-> ($ "#searchbyForm") (.serialize)))
          (that.setState (obj queryString (-> ($ "#searchbyForm") (.serialize)))))
+       (defvar auxiliary
+         (obj teacherInfo that.state.teacherInfo
+              ccaInfo that.state.ccaInfo
+              subjectInfo that.state.subjectInfo))
        (e "div" ()
          (e "div" (className "row")
            (e "div" (className "col-sm-11 col-md-8 col-lg-7")
@@ -591,70 +677,101 @@
                      (e "input" (type "text" className "form-control" disabled true value "")))))
                (e "div" (className "radio")
                  (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "teacher" onChange handleChange))
+                   "I’d like to view students whose witness is a particular teacher."
+                   (if (= this.state.selected "teacher")
+                     (e "select" (className "form-control" name "id")
+                       (__map auxiliary.teacherInfo.data
+                              (fn (teacher)
+                                (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")"))))
+                     (e "select" (className "form-control" disabled true)))))
+               (e "div" (className "radio")
+                 (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "subject" onChange handleChange))
+                   "I’d like to view students who takes a particular subject."
+                   (if (= this.state.selected "subject")
+                     (e "select" (className "form-control" name "id")
+                       (__map auxiliary.subjectInfo.data
+                              (fn (subject)
+                                (e "option" (value subject.id key subject.id) subject.name " (" (-> (__map subject.level (fn (l) (+ "Year " l))) (.join ", ")) ")"))))
+                     (e "select" (className "form-control" disabled true)))))
+               (e "div" (className "radio")
+                 (e "label" ()
                    (e "input" (type "radio" name "searchby" value "cca" onChange handleChange))
                    "I’d like to view students from a particular CCA."
                    (if (= this.state.selected "cca")
-                     (e "input" (type "text" className "form-control" disabled true value "TODO"))
-                     (e "input" (type "text" className "form-control" disabled true value "")))))
+                     (e "select" (className "form-control" name "id")
+                       (__map auxiliary.ccaInfo.data
+                              (fn (cca)
+                                (e "option" (value cca.id key cca.id) cca.name " (" cca.category ")"))))
+                     (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
                    (e "input" (type "radio" name "searchby" value "all" onChange handleChange))
-                   "I’d like to view all students from all levels. (NOT RECOMMENDED; very taxing on the network)"))
+                   "I’d like to view " (e "em" () "all") " students. (" (e "strong" () "NOT RECOMMENDED:") " very taxing on the network)"))
                (e "button" (type "submit" className "btn btn-primary" onClick buttonClick) "View"))))
          (e "div" (className "row")
-           (if this.state.queryString
-             (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString)))
-             null)))))
+           (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary))))))
 
-   (defvar pageSpec (obj "/admin" (obj pageName "Home"
-                                       component AdminHomeR
-                                       dataSpec null)
-                         "/admin/ccas" (obj pageName "Manage CCAs"
-                                            component AdminCcasR
-                                            dataSpec (obj humanName "CCA"
-                                                          humanNamePlural "CCAs"
-                                                          machineName "ccas"
-                                                          editor CcaEditor
-                                                          categoryColumn (array "category" _.identity "CCA Category")
-                                                          columns (array (array "name" _.identity "CCA Name"))))
-                         "/admin/subjects" (obj pageName "Manage Subjects"
-                                                component AdminSubjectsR
-                                                dataSpec (obj humanName "Subject"
-                                                              humanNamePlural "Subjects"
-                                                              machineName "subjects"
-                                                              editor SubjectEditor
-                                                              categoryColumn (array "level" (fn (ls) (-> (__map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
-                                                              columns (array
-                                                                       (array "name" _.identity "Subject Name")
-                                                                       (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
+   (defun lookupForeign (dataset id)
+     (|| (_.find dataset.data (fn (v) (= id v.id))) "??"))
 
-                                                                       (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
-                         "/admin/teachers" (obj pageName "Manage Teachers"
-                                                component AdminTeachersR
-                                                dataSpec (obj humanName "Teacher"
-                                                              humanNamePlural "Teachers"
-                                                              machineName "teachers"
-                                                              editor TeacherEditor
-                                                              categoryColumn null
-                                                              columns (array
-                                                                       (array "name" _.identity "Name")
-                                                                       (array "unit" _.identity "Unit")
-                                                                       (array "email" _.identity "Email Address")
-                                                                       (array "is_admin" (fn (b) (if b "Yes" "No")) "Administrator?")
-                                                                       (array "witness_name" _.identity "Witness Name"))))
-                         "/admin/students" (obj pageName "Manage Students"
-                                                component AdminStudentsR
-                                                dataSpec (obj humanName "Student"
-                                                              humanNamePlural "Students"
-                                                              machineName "students"
-                                                              editor StudentEditor
-                                                              categoryColumn (array "class" _.identity "Class")
-                                                              columns (array
-                                                                       (array "index_number" _.identity "Reg #")
-                                                                       (array "name" _.identity "Name")
-                                                                       (array "chinese_name" _.identity "Chinese Name")
-                                                                       (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" v))) "NRIC")
-                                                                       )))))
+   (defvar pageSpec
+     (obj "/admin" (obj pageName "Home"
+                        component AdminHomeR
+                        dataSpec null)
+          "/admin/ccas" (obj pageName "Manage CCAs"
+                             component AdminCcasR
+                             dataSpec (obj humanName "CCA"
+                                           humanNamePlural "CCAs"
+                                           machineName "ccas"
+                                           editor CcaEditor
+                                           categoryColumn (array "category" _.identity "CCA Category")
+                                           columns (array (array "name" _.identity "CCA Name"))))
+          "/admin/subjects" (obj pageName "Manage Subjects"
+                                 component AdminSubjectsR
+                                 dataSpec (obj humanName "Subject"
+                                               humanNamePlural "Subjects"
+                                               machineName "subjects"
+                                               editor SubjectEditor
+                                               categoryColumn (array "level" (fn (ls) (-> (__map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
+                                               columns (array
+                                                        (array "name" _.identity "Subject Name")
+                                                        (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
+
+                                                        (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
+          "/admin/teachers" (obj pageName "Manage Teachers"
+                                 component AdminTeachersR
+                                 dataSpec (obj humanName "Teacher"
+                                               humanNamePlural "Teachers"
+                                               machineName "teachers"
+                                               editor TeacherEditor
+                                               categoryColumn null
+                                               columns (array
+                                                        (array "name" _.identity "Name")
+                                                        (array "unit" _.identity "Unit")
+                                                        (array "email" _.identity "Email Address")
+                                                        (array "is_admin" (fn (b) (if b "Yes" "No")) "Administrator?")
+                                                        (array "witness_name" _.identity "Witness Name"))))
+          "/admin/students" (obj pageName "Manage Students"
+                                 component AdminStudentsR
+                                 dataSpec (obj humanName "Student"
+                                               humanNamePlural "Students"
+                                               machineName "students"
+                                               editor StudentEditor
+                                               categoryColumn (array "class" _.identity "Class")
+                                               columns (array
+                                                        (array "index_number" _.identity "Reg #")
+                                                        (array "name" _.identity "Name")
+                                                        (array "chinese_name" _.identity "Chinese")
+                                                        (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" v))) "NRIC")
+                                                        (array "subject_combi" (fn (ss) (defvar that this) (|| (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")) (e "i" () "—"))) "Subjects")
+                                                        (array "witnesser" (fn (tid)
+                                                                             (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid)))) "Witness")
+                                                        (array "submission" (fn (sub)
+                                                                              (cond (= sub.tag "SubmissionNotOpen") "Locked"
+                                                                                    (= sub.tag "SubmissionOpen") "Open"
+                                                                                    (= sub.tag "SubmissionCompleted") "Completed")) "Status"))))))
 
    (defcomponent Page
      render
