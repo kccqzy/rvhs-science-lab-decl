@@ -191,7 +191,7 @@ parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (par
         subjectCodeParser candidates = do
           (str, parsed) <- get
           (code, subject) <- lift $ Map.toList candidates
-          let str' = T.dropWhile (PT.inClass " \t,;.") str
+          let str' = T.dropWhile (PT.inClass " \t,;.&/\\+") str
           case T.stripPrefix code str' of
            Nothing -> mzero
            Just remaining -> put (remaining, Set.insert subject parsed)
