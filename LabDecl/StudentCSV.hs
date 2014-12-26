@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
-module LabDecl.StudentCSV (parseCSV) where
+module LabDecl.StudentCSV (
+  parseCSV, CsvStudent(..),
+  klass, indexNo, nric, name, chinese, subjCombi, witness) where
 
 import Control.Monad
 import Control.Monad.State

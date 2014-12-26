@@ -179,6 +179,11 @@ removeAllEntities _ = dbField'._2 .= empty
 subjectsToMap :: Set Subject -> Map T.Text Subject
 subjectsToMap = Set.foldr (\v m -> maybe m (\c -> Map.insert c v m) (v ^. subjectCode)) Map.empty
 
+-- | Convert a set of teachers to a mapping between witness name and
+-- teacher.
+teachersToMap :: Set Teacher -> Map T.Text Teacher
+teachersToMap = Set.foldr (\v -> Map.insert (v ^. teacherWitnessName) v) Map.empty
+
 -- | A prerequisite for safe adds.
 class (HasPrimaryKey a i) => HasAddConstraint a i where
   preAddCheck :: Bool -> a -> IUpdate

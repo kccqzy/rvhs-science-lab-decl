@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE RecordWildCards #-}
 module LabDecl.Handlers where
 
 import Control.Applicative
@@ -30,6 +31,8 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import qualified Data.Attoparsec.Text as PT
+import Data.Vector (Vector)
+import qualified Data.Vector as V
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -39,6 +42,8 @@ import qualified Data.IntSet as IntSet
 import qualified Data.Aeson as JSON
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
+import Data.Conduit (($$))
+import Data.Conduit.Binary (sinkLbs)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
@@ -47,6 +52,8 @@ import Text.Cassius (cassiusFile, cassiusFileReload)
 import Text.Hamlet (hamletFile, hamletFileReload)
 import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
+import Codec.Text.Detect (detectEncodingName)
+import qualified Data.Text.ICU.Convert as ICU
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData)
@@ -57,6 +64,7 @@ import LabDecl.Types
 import LabDecl.AcidicModels
 import LabDecl.StudentCSV
 import LabDecl.Models
+import LabDecl.ErrMsg
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
@@ -82,6 +90,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/teachers             TeachersR      GET POST DELETE
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
 /api/students             StudentsR      GET POST DELETE
+/api/students/many        ManyStudentsR  POST
 /api/students/submit      StudentSubmitR POST
 !/api/students/#StudentId StudentR       GET PUT DELETE
 /admin                    AdminHomeR     GET
@@ -289,20 +298,24 @@ classField :: Field Handler Class
 classField = checkMMap fw bw textField
   where bw (Class (l, c)) = T.pack $ show l ++ [c]
         fw = return . parseClass . T.encodeUtf8
-        parseClass :: C.ByteString -> Either T.Text Class
-        parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
-          l <- Char.digitToInt <$> PC.digit
-          guard $ 1 <= l && l <= 6
-          c <- PC.satisfy $ PC.inClass "A-NP-Z"
-          PC.endOfInput
-          return $ Class (l, c)
+
+parseClass :: C.ByteString -> Either T.Text Class
+parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
+  l <- Char.digitToInt <$> PC.digit
+  guard $ 1 <= l && l <= 6
+  c <- PC.satisfy $ PC.inClass "A-NP-Z"
+  PC.endOfInput
+  return $ Class (l, c)
 
 nricField :: Field Handler Nric
 nricField = checkMMap fw bw (checkBool validatePartialNric ("wrong nric format" :: T.Text) textField)
   where bw (Nric s) = s
         fw = checkMMapOk . Nric
-        validatePartialNric = validatePartialNricBS . T.encodeUtf8
-        validatePartialNricBS = (isRight .) . PC.parseOnly $ do
+
+validatePartialNric :: T.Text -> Bool
+validatePartialNric = validatePartialNricBS . T.encodeUtf8
+  where validatePartialNricBS = (isRight .) . PC.parseOnly $ do
+          PC.option "XXXX" (PC.stringCI "XXXX")
           PC.count 4 PC.digit
           PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
           PC.endOfInput
@@ -465,6 +478,48 @@ postStudentSubmitR = do
   case JSON.decode body of
    Nothing -> invalidArgs ["no parse"]
    Just s -> acidUpdateHandler $ PublicStudentDoSubmission s
+
+postManyStudentsR :: Handler Value
+postManyStudentsR = do
+  acid <- getAcid <$> ask
+  fileinfo <- runInputPost (ireq fileField "csv")
+  force <- runInputPost (ireq checkBoxField "force")
+  bs <- fileSource fileinfo $$ sinkLbs
+  result <- runEitherT $ do
+    let maybeEncoding = detectEncodingName bs -- ^ unsafePerformIO here
+    encoding <- hoistEither $ note errCSVTextDecodeFailed maybeEncoding
+    converter <- liftIO $ ICU.open encoding Nothing
+    let csvText = ICU.toUnicode converter (CL.toStrict bs)
+    csvData <- hoistEither $ parseCSV csvText
+    allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
+    allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
+    V.forM csvData $ \(rowNumber, rawStudent@CsvStudent{..}) -> do
+      -- attempt to convert rawStudent to a Student
+      klass@(Class (level, _)) <- hoistEither . parseClass' . T.encodeUtf8 $ _klass
+      indexNo <- hoistEither . parseInt . T.encodeUtf8 $ _indexNo
+      hoistEither . note "nric wrong format" . guard . validatePartialNric $ _nric
+      witness <- hoistEither $ parseWitnessName allTeachers _witness
+      let subjects = parseSubjectCode (allSubjects !! (level-1)) _subjCombi
+      case subjects of
+       [] -> hoistEither $ Left "subject code no parse"
+       [subjects] -> do
+         let subjectIds = Set.mapMonotonic (^. idField) subjects
+         return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds (Nric _nric) SubmissionNotOpen
+       _ -> hoistEither $ Left "subject code ambiguous"
+  case result of
+   Left e -> invalidArgs [TL.toStrict e]
+   Right vs -> acidUpdateHandler $ AddStudents force vs
+  where parseClass' = fmapL TL.fromStrict . parseClass
+        parseInt :: C.ByteString -> Either TL.Text Int
+        parseInt = ((note "not integer" . hush) .) . PC.parseOnly $ PC.decimal <* PC.endOfInput
+        parseWitnessName :: Map T.Text Teacher -> T.Text -> Either TL.Text (Maybe TeacherId)
+        parseWitnessName teacherMap s =
+          case Map.lookup s teacherMap of
+           Just t -> return . Just $ t ^. idField
+           Nothing -> case s `elem` [ "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ] of
+             True -> return Nothing
+             False -> Left "no parse"
+
 
 -- |
 -- = HTML handlers
