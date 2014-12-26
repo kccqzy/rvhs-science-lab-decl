@@ -97,12 +97,11 @@ $(function() {
                 className: "text-right"
             },React_createElement("div",{
                 className: "btn-group",
-                role: "group",
-                "aria-label": "Action Buttons"
+                role: "group"
             },React_createElement("button",{
                 type: "button",
                 className: "btn btn-default btn-xs",
-                "aria-label": "Edit",
+                title: "Edit",
                 onClick: onEditButtonClick
             },React_createElement("span",{
                 className: "glyphicon glyphicon-pencil",
@@ -110,7 +109,7 @@ $(function() {
             })),React_createElement("button",{
                 type: "button",
                 className: "btn btn-default btn-xs",
-                "aria-label": "Delete",
+                title: "Delete",
                 onClick: onDeleteButtonClick
             },React_createElement("span",{
                 className: "glyphicon glyphicon-trash",

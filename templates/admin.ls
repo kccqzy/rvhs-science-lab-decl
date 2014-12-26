@@ -100,10 +100,10 @@
                   (defvar mapper (get 1 spec))
                   (e "td" (key idx) (mapper.apply that.props.auxiliary (array value)))))
          (e "td" (className "text-right")
-           (e "div" (className "btn-group" role "group" "aria-label" "Action Buttons")
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Edit" onClick onEditButtonClick)
+           (e "div" (className "btn-group" role "group")
+             (e "button" (type "button" className "btn btn-default btn-xs" title "Edit" onClick onEditButtonClick)
                (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
-             (e "button" (type "button" className "btn btn-default btn-xs" "aria-label" "Delete" onClick onDeleteButtonClick)
+             (e "button" (type "button" className "btn btn-default btn-xs" title "Delete" onClick onDeleteButtonClick)
                (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
 
    ;; An EntityCategory is a group of data shared under a category,
