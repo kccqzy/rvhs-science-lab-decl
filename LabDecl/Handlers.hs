@@ -18,7 +18,7 @@ import Control.Monad.Reader (ReaderT(..), ask)
 import Control.Monad.State (get, put, evalStateT, execStateT, StateT)
 import Control.Monad.STM (STM, atomically)
 import Control.Concurrent.STM.TChan
-import Control.Concurrent.Async
+import Control.Concurrent.Async hiding (race)
 import Control.Concurrent
 import Control.Error
 import Control.Lens ((^.))
@@ -56,7 +56,7 @@ import Codec.Text.Detect (detectEncodingName)
 import qualified Data.Text.ICU.Convert as ICU
 import Yesod.Core
 import Yesod.Form hiding (emailField)
-import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData)
+import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
 import Yesod.EmbeddedStatic
 
 import LabDecl.Utilities
@@ -147,12 +147,16 @@ acidQueryHandler event = do
               put response
       sendResponse
       forever $ do
-        r <- liftIO $ race  -- we either wait for 10s to send a ping to keepalive the connection, or wait for a notification
-             (atomically (readTChanAll_ readChan))
-             (threadDelay 10000000)
+        r <- race
+             (lift receiveNoData) -- wait for client data or close request (exception will be thrown)
+             (liftIO $ race
+              (atomically (readTChanAll_ readChan)) -- wait for update notification
+              (threadDelay 10000000)) -- wait for 10s
         case r of
-         Left _ -> sendResponse
-         Right _ -> lift sendPing
+         Left _ -> return () -- ignore client data
+         Right r' -> case r' of
+           Left _ -> sendResponse
+           Right _ -> lift sendPing
 
   -- non WebSocket alternative
   (httpStatus, jsonResponse) <- genResponse
@@ -162,6 +166,7 @@ acidQueryHandler event = do
 
   where sendPing :: (MonadIO m) => WebSocketsT m ()
         sendPing = ReaderT $ liftIO . flip WS.sendPing CL.empty
+        receiveNoData = void $ (receiveData :: (MonadIO m) => WebSocketsT m T.Text)
         readTChanAll_ = liftM2 (>>) readTChan tryReadTChanAll_
         tryReadTChanAll_ chan = whileJust_ (tryReadTChan chan) return
 
