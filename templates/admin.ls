@@ -494,10 +494,12 @@
            (e "input" (type "text" className "form-control" name "nric" inputmode "verbatim" defaultValue (ifentity .nric))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "witnesser") "Witness")
-           (e "select" (className "form-control" name "witnesser" defaultValue (ifentity .witnesser))
-             (__map this.props.auxiliary.teacherInfo.data
-                    (fn (teacher)
-                      (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")")))))
+           (e "select" (className "form-control" name "witness" defaultValue (ifentity .witnesser))
+             (-> (array (e "option" (key 0) "None"))
+                 (.concat
+                  (__map this.props.auxiliary.teacherInfo.data
+                         (fn (teacher)
+                           (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")")))))))
          (e "div" (className "form-group")
            (e "label" (htmlFor "subj") "Subject Combination")
            (e "div" (className "checkbox")

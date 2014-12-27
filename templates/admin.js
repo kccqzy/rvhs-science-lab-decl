@@ -856,16 +856,20 @@ $(function() {
                 htmlFor: "witnesser"
             },"Witness"),React_createElement("select",{
                 className: "form-control",
-                name: "witnesser",
+                name: "witness",
                 defaultValue: (this.props.entity ?
                     (this.props.entity).witnesser :
                     "")
-            },__map(this.props.auxiliary.teacherInfo.data,function(teacher) {
+            },([
+                React_createElement("option",{
+                    key: 0
+                },"None")
+            ]).concat(__map(this.props.auxiliary.teacherInfo.data,function(teacher) {
                 return React_createElement("option",{
                     value: teacher.id,
                     key: teacher.id
                 },teacher.name," (",teacher.witness_name,")");
-            }))),React_createElement("div",{
+            })))),React_createElement("div",{
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "subj"
