@@ -343,8 +343,9 @@ subjCombiField klass = checkMMap fw bw (checkboxesField optlist)
         optlist = do
           acid <- getAcid <$> ask
           let (Class (level, _)) = klass
-          e <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
-          optionsPairs . map (liftM2 (,) (T.pack . show . unSubjectId) id . (^. subjectId)) . Set.toList $ e
+          subjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
+          let noncompulsorySubjects = filter (isJust . (^. subjectCode)) . Set.toAscList $ subjects
+          optionsPairs . map (liftM2 (,) (T.pack . show . unSubjectId) id . (^. subjectId)) $ noncompulsorySubjects
         unSubjectId (SubjectId i) = i
 
 -- | Generically parses forms and handles a database update.

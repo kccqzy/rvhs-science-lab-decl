@@ -505,9 +505,9 @@
                (__map (_.filter that.props.auxiliary.subjectInfo.data
                                 (fn (subject) (&& (_.contains subject.level that.state.currentLevel)
                                                   (! (null? subject.code)))))
-                      (fn (subject)
+                      (fn (subject idx)
                         (e "label" (className "checkbox-inline" key subject.id)
-                          (e "input" (type "checkbox" name "subj" value subject.id
+                          (e "input" (type "checkbox" name "subj" value (+ 1 idx)
                                            defaultChecked (if that.props.entity (_.contains that.props.entity.subject_combi subject.id) false)))
                           subject.name " (" subject.code ")")))
                (e "p" (className "help-block") "Subjects are not available for selection because you did not correctly enter a class.")))))))

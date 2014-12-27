@@ -872,14 +872,14 @@ $(function() {
             },(this.state.currentLevel ?
                 __map(_.filter(that.props.auxiliary.subjectInfo.data,function(subject) {
                     return (_.contains(subject.level,that.state.currentLevel) && (!(subject.code === null)));
-                }),function(subject) {
+                }),function(subject,idx) {
                     return React_createElement("label",{
                         className: "checkbox-inline",
                         key: subject.id
                     },React_createElement("input",{
                         type: "checkbox",
                         name: "subj",
-                        value: subject.id,
+                        value: (1 + idx),
                         defaultChecked: (that.props.entity ?
                             _.contains(that.props.entity.subject_combi,subject.id) :
                             false)
