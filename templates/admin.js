@@ -21,11 +21,12 @@ $(function() {
                     };
                     conn.onmessage = callback;
                     conn.onerror = function() {
-                        console.log("WS connection errored; how?");
+                        console.log("WS connection errored.");
                         return connect();
                     };
-                    conn.onclose = function() {
-                        return console.log("WS connection closed; why?");
+                    conn.onclose = function(e) {
+                        console.log(e);
+                        return console.log("WS connection closed.");
                     };
                 })() :
                 setTimeout(connect,(Date.now() - timeConnected)));
@@ -48,6 +49,9 @@ $(function() {
                 return pathname;
             },
             close: function() {
+                conn.onmessage = _.noop;
+                conn.onerror = _.noop;
+                conn.onclose = _.noop;
                 return conn.close();
             }
         };
@@ -408,6 +412,7 @@ $(function() {
             };
             var next = function(hideModal,setSpinner) {
                 setSpinner(1);
+                console.log(($("#editorForm")).serialize());
                 return $.ajax(endpoint,{
                     type: method,
                     data: ($("#editorForm")).serialize(),
@@ -942,6 +947,24 @@ $(function() {
             wsUrl: React_PropTypes.string,
             auxiliary: React_PropTypes.object
         },
+        getInitialState: function() {
+            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
+            var mname = dataSpec.machineName;
+            return {
+                conn: APIConnection((this.props.wsUrl || ("/api/" + mname)))
+            };
+        },
+        componentWillReceiveProps: function(newProps) {
+            var that = this;
+            return ((newProps.wsUrl !== this.props.wsUrl) ?
+                (function() {
+                    that.state.conn.close();
+                    return that.setState({
+                        conn: APIConnection(newProps.wsUrl)
+                    });
+                })() :
+                undefined);
+        },
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -981,7 +1004,7 @@ $(function() {
                 className: "btn btn-default",
                 onClick: onRemoveAllButtonClick
             },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
-                conn: APIConnection((this.props.wsUrl || ("/api/" + mname))),
+                conn: this.state.conn,
                 entityEditor: editor,
                 auxiliary: this.props.auxiliary
             }));

@@ -47,10 +47,11 @@
            (set conn.onopen (fn () (set timeConnected (Date.now))))
            (set conn.onmessage callback)
            (set conn.onerror (fn ()
-                               (console.log "WS connection errored; how?")
+                               (console.log "WS connection errored.")
                                (connect)))
-           (set conn.onclose (fn ()
-                               (console.log "WS connection closed; why?"))))
+           (set conn.onclose (fn (e)
+                               (console.log e)
+                               (console.log "WS connection closed."))))
          (setTimeout connect (- (Date.now) timeConnected))))
      (-> ($ window) (.on "beforeunload" (fn () (conn.close))))
      (obj
@@ -60,7 +61,11 @@
                          (set conn.onmessage wrapFunc)
                          (set callback wrapFunc))
       pathname (fn () pathname)
-      close (fn () (conn.close))))
+      close (fn ()
+              (set conn.onmessage _.noop)
+              (set conn.onerror _.noop)
+              (set conn.onclose _.noop)
+              (conn.close))))
 
    ;; An EntityRow is a row of data in the table. Each row also has
    ;; two action buttons.
@@ -312,6 +317,7 @@
          (that.setState (obj err resp.meta.details)))
        (defun next (hideModal setSpinner)
          (setSpinner 1)
+         (console.log (-> ($ "#editorForm") (.serialize)))
          ($.ajax endpoint (obj type method
                                data (-> ($ "#editorForm") (.serialize))
                                success hideModal
@@ -545,6 +551,22 @@
       customButtons React_PropTypes.node
       wsUrl React_PropTypes.string
       auxiliary React_PropTypes.object)
+
+     getInitialState
+     (fn ()
+       (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
+       (defvar mname dataSpec.machineName)
+       (obj
+        conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname)))))
+
+     componentWillReceiveProps
+     (fn (newProps)
+       (defvar that this)
+       (if (!= newProps.wsUrl this.props.wsUrl)
+         (do
+           (that.state.conn.close)
+           (that.setState (obj conn (APIConnection newProps.wsUrl))))))
+
      render
      (fn ()
        (defvar that this)
@@ -569,7 +591,7 @@
            (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All"))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
-         (e EntityTable (conn (APIConnection (|| this.props.wsUrl (+ "/api/" mname))) entityEditor editor auxiliary this.props.auxiliary))))
+         (e EntityTable (conn this.state.conn entityEditor editor auxiliary this.props.auxiliary))))
 
      ;; Prevent establishing a new connection every time this is
      ;; rerendered.
