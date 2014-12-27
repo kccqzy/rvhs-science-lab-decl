@@ -770,7 +770,9 @@ $(function() {
         },
         getInitialState: function() {
             return {
-                currentLevel: null
+                currentLevel: (this.props.entity ?
+                    this.props.entity["class"][0] :
+                    undefined)
             };
         },
         render: function() {

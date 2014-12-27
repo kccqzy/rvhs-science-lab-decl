@@ -468,7 +468,7 @@
 
      getInitialState
      (fn ()
-       (obj currentLevel null))
+       (obj currentLevel (if this.props.entity (get 0 (get "class" this.props.entity)))))
 
      render
      (fn ()
