@@ -73,7 +73,8 @@ $(function() {
                     return React_createElement("td",{
                         rowSpan: that.props.firstRowSpan
                     },mapper.apply(that.props.auxiliary,[
-                        value
+                        value,
+                        that.props.entity
                     ]));
                 })() :
                 null);
@@ -95,7 +96,8 @@ $(function() {
                 return React_createElement("td",{
                     key: idx
                 },mapper.apply(that.props.auxiliary,[
-                    value
+                    value,
+                    that.props.entity
                 ]));
             }),React_createElement("td",{
                 className: "text-right"
@@ -1505,22 +1507,50 @@ $(function() {
                     ],
                     [
                         "submission",
-                        function(sub) {
-                            return ((sub.tag === "SubmissionNotOpen") ?
-                                React_createElement("i",{
-                                    className: "fa fa-lock",
-                                    title: "Currently Locked"
-                                }) :
+                        function(sub,entity) {
+                            var lockicon = React_createElement("span",{
+                                className: "glyphicon glyphicon-lock",
+                                "aria-hidden": "true"
+                            });
+                            var completeicon = React_createElement("span",{
+                                className: "glyphicon glyphicon-ok",
+                                "aria-hidden": "true"
+                            });
+                            var onUnlockClick = function() {
+                                return $.ajax((("/api/students/" + entity.id) + "/unlock"),{
+                                    type: "POST"
+                                });
+                            };
+                            var onLockClick = function() {
+                                return $.ajax((("/api/students/" + entity.id) + "/lock"),{
+                                    type: "POST"
+                                });
+                            };
+                            return React_createElement("div",{
+                                className: "btn-group",
+                                role: "toolbar",
+                                "aria-label": "Status Buttons"
+                            },((sub.tag === "SubmissionNotOpen") ?
+                                React_createElement("button",{
+                                    type: "button",
+                                    className: "btn btn-danger btn-xs active",
+                                    onClick: onUnlockClick,
+                                    title: "Click to unlock submission."
+                                },lockicon," Locked") :
                                 ((sub.tag === "SubmissionOpen") ?
-                                    React_createElement("i",{
-                                        className: "fa fa-unlock-alt",
-                                        title: "Currently Unlocked"
-                                    }) :
+                                    React_createElement("button",{
+                                        type: "button",
+                                        className: "btn btn-primary btn-xs",
+                                        onClick: onLockClick,
+                                        title: "Click to lock submission."
+                                    },lockicon," Unlocked") :
                                     ((sub.tag === "SubmissionCompleted") ?
-                                        React_createElement("i",{
-                                            className: "fa fa-check"
-                                        }) :
-                                        undefined)));
+                                        React_createElement("button",{
+                                            type: "button",
+                                            className: "btn btn-success btn-xs active",
+                                            title: "Submission has been completed."
+                                        },completeicon," Completed") :
+                                        undefined))));
                         },
                         "Status"
                     ]

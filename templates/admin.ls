@@ -87,7 +87,7 @@
                              (defvar value (get (get 0 dataSpec.categoryColumn) that.props.entity))
                              (defvar mapper (get 1 dataSpec.categoryColumn))
                              (e "td" (rowSpan that.props.firstRowSpan)
-                               (mapper.apply that.props.auxiliary (array value))))
+                               (mapper.apply that.props.auxiliary (array value that.props.entity))))
                            null))
        (defun onEditButtonClick ()
          (React.render
@@ -103,7 +103,7 @@
                 (fn (spec idx)
                   (defvar value (get (get 0 spec) that.props.entity))
                   (defvar mapper (get 1 spec))
-                  (e "td" (key idx) (mapper.apply that.props.auxiliary (array value)))))
+                  (e "td" (key idx) (mapper.apply that.props.auxiliary (array value that.props.entity)))))
          (e "td" (className "text-right")
            (e "div" (className "btn-group" role "group")
              (e "button" (type "button" className "btn btn-default btn-xs" title "Edit" onClick onEditButtonClick)
@@ -755,65 +755,96 @@
      (|| (_.find dataset.data (fn (v) (= id v.id))) "??"))
 
    (defvar pageSpec
-     (obj "/admin" (obj pageName "Home"
-                        component AdminHomeR
-                        dataSpec null)
-          "/admin/ccas" (obj pageName "Manage CCAs"
-                             component AdminCcasR
-                             dataSpec (obj humanName "CCA"
-                                           humanNamePlural "CCAs"
-                                           machineName "ccas"
-                                           editor CcaEditor
-                                           categoryColumn (array "category" _.identity "CCA Category")
-                                           columns (array (array "name" _.identity "CCA Name"))))
-          "/admin/subjects" (obj pageName "Manage Subjects"
-                                 component AdminSubjectsR
-                                 dataSpec (obj humanName "Subject"
-                                               humanNamePlural "Subjects"
-                                               machineName "subjects"
-                                               editor SubjectEditor
-                                               categoryColumn (array "level" (fn (ls) (-> (__map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
-                                               columns (array
-                                                        (array "name" _.identity "Subject Name")
-                                                        (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
+     (obj "/admin"
+          (obj pageName "Home"
+               component AdminHomeR
+               dataSpec null)
 
-                                                        (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
-          "/admin/teachers" (obj pageName "Manage Teachers"
-                                 component AdminTeachersR
-                                 dataSpec (obj humanName "Teacher"
-                                               humanNamePlural "Teachers"
-                                               machineName "teachers"
-                                               editor TeacherEditor
-                                               categoryColumn null
-                                               columns (array
-                                                        (array "name" _.identity "Name")
-                                                        (array "unit" _.identity "Unit")
-                                                        (array "email" _.identity "Email Address")
-                                                        (array "is_admin" (fn (b) (if b "Yes" "No")) "Administrator?")
-                                                        (array "witness_name" _.identity "Witness Name"))))
-          "/admin/students" (obj pageName "Manage Students"
-                                 component AdminStudentsR
-                                 dataSpec (obj humanName "Student"
-                                               humanNamePlural "Students"
-                                               machineName "students"
-                                               editor StudentEditor
-                                               categoryColumn (array "class" _.identity "Class")
-                                               columns (array
-                                                        (array "index_number" _.identity "Reg #")
-                                                        (array "name" _.identity "Name")
-                                                        (array "chinese_name" _.identity "Chinese")
-                                                        (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "NRIC")
-                                                        (array "subject_combi" (fn (ss)
-                                                                                 (defvar that this)
-                                                                                 (defvar codes (-> (__map ss (fn (s) (.code (lookupForeign that.subjectInfo s)))) (.join ", ")))
-                                                                                 (defvar names (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")))
-                                                                                 (if codes (e "span" (title names) codes) "—")) "Subjects")
-                                                        (array "witnesser" (fn (tid)
-                                                                             (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid)))) "Witness")
-                                                        (array "submission" (fn (sub)
-                                                                              (cond (= sub.tag "SubmissionNotOpen") (e "i" (className "fa fa-lock" title "Currently Locked"))
-                                                                                    (= sub.tag "SubmissionOpen") (e "i" (className "fa fa-unlock-alt" title "Currently Unlocked"))
-                                                                                    (= sub.tag "SubmissionCompleted") (e "i" (className "fa fa-check")))) "Status"))))))
+          "/admin/ccas"
+          (obj pageName "Manage CCAs"
+               component AdminCcasR
+               dataSpec
+               (obj humanName "CCA"
+                    humanNamePlural "CCAs"
+                    machineName "ccas"
+                    editor CcaEditor
+                    categoryColumn (array "category" _.identity "CCA Category")
+                    columns (array (array "name" _.identity "CCA Name"))))
+
+          "/admin/subjects"
+          (obj pageName "Manage Subjects"
+               component AdminSubjectsR
+               dataSpec
+               (obj humanName "Subject"
+                    humanNamePlural "Subjects"
+                    machineName "subjects"
+                    editor SubjectEditor
+                    categoryColumn (array "level" (fn (ls) (-> (__map ls (fn (l) (+ "Year " l))) (.join ", "))) "Applies To")
+                    columns
+                    (array
+                     (array "name" _.identity "Subject Name")
+                     (array "code" (fn (v) (if v (e "code" () v) (e "i" () "(None; Compulsory Subject)"))) "Subject Code")
+                     (array "is_science" (fn (b) (if b "Yes" "No")) "Science Subject?"))))
+
+          "/admin/teachers"
+          (obj pageName "Manage Teachers"
+               component AdminTeachersR
+               dataSpec
+               (obj humanName "Teacher"
+                    humanNamePlural "Teachers"
+                    machineName "teachers"
+                    editor TeacherEditor
+                    categoryColumn null
+                    columns
+                    (array
+                     (array "name" _.identity "Name")
+                     (array "unit" _.identity "Unit")
+                     (array "email" _.identity "Email Address")
+                     (array "is_admin" (fn (b) (if b "Yes" "No")) "Administrator?")
+                     (array "witness_name" _.identity "Witness Name"))))
+
+          "/admin/students"
+          (obj pageName "Manage Students"
+               component AdminStudentsR
+               dataSpec
+               (obj humanName "Student"
+                    humanNamePlural "Students"
+                    machineName "students"
+                    editor StudentEditor
+                    categoryColumn (array "class" _.identity "Class")
+                    columns
+                    (array
+                     (array "index_number" _.identity "Reg #")
+                     (array "name" _.identity "Name")
+                     (array "chinese_name" _.identity "Chinese")
+                     (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "NRIC")
+                     (array "subject_combi"
+                            (fn (ss)
+                              (defvar that this)
+                              (defvar codes (-> (__map ss (fn (s) (.code (lookupForeign that.subjectInfo s)))) (.join ", ")))
+                              (defvar names (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")))
+                              (if codes (e "span" (title names) codes) "—"))
+                            "Subjects")
+                     (array "witnesser"
+                            (fn (tid)
+                              (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid))))
+                            "Witness")
+                     (array "submission"
+                            (fn (sub entity)
+                              (defvar lockicon (e "span" (className "glyphicon glyphicon-lock" "aria-hidden" "true")))
+                              (defvar completeicon (e "span" (className "glyphicon glyphicon-ok" "aria-hidden" "true")))
+                              (defun onUnlockClick ()
+                                ($.ajax (+ (+ "/api/students/" entity.id) "/unlock") (obj type "POST")))
+                              (defun onLockClick ()
+                                ($.ajax (+ (+ "/api/students/" entity.id) "/lock") (obj type "POST")))
+                              (e "div" (className "btn-group" role "toolbar" "aria-label" "Status Buttons")
+                                (cond (= sub.tag "SubmissionNotOpen")
+                                      (e "button" (type "button" className "btn btn-danger btn-xs active" onClick onUnlockClick title "Click to unlock submission.") lockicon " Locked")
+                                      (= sub.tag "SubmissionOpen")
+                                      (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon " Unlocked")
+                                      (= sub.tag "SubmissionCompleted")
+                                      (e "button" (type "button" className "btn btn-success btn-xs active" title "Submission has been completed.") completeicon " Completed"))))
+                            "Status"))))))
 
    (defcomponent Page
      render
