@@ -22,6 +22,8 @@ import Control.Concurrent.Async hiding (race)
 import Control.Concurrent
 import Control.Error
 import Control.Lens ((^.))
+import Data.List
+import Data.Function
 import qualified Data.Char as Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -197,18 +199,37 @@ acidUpdateHandler event = do
 checkMMapOk :: a -> Handler (Either T.Text a)
 checkMMapOk = return . return
 
+data HumanFriendlyParseResult = ParseSuccess (Set Subject)
+                              | ParseAmbiguous [Set Subject]
+                              | ParseIncomplete (T.Text, (Set Subject))
+                              | ParseNothing T.Text
+                              | ParseInternalError
+                              deriving (Show, Eq)
+
+parseSubjectCodeFriendly :: Map T.Text Subject -> T.Text -> HumanFriendlyParseResult
+parseSubjectCodeFriendly allSubjects str =
+  case execStateT (subjectCodesParser allSubjects) (str, Set.empty) of
+   [] -> ParseInternalError -- unreachable
+   [(st, su)] | st == str && Set.null su -> ParseNothing st -- single element
+   (_:[]) -> ParseInternalError -- unreachable
+   possibilities -> -- more than one element: last one is where nothing is parsed
+     case filter (T.null . fst) possibilities of
+      [] -> ParseIncomplete . head $ sortBy (compare `on` (T.length . fst)) possibilities
+      [(_, subjects)] -> ParseSuccess subjects
+      completedPossibilities -> ParseAmbiguous $ map snd completedPossibilities
+
 -- | Parses a subject code string into a set of subjects.
 parseSubjectCode :: Map T.Text Subject -> T.Text -> [Set Subject]
-parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (parseSubjects allSubjects) . (,Set.empty)
-  where parseSubjects = many . subjectCodeParser
-        subjectCodeParser :: Map T.Text Subject -> StateT (T.Text, Set Subject) [] ()
-        subjectCodeParser candidates = do
+parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (subjectCodesParser allSubjects) . (,Set.empty)
+
+subjectCodesParser :: Map T.Text Subject -> StateT (T.Text, Set Subject) [] ()
+subjectCodesParser = void . many . subjectCodeParser
+  where subjectCodeParser candidates = do
           (str, parsed) <- get
           (code, subject) <- lift $ Map.toList candidates
-          let str' = T.dropWhile (PT.inClass " \t,;.&/\\+") str
-          case T.stripPrefix code str' of
+          case T.stripPrefix code str of
            Nothing -> mzero
-           Just remaining -> put (remaining, Set.insert subject parsed)
+           Just remaining -> put (T.dropWhile (PT.inClass " \t,;.&/\\+") remaining, Set.insert subject parsed)
 
 -- | A stronger version of FormInput that allows coupled
 -- fields. Monads assume later computations depend on results of
