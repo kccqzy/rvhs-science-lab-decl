@@ -95,3 +95,43 @@ errCSVDuplicateColumnHeader cells = [stext| Cannot understand the
   table column headers because there seem to exist multiple columns
   with the same meaning. Please check the cells #{cells} of the
   uploaded CSV file. |]
+
+errCSVClassNoParse row bs = [stext| Cannot understand “#{bs}” as a
+  class in row #{row} of uploaded CSV file because it has incorrect
+  format. The correct format is a number from 1 to 6, followed an
+  uppercase letter except for O. |]
+
+errCSVNricNoParse row nric = [stext| Cannot understand “#{nric}” as
+  NRIC in row #{row} of the uploaded CSV file because it has incorrect
+  format. The correct format of NRIC is: optionally “XXXX” followed by
+  four decimal digits followed by an uppercase letter which must be
+  one of “JZIHGFEDCBAXWUTRQPNMLK”. |]
+
+errCSVSubjectCodeAmbiguous row subjcode interp1 interp2 = [stext|
+  Cannot unambiguously understand the subject codes “#{subjcode}” in
+  row #{row} of uploaded CSV file because there are multiple
+  interpretations: it could mean either #{interp1} or #{interp2}. |]
+
+errCSVSubjectCodeIncomplete row subjcode rem ps = [stext| Cannot
+  completely understand the subject codes “#{subjcode}” in row
+  #{row} of uploaded CSV file. A portion of the subject codes are
+  understood: #{ps} but the remaining part “#{rem}” could not be
+  understood. |]
+
+errCSVSubjectCodeNothing row subjcode = [stext| Cannot understand the
+  subject codes “#{subjcode}” in row #{row} of uploaded CSV
+  file. Please check the valid subjects and the spelling of subject
+  code. |]
+
+errCSVSubjectCodeInternalError row subjcode = [stext| Cannot
+  understand the subject codes “#{subjcode}” in row #{row} of
+  uploaded CSV file due to an internal error. This should not
+  happen. |]
+
+errCSVIndexNumNoParse row bs = [stext| Cannot understand “#{bs}” as an
+  integer for index number in row #{row} of uploaded CSV file. |]
+
+errCSVWitnessNoParse row s = [stext| Cannot understand “#{s}” as a
+  witness name in row #{row} of uploaded CSV file. Please check the
+  spelling carefully. Use a hyphen if you intend to mean no witness.
+  |]

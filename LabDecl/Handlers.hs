@@ -520,32 +520,42 @@ postManyStudentsR = do
     csvData <- hoistEither $ parseCSV csvText
     allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
     allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
-    V.forM csvData $ \(rowNumber, rawStudent@CsvStudent{..}) -> do
+    V.forM csvData $ \(rowNumber', rawStudent@CsvStudent{..}) -> do
+      let rowNumber = succ rowNumber'
       -- attempt to convert rawStudent to a Student
-      klass@(Class (level, _)) <- hoistEither . parseClass' . T.encodeUtf8 $ _klass
-      indexNo <- hoistEither . parseInt . T.encodeUtf8 $ _indexNo
-      hoistEither . note "nric wrong format" . guard . validatePartialNric $ _nric
-      witness <- hoistEither $ parseWitnessName allTeachers _witness
-      let subjects = parseSubjectCode (allSubjects !! (level-1)) _subjCombi
-      case subjects of
-       [] -> hoistEither $ Left "subject code no parse"
-       [subjects] -> do
-         let subjectIds = Set.mapMonotonic (^. idField) subjects
-         return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds (Nric _nric) SubmissionNotOpen
-       _ -> hoistEither $ Left "subject code ambiguous"
+      klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 $ _klass
+      indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 $ _indexNo
+      hoistEither . note (errCSVNricNoParse rowNumber _nric) . guard . validatePartialNric $ _nric
+      witness <- hoistEither $ parseWitnessName rowNumber allTeachers _witness
+      subjectIds <- case _subjCombi `elem` emptyFieldDesig of
+        True -> return Set.empty
+        False -> do
+          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) _subjCombi
+          case possibilities of
+           ParseSuccess s -> return $ Set.mapMonotonic (^. idField) s
+           ParseAmbiguous ss -> do
+             let (i1:i2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) ss
+             hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber _subjCombi i1 i2
+           ParseIncomplete (rem, ps) -> do
+             let psf = T.intercalate ", " . map (^. subjectName) . Set.toList $ ps
+             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber _subjCombi rem psf
+           ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber _subjCombi
+           ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber _subjCombi
+      return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds (Nric _nric) SubmissionNotOpen
   case result of
    Left e -> invalidArgs [TL.toStrict e]
    Right vs -> acidUpdateHandler $ AddStudents force vs
-  where parseClass' = fmapL TL.fromStrict . parseClass
-        parseInt :: C.ByteString -> Either TL.Text Int
-        parseInt = ((note "not integer" . hush) .) . PC.parseOnly $ PC.decimal <* PC.endOfInput
-        parseWitnessName :: Map T.Text Teacher -> T.Text -> Either TL.Text (Maybe TeacherId)
-        parseWitnessName teacherMap s =
+  where parseClass' row bs = note (errCSVClassNoParse row (T.decodeUtf8 bs)) $ hush $ parseClass bs
+        parseIndex :: Int -> C.ByteString -> Either TL.Text Int
+        parseIndex row bs = note (errCSVIndexNumNoParse row (T.decodeUtf8 bs)) $ hush $ PC.parseOnly (PC.decimal <* PC.endOfInput) bs
+        parseWitnessName :: Int -> Map T.Text Teacher -> T.Text -> Either TL.Text (Maybe TeacherId)
+        parseWitnessName row teacherMap s =
           case Map.lookup s teacherMap of
            Just t -> return . Just $ t ^. idField
-           Nothing -> case s `elem` [ "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ] of
+           Nothing -> case s `elem` emptyFieldDesig of
              True -> return Nothing
-             False -> Left "no parse"
+             False -> Left $ errCSVWitnessNoParse row s
+        emptyFieldDesig = [ "", "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ]
 
 
 -- |
