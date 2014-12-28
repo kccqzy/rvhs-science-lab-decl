@@ -27,6 +27,8 @@ import Data.Function
 import qualified Data.Char as Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
+import qualified Data.ByteString.Base64 as C64
+import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
@@ -46,6 +48,8 @@ import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
+import Data.Time.Calendar (Day(..))
+import Data.Time.Clock (utctDay, getCurrentTime)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
@@ -55,6 +59,7 @@ import Text.Hamlet (hamletFile, hamletFileReload)
 import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
 import Codec.Text.Detect (detectEncodingName)
+import qualified Codec.Picture.Png as Png
 import qualified Data.Text.ICU.Convert as ICU
 import Yesod.Core
 import Yesod.Form hiding (emailField)
@@ -93,8 +98,10 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
 /api/students             StudentsR      GET POST DELETE
 /api/students/many        ManyStudentsR  POST
-/api/students/submit      StudentSubmitR POST
 !/api/students/#StudentId StudentR       GET PUT DELETE
+/api/students/#StudentId/submit      StudentSubmitR POST
+/api/students/#StudentId/unlock      UnlockSubmissionR POST
+/api/students/#StudentId/lock        LockSubmissionR POST
 /admin                    AdminHomeR     GET
 /admin/ccas               AdminCcasR     GET
 /admin/subjects           AdminSubjectsR GET
@@ -308,6 +315,33 @@ emailField = checkMMap fw bw (checkBool validateEmail ("email wrong format" :: T
                   r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
                   guard $ C.length (C.intercalate "-" r) <= 63
 
+sgPhoneField :: Field Handler Phone
+sgPhoneField = checkMMap fw bw (checkBool validatePhone ("phone wrong format" :: T.Text) textField)
+  where fw = checkMMapOk . Phone
+        bw (Phone p) = p
+        validatePhone = validatePhoneBS . T.encodeUtf8
+        validatePhoneBS = (isRight .) . PC.parseOnly $ do
+          PC.string "+65 "
+          PC.count 4 PC.digit
+          PC.char ' '
+          PC.count 4 PC.digit
+          PC.endOfInput
+
+studentSubmitForm :: StudentId -> FormInput Handler (StudentId, Nric, StudentSubmission)
+studentSubmitForm sid = unMFormInput $ do
+  nric <- mireq nricField "nric"
+  phone <- mireq sgPhoneField "phone"
+  email <- mireq emailField "email"
+  cca1 <- miopt ccaIdField "cca1"
+  cca2 <- miopt ccaIdField "cca2"
+  cca3 <- miopt ccaIdField "cca3"
+  let cca = catMaybes [cca1, cca2, cca3]
+  hasError <- mireq checkBoxField "haserror"
+  sig <- mireq pngField "sig"
+  today <- mireq todayField "today"
+  ua <- mireq textField "ua"
+  return $ (sid, nric, SubmissionCompleted phone email cca hasError (Just sig) Nothing today ua)
+
 studentForm :: StudentId -> FormInput Handler Student
 studentForm sid = unMFormInput $ do
                   a <- mireq textField "name"
@@ -355,6 +389,36 @@ parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ do
    Nothing -> digits ++ [suffix]
    Just p  -> p : digits ++ [suffix]
 
+todayField :: Field Handler Day
+todayField = checkMMap fw bw checkBoxField
+  where bw _ = False
+        fw _ = do
+          today <- liftIO $ utctDay <$> getCurrentTime
+          checkMMapOk today
+
+pngField :: Field Handler ByteString64
+pngField = checkMMap fw bw textField
+  where bw = undefined -- XXX
+        fw = return . parsePngData . T.encodeUtf8
+
+parsePngData :: C.ByteString -> Either T.Text ByteString64
+parsePngData bs = note "invalid image data" . hush $ do
+  data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
+  d <- C64.decode data64
+  Png.decodePng d
+  return $ ByteString64 d
+
+ccaIdField :: Field Handler CcaId
+ccaIdField = checkMMap fw bw intField
+  where bw (CcaId i) = i
+        fw i = do
+          acid <- getAcid <$> ask
+          let rv = CcaId i
+          e <- liftIO $ Acid.query acid $ LookupCcaById (CcaId i)
+          case e of
+           Nothing -> return . Left $ ("no such cca" :: T.Text)
+           Just _ -> return . Right $ rv
+
 teacherIdField :: Field Handler TeacherId
 teacherIdField = checkMMap fw bw intField
   where bw (TeacherId i) = i
@@ -382,8 +446,7 @@ subjCombiField klass = checkMMap fw bw (checkboxesField optlist)
 acidFormUpdateHandler :: (Acid.UpdateEvent ev,
                           ToJSON r, ToJSON e,
                           Acid.MethodResult ev ~ Either e r,
-                          Acid.MethodState ev ~ Database,
-                          HasPrimaryKey a i) =>
+                          Acid.MethodState ev ~ Database) =>
                          (i -> FormInput Handler a) ->
                          (Bool -> a -> ev) ->
                          i -> Handler Value
@@ -507,13 +570,14 @@ deleteStudentR = acidUpdateHandler . RemoveStudent
 deleteStudentsR :: Handler Value
 deleteStudentsR = acidUpdateHandler RemoveAllStudents
 
-postStudentSubmitR :: Handler Value
-postStudentSubmitR = do
-  req <- waiRequest
-  body <- liftIO $ Wai.strictRequestBody req
-  case JSON.decode body of
-   Nothing -> invalidArgs ["no parse"]
-   Just s -> acidUpdateHandler $ PublicStudentDoSubmission s
+postStudentSubmitR :: StudentId -> Handler Value
+postStudentSubmitR = acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission)
+
+postUnlockSubmissionR :: StudentId -> Handler Value
+postUnlockSubmissionR = acidUpdateHandler . TeacherUnlockSubmission
+
+postLockSubmissionR :: StudentId -> Handler Value
+postLockSubmissionR = acidUpdateHandler . TeacherLockSubmission
 
 postManyStudentsR :: Handler Value
 postManyStudentsR = do

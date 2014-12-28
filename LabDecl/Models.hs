@@ -17,8 +17,6 @@ import Data.List
 import Data.Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import qualified Data.ByteString.Base64 as C64
-import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
@@ -37,7 +35,6 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Typeable (Typeable, typeOf)
 import qualified Data.Acid as Acid
-import qualified Codec.Picture.Png as Png
 
 import LabDecl.Types
 import LabDecl.Utilities
@@ -304,7 +301,7 @@ removeAllTeachers = removeAllEntities (Proxy :: Proxy Teacher)
 removeAllStudents = removeAllEntities (Proxy :: Proxy Student)
 
 -- |
--- = Public (Restricted) Queries and Updates
+-- = Public and Teacher (Restricted) Queries and Updates
 
 -- | A public query to list all classes.
 publicListClasses :: IQuery (Set Class)
@@ -327,35 +324,40 @@ publicLookupStudentByClassIndexNumber klass indexNumber nric = do
     guard $ nric `nricMatch` student ^. studentNric
     return student
 
--- | A public update to do submission. We intentionally do not just
--- take the updated fields as arguments, but rather take a full
--- student and then compare. This is more work but it will be worth it
--- (at least I hope so).
--- XXX This kind of validation should happen in Handlers not here.
-publicStudentDoSubmission :: Student -> IUpdate
-publicStudentDoSubmission newStudent = do
-  maybeStudent <- liftQuery $ lookupStudentById (newStudent ^. studentId)
+-- | A public update to do submission.
+publicStudentDoSubmission :: (StudentId, Nric, StudentSubmission) -> IUpdate
+publicStudentDoSubmission (sid, nric, submission) = do
+  maybeStudent <- liftQuery $ lookupStudentById sid
   validCcas <- liftQuery $ Set.map (^. ccaId) <$> listCcas
   changedStudent <- lift . note errInvalidPublicSubmission $ do
     student <- maybeStudent
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
-    guard . not $ (_SubmissionCompleted `isn't` (newStudent ^. studentSubmission))
-    guard $ Just Nothing == newStudent ^? studentSubmission . ssFinalDeclaration
-    guard $ maybe False (all (`Set.member` validCcas)) (newStudent ^? studentSubmission . ssCca)
-    guard $ newStudent == (student & studentSubmission .~ newStudent ^. studentSubmission)
-    guard $ student ^. studentNric `nricMatch` newStudent ^. studentNric
-    case join $ newStudent ^? studentSubmission . ssSignature of
-     Nothing -> mzero
-     Just sigdataurl -> do
-       sigdata <- decodePngBase64 sigdataurl
-       return . (studentSubmission . ssSignature .~ Just sigdata) $ student
+    guard . not $ (_SubmissionCompleted `isn't` submission)
+    guard . isJust . join $ submission ^? ssSignature
+    guard $ Just Nothing == submission ^? ssFinalDeclaration
+    guard $ all (`Set.member` validCcas) (submission ^. ssCca)
+    guard $ student ^. studentNric `nricMatch` nric
+    return $ student & studentSubmission .~ submission
   replaceEntity True changedStudent
-  where decodePngBase64 :: ByteString64 -> Maybe ByteString64
-        decodePngBase64 (ByteString64 bs) = fmap ByteString64 . hush $ do
-          data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
-          d <- C64.decode data64
-          Png.decodePng d
-          return d
+
+teacherChangeSubmissionStatus :: (Student -> TL.Text) -> APrism' StudentSubmission a -> StudentSubmission -> StudentId -> IUpdate
+teacherChangeSubmissionStatus errMsg currentStatus newStatus sid = do
+  maybeStudent <- liftQuery $ lookupStudentById sid
+  student <- lift . note (errEntityNotExist (undefined :: Student)) $ maybeStudent
+  lift . note (errMsg student) . guard . not $ (currentStatus `isn't` (student ^. studentSubmission))
+  let newStudent = student & studentSubmission .~ newStatus
+  replaceEntity True newStudent
+
+-- | Lets a teacher unlock submission. Submission must currently be
+-- locked.
+teacherUnlockSubmission :: StudentId -> IUpdate
+teacherUnlockSubmission = teacherChangeSubmissionStatus errSubmissionNotLocked _SubmissionNotOpen SubmissionOpen
+
+-- | Lets a teacher lock submission. Submission must currently be
+-- unlocked.
+teacherLockSubmission :: StudentId -> IUpdate
+teacherLockSubmission = teacherChangeSubmissionStatus errSubmissionNotUnlocked _SubmissionOpen SubmissionNotOpen
+
 
 -- |
 -- = Internal Operations
@@ -414,5 +416,7 @@ eventNames = [
     'publicListClasses,
     'publicListStudentsFromClass,
     'publicLookupStudentByClassIndexNumber,
-    'publicStudentDoSubmission
+    'publicStudentDoSubmission,
+    'teacherUnlockSubmission,
+    'teacherLockSubmission
     ]
