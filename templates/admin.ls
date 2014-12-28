@@ -324,6 +324,7 @@
                                error (fn (jqxhr)
                                        (setSpinner 0)
                                        (console.log "http error")
+                                       (console.log jqxhr)
                                        (onError jqxhr)))))
        (e "form" (id "editorForm" role "form")
          (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" next next)
@@ -389,6 +390,41 @@
          (e "div" (className "checkbox")
            (e "label" ()
              (e "input" (type "checkbox" name "force" defaultChecked false)) "Force the operation to continue despite errors (not recommended).")))))
+
+   (defcomponent BatchUploadStudents
+     getInitialState
+     (fn () (obj err null))
+     render
+     (fn ()
+       (defvar that this)
+       (defun next (hideModal setSpinner)
+         (setSpinner 1)
+         (defvar formData (new FormData (-> ($ "#uploaderForm") (.get 0))))
+         (console.log formData)
+         (defun onError (jqxhr)
+           (defvar resp (JSON.parse jqxhr.responseText))
+           (that.setState (obj err resp.meta.details)))
+         ($.ajax "/api/students/many"
+                 (obj
+                  type "POST"
+                  data formData
+                  contentType false
+                  processData false
+                  success hideModal
+                  error (fn (jqxhr)
+                          (setSpinner 0)
+                          (console.log "http error")
+                          (console.log jqxhr)
+                          (onError jqxhr)))))
+       (e ActionModal (actionButtonStyle "primary" actionButtonLabel "Upload" title "Add Students via Uploading CSV File" next next)
+         (if this.state.err
+           (e "div" (className "alert alert-danger" role "alert") this.state.err)
+           null)
+         (e "form" (id "uploaderForm" role "form")
+           (e "p" (className "help-block") "This allows you to upload a CSV file of students and add all of them. This is an all-or-nothing operation: even if only one student could not be added, none of the students will be added.")
+           (e "div" (className "form-group")
+             (e "label" (htmlFor "csv") "CSV File")
+             (e "input" (type "file" className "form-control" name "csv" accept "text/csv,.csv" required true)))))))
 
    (defcomponent TestDecoder
      getInitialState
@@ -649,6 +685,11 @@
 
      render
      (fn ()
+       (defun onBatchUploadButtonClick ()
+         (React.render
+          (e BatchUploadStudents ())
+          (getModalWrapper)))
+       (defvar customButtons (e "button" (onClick onBatchUploadButtonClick type "button" className "btn btn-default") "Add New (Upload CSV File)"))
        (defvar that this)
        (defun onRadioChange (e)
          (if e.target.checked
@@ -708,7 +749,7 @@
                    "I’d like to view " (e "em" () "all") " students. (" (e "strong" () "NOT RECOMMENDED:") " very taxing on the network)"))
                (e "button" (type "submit" className "btn btn-primary" onClick onViewButtonClick) "View"))))
          (e "div" (className "row")
-           (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary))))))
+           (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary customButtons customButtons))))))
 
    (defun lookupForeign (dataset id)
      (|| (_.find dataset.data (fn (v) (= id v.id))) "??"))

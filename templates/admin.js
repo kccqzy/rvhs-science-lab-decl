@@ -420,6 +420,7 @@ $(function() {
                     error: function(jqxhr) {
                         setSpinner(0);
                         console.log("http error");
+                        console.log(jqxhr);
                         return onError(jqxhr);
                     }
                 });
@@ -599,6 +600,72 @@ $(function() {
         }
     },_.invert({
         SubjectEditor: "displayName"
+    })));
+    var BatchUploadStudents = React_createClass(_.defaults({
+        getInitialState: function() {
+            return {
+                err: null
+            };
+        },
+        render: function() {
+            var that = this;
+            var next = function(hideModal,setSpinner) {
+                setSpinner(1);
+                var formData = new FormData(($("#uploaderForm")).get(0));
+                console.log(formData);
+                var onError = function(jqxhr) {
+                    var resp = JSON.parse(jqxhr.responseText);
+                    return that.setState({
+                        err: resp.meta.details
+                    });
+                };
+                return $.ajax("/api/students/many",{
+                    type: "POST",
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: hideModal,
+                    error: function(jqxhr) {
+                        setSpinner(0);
+                        console.log("http error");
+                        console.log(jqxhr);
+                        return onError(jqxhr);
+                    }
+                });
+            };
+            return React_createElement(ActionModal,{
+                actionButtonStyle: "primary",
+                actionButtonLabel: "Upload",
+                title: "Add Students via Uploading CSV File",
+                next: next
+            },(this.state.err ?
+                React_createElement("div",{
+                    className: "alert alert-danger",
+                    role: "alert"
+                },this.state.err) :
+                null),React_createElement("form",{
+                id: "uploaderForm",
+                role: "form"
+            },React_createElement("p",{
+                className: "help-block"
+            },"This allows you to upload a CSV file of students and add all of them. This is an all-or-nothing operation: even if only one student could not be added, none of the students will be added."),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("label",{
+                htmlFor: "csv"
+            },"CSV File"),React_createElement("input",{
+                type: "file",
+                className: "form-control",
+                name: "csv",
+                accept: "text/csv,.csv",
+                required: true
+            }))));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        BatchUploadStudents: "displayName"
     })));
     var TestDecoder = React_createClass(_.defaults({
         getInitialState: function() {
@@ -1109,6 +1176,14 @@ $(function() {
             return this.state.subjectConn.close();
         },
         render: function() {
+            var onBatchUploadButtonClick = function() {
+                return React.render(React_createElement(BatchUploadStudents,{}),getModalWrapper());
+            };
+            var customButtons = React_createElement("button",{
+                onClick: onBatchUploadButtonClick,
+                type: "button",
+                className: "btn btn-default"
+            },"Add New (Upload CSV File)");
             var that = this;
             var onRadioChange = function(e) {
                 return (e.target.checked ?
@@ -1232,7 +1307,8 @@ $(function() {
                 className: "row"
             },React_createElement(EntityPage,{
                 wsUrl: ("/api/students?" + this.state.queryString),
-                auxiliary: auxiliary
+                auxiliary: auxiliary,
+                customButtons: customButtons
             })));
         }
     },{
