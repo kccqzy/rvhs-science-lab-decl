@@ -1,13 +1,13 @@
 .hover-view
   display: block
   position: relative
-  min-width: 4em
 
   &::before
     display: block
-    content: "Move cursor here"
+    content: "Hover…"
     position: absolute
     transition: opacity 0.2s linear
+    font-style: italic
 
   &::after
     display: block

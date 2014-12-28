@@ -1480,9 +1480,17 @@ $(function() {
                         "subject_combi",
                         function(ss) {
                             var that = this;
-                            return ((__map(ss,function(s) {
+                            var codes = (__map(ss,function(s) {
+                                return (lookupForeign(that.subjectInfo,s)).code;
+                            })).join(", ");
+                            var names = (__map(ss,function(s) {
                                 return (lookupForeign(that.subjectInfo,s)).name;
-                            })).join(", ") || React_createElement("i",{},"—"));
+                            })).join(", ");
+                            return (codes ?
+                                React_createElement("span",{
+                                    title: names
+                                },codes) :
+                                "—");
                         },
                         "Subjects"
                     ],
@@ -1499,11 +1507,19 @@ $(function() {
                         "submission",
                         function(sub) {
                             return ((sub.tag === "SubmissionNotOpen") ?
-                                "Locked" :
+                                React_createElement("i",{
+                                    className: "fa fa-lock",
+                                    title: "Currently Locked"
+                                }) :
                                 ((sub.tag === "SubmissionOpen") ?
-                                    "Open" :
+                                    React_createElement("i",{
+                                        className: "fa fa-unlock-alt",
+                                        title: "Currently Unlocked"
+                                    }) :
                                     ((sub.tag === "SubmissionCompleted") ?
-                                        "Completed" :
+                                        React_createElement("i",{
+                                            className: "fa fa-check"
+                                        }) :
                                         undefined)));
                         },
                         "Status"

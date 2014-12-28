@@ -593,6 +593,7 @@ postManyStudentsR = do
     V.forM csvData $ \(rowNumber', rawStudent@CsvStudent{..}) -> do
       let rowNumber = succ rowNumber'
       -- attempt to convert rawStudent to a Student
+      let name = T.toTitle _name
       klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 $ _klass
       indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 $ _indexNo
       nric <- hoistEither . parseNric' rowNumber . T.encodeUtf8 $ _nric
@@ -611,7 +612,7 @@ postManyStudentsR = do
              hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber _subjCombi rem psf
            ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber _subjCombi
            ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber _subjCombi
-      return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds nric SubmissionNotOpen
+      return $ Student (StudentId 0) name _chinese witness klass indexNo subjectIds nric SubmissionNotOpen
   case result of
    Left e -> invalidArgs [TL.toStrict e]
    Right vs -> acidUpdateHandler $ AddStudents force vs
@@ -665,5 +666,6 @@ getAdminSubjectsR = defaultLayout $ do
 getAdminStudentsR :: Handler Html
 getAdminStudentsR = defaultLayout $ do
   setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
+  addStylesheet $ StaticR fontawesome_min_css
   toWidget $(cassiusFile "templates/hover.cassius")
   adminSite

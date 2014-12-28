@@ -803,13 +803,17 @@
                                                         (array "name" _.identity "Name")
                                                         (array "chinese_name" _.identity "Chinese")
                                                         (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "NRIC")
-                                                        (array "subject_combi" (fn (ss) (defvar that this) (|| (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")) (e "i" () "—"))) "Subjects")
+                                                        (array "subject_combi" (fn (ss)
+                                                                                 (defvar that this)
+                                                                                 (defvar codes (-> (__map ss (fn (s) (.code (lookupForeign that.subjectInfo s)))) (.join ", ")))
+                                                                                 (defvar names (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")))
+                                                                                 (if codes (e "span" (title names) codes) "—")) "Subjects")
                                                         (array "witnesser" (fn (tid)
                                                                              (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid)))) "Witness")
                                                         (array "submission" (fn (sub)
-                                                                              (cond (= sub.tag "SubmissionNotOpen") "Locked"
-                                                                                    (= sub.tag "SubmissionOpen") "Open"
-                                                                                    (= sub.tag "SubmissionCompleted") "Completed")) "Status"))))))
+                                                                              (cond (= sub.tag "SubmissionNotOpen") (e "i" (className "fa fa-lock" title "Currently Locked"))
+                                                                                    (= sub.tag "SubmissionOpen") (e "i" (className "fa fa-unlock-alt" title "Currently Unlocked"))
+                                                                                    (= sub.tag "SubmissionCompleted") (e "i" (className "fa fa-check")))) "Status"))))))
 
    (defcomponent Page
      render
