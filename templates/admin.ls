@@ -605,6 +605,10 @@
            (that.state.conn.close)
            (that.setState (obj conn (APIConnection newProps.wsUrl))))))
 
+     componentDidMount
+     (fn ()
+       (-> ($ "body") (.popover (obj selector ".has-popover"))))
+
      render
      (fn ()
        (defvar that this)
@@ -831,6 +835,7 @@
                             "Witness")
                      (array "submission"
                             (fn (sub entity)
+                              (defvar that this)
                               (defvar lockicon (e "span" (className "glyphicon glyphicon-lock" "aria-hidden" "true")))
                               (defvar completeicon (e "span" (className "glyphicon glyphicon-ok" "aria-hidden" "true")))
                               (defun onUnlockClick ()
@@ -843,7 +848,11 @@
                                       (= sub.tag "SubmissionOpen")
                                       (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon " Unlocked")
                                       (= sub.tag "SubmissionCompleted")
-                                      (e "button" (type "button" className "btn btn-success btn-xs active" title "Submission has been completed.") completeicon " Completed"))))
+                                      (do
+                                        (defvar popoverContent (-> (array "Email: " sub.email
+                                                                          "; Phone: " sub.phone
+                                                                          "; CCAs: " (|| (-> (__map sub.cca (fn (s) (.name (lookupForeign that.ccaInfo s)))) (.join ", ")) "None")) (.join "")))
+                                        (e "button" (type "button" className "btn btn-success btn-xs active has-popover" title "Submission has been completed." "data-title" "Submitted Information" "data-content" popoverContent "data-placement" "top") completeicon " Completed")))))
                             "Status"))))))
 
    (defcomponent Page

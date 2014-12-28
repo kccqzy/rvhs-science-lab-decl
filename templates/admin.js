@@ -1040,6 +1040,11 @@ $(function() {
                 })() :
                 undefined);
         },
+        componentDidMount: function() {
+            return ($("body")).popover({
+                selector: ".has-popover"
+            });
+        },
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -1508,6 +1513,7 @@ $(function() {
                     [
                         "submission",
                         function(sub,entity) {
+                            var that = this;
                             var lockicon = React_createElement("span",{
                                 className: "glyphicon glyphicon-lock",
                                 "aria-hidden": "true"
@@ -1545,11 +1551,26 @@ $(function() {
                                         title: "Click to lock submission."
                                     },lockicon," Unlocked") :
                                     ((sub.tag === "SubmissionCompleted") ?
-                                        React_createElement("button",{
-                                            type: "button",
-                                            className: "btn btn-success btn-xs active",
-                                            title: "Submission has been completed."
-                                        },completeicon," Completed") :
+                                        (function() {
+                                            var popoverContent = ([
+                                                "Email: ",
+                                                sub.email,
+                                                "; Phone: ",
+                                                sub.phone,
+                                                "; CCAs: ",
+                                                ((__map(sub.cca,function(s) {
+                                                    return (lookupForeign(that.ccaInfo,s)).name;
+                                                })).join(", ") || "None")
+                                            ]).join("");
+                                            return React_createElement("button",{
+                                                type: "button",
+                                                className: "btn btn-success btn-xs active has-popover",
+                                                title: "Submission has been completed.",
+                                                "data-title": "Submitted Information",
+                                                "data-content": popoverContent,
+                                                "data-placement": "top"
+                                            },completeicon," Completed");
+                                        })() :
                                         undefined))));
                         },
                         "Status"
