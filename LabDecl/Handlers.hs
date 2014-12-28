@@ -60,7 +60,6 @@ import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
 import Codec.Text.Detect (detectEncodingName)
 import qualified Codec.Picture.Png as Png
-import qualified Data.Text.ICU.Convert as ICU
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
@@ -586,10 +585,8 @@ postManyStudentsR = do
   force <- runInputPost (ireq checkBoxField "force")
   bs <- fileSource fileinfo $$ sinkLbs
   result <- runEitherT $ do
-    let maybeEncoding = detectEncodingName bs -- ^ unsafePerformIO here
-    encoding <- hoistEither $ note errCSVTextDecodeFailed maybeEncoding
-    converter <- liftIO $ ICU.open encoding Nothing
-    let csvText = ICU.toUnicode converter (CL.toStrict bs)
+    maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
+    csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
     csvData <- hoistEither $ parseCSV csvText
     allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
     allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
