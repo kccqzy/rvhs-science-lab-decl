@@ -324,7 +324,7 @@ publicLookupStudentByClassIndexNumber klass indexNumber nric = do
   maybeStudent <- lookupStudentByClassIndexNumber klass indexNumber
   return $ do
     student <- maybeStudent
-    guard $ nric == student ^. studentNric
+    guard $ nric `nricMatch` student ^. studentNric
     return student
 
 -- | A public update to do submission. We intentionally do not just
@@ -343,6 +343,7 @@ publicStudentDoSubmission newStudent = do
     guard $ Just Nothing == newStudent ^? studentSubmission . ssFinalDeclaration
     guard $ maybe False (all (`Set.member` validCcas)) (newStudent ^? studentSubmission . ssCca)
     guard $ newStudent == (student & studentSubmission .~ newStudent ^. studentSubmission)
+    guard $ student ^. studentNric `nricMatch` newStudent ^. studentNric
     case join $ newStudent ^? studentSubmission . ssSignature of
      Nothing -> mzero
      Just sigdataurl -> do

@@ -334,17 +334,26 @@ parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
   return $ Class (l, c)
 
 nricField :: Field Handler Nric
-nricField = checkMMap fw bw (checkBool validatePartialNric ("wrong nric format" :: T.Text) textField)
+nricField = checkMMap fw bw textField
   where bw (Nric s) = s
-        fw = checkMMapOk . Nric
+        fw = return . parseNric . T.encodeUtf8
 
-validatePartialNric :: T.Text -> Bool
-validatePartialNric = validatePartialNricBS . T.encodeUtf8
-  where validatePartialNricBS = (isRight .) . PC.parseOnly $ do
-          PC.option "XXXX" (PC.stringCI "XXXX")
-          PC.count 4 PC.digit
-          PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
-          PC.endOfInput
+parseNric :: C.ByteString -> Either T.Text Nric
+parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ do
+  many (PC.char 'X')
+  prefix <- PC.option Nothing (Just <$> PC.satisfy (PC.inClass "SFTG"))
+  digits <- PC.many1 PC.digit
+  guard $ length digits >= 4 && length digits <= 7
+  suffix <- case (prefix, digits) of
+    (Just c, [d1,d2,d3,d4,d5,d6,d7]) -> do
+      let prefixNum = if c `C.elem` "SF" then 0 else 4
+      let check = (`rem` 11) . (+ prefixNum) . sum . zipWith (*) [2,7,6,5,4,3,2] . map Char.digitToInt $ digits
+      PC.char $ "JZIHGFEDCBAXWUTRQPNMLK" !! (prefixNum `div` 4 * 11 + check)
+    _ -> PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
+  PC.endOfInput
+  return . Nric . T.pack $ case prefix of
+   Nothing -> digits ++ [suffix]
+   Just p  -> p : digits ++ [suffix]
 
 teacherIdField :: Field Handler TeacherId
 teacherIdField = checkMMap fw bw intField
@@ -525,7 +534,7 @@ postManyStudentsR = do
       -- attempt to convert rawStudent to a Student
       klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 $ _klass
       indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 $ _indexNo
-      hoistEither . note (errCSVNricNoParse rowNumber _nric) . guard . validatePartialNric $ _nric
+      nric <- hoistEither . parseNric' rowNumber . T.encodeUtf8 $ _nric
       witness <- hoistEither $ parseWitnessName rowNumber allTeachers _witness
       subjectIds <- case _subjCombi `elem` emptyFieldDesig of
         True -> return Set.empty
@@ -541,11 +550,12 @@ postManyStudentsR = do
              hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber _subjCombi rem psf
            ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber _subjCombi
            ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber _subjCombi
-      return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds (Nric _nric) SubmissionNotOpen
+      return $ Student (StudentId 0) _name _chinese witness klass indexNo subjectIds nric SubmissionNotOpen
   case result of
    Left e -> invalidArgs [TL.toStrict e]
    Right vs -> acidUpdateHandler $ AddStudents force vs
   where parseClass' row bs = note (errCSVClassNoParse row (T.decodeUtf8 bs)) $ hush $ parseClass bs
+        parseNric' row bs = note (errCSVNricNoParse row (T.decodeUtf8 bs)) $ hush $ parseNric bs
         parseIndex :: Int -> C.ByteString -> Either TL.Text Int
         parseIndex row bs = note (errCSVIndexNumNoParse row (T.decodeUtf8 bs)) $ hush $ PC.parseOnly (PC.decimal <* PC.endOfInput) bs
         parseWitnessName :: Int -> Map T.Text Teacher -> T.Text -> Either TL.Text (Maybe TeacherId)

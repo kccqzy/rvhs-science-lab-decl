@@ -14,6 +14,7 @@ import Data.Maybe
 import Data.Either
 import Data.List
 import Data.Char
+import Data.Function
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
@@ -65,6 +66,11 @@ newtype CcaId     = CcaId Int         deriving (Show, Eq, Ord, Data, Typeable, G
 newtype SubjectId = SubjectId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON, PathPiece, Read)
 newtype TeacherId = TeacherId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON, PathPiece, Read)
 newtype StudentId = StudentId Int     deriving (Show, Eq, Ord, Data, Typeable, Generic, ToJSON, FromJSON, PathPiece, Read)
+
+infix 4 `nricMatch`
+nricMatch :: Nric -> Nric -> Bool
+nricMatch = (==) `on` lastFive
+  where lastFive (Nric a) = T.drop (T.length a - 5) a
 
 -- | Generate an index from the field literal.
 ixLitField :: (Typeable i, Ord i) => Lens' a i -> Ix a

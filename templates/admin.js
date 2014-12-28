@@ -1471,7 +1471,7 @@ $(function() {
                         function(v) {
                             return React_createElement("span",{
                                 className: "hover-view",
-                                "data-text": v
+                                "data-text": (v).slice(-5)
                             });
                         },
                         "NRIC"

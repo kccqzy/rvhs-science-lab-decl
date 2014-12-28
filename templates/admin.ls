@@ -802,7 +802,7 @@
                                                         (array "index_number" _.identity "Reg #")
                                                         (array "name" _.identity "Name")
                                                         (array "chinese_name" _.identity "Chinese")
-                                                        (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" v))) "NRIC")
+                                                        (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "NRIC")
                                                         (array "subject_combi" (fn (ss) (defvar that this) (|| (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")) (e "i" () "—"))) "Subjects")
                                                         (array "witnesser" (fn (tid)
                                                                              (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid)))) "Witness")
