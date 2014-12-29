@@ -121,6 +121,35 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 |])
 
 instance Yesod LabDeclarationApp where
+
+  -- | Authorisation table
+  isAuthorized CcasR                 w = requirePrivilege (if w then PrivAdmin else PrivNone)
+  isAuthorized (CcaR _)              w = requirePrivilege (if w then PrivAdmin else PrivNone)
+  isAuthorized SubjectsR             w = requirePrivilege (if w then PrivAdmin else PrivNone)
+  isAuthorized TestDecodeR           _ = requirePrivilege PrivTeacher
+  isAuthorized (SubjectR _)          w = requirePrivilege (if w then PrivAdmin else PrivNone)
+  isAuthorized TeachersR             w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
+  isAuthorized (TeacherR _)          w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
+  isAuthorized ClassesR              _ = requirePrivilege PrivNone
+  isAuthorized (ClassR _)            _ = requirePrivilege PrivNone
+  isAuthorized (PublicStudentR _ _)  _ = requirePrivilege PrivNone
+  isAuthorized StudentsR             w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
+  isAuthorized ManyStudentsR         _ = requirePrivilege PrivAdmin
+  isAuthorized (StudentR _)          w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
+  isAuthorized (StudentSubmitR _)    _ = requirePrivilege PrivNone
+  isAuthorized (LockSubmissionR _)   _ = requirePrivilege PrivTeacher
+  isAuthorized (UnlockSubmissionR _) _ = requirePrivilege PrivTeacher
+  isAuthorized AdminHomeR            _ = requirePrivilege PrivTeacher
+  isAuthorized AdminCcasR            _ = requirePrivilege PrivTeacher
+  isAuthorized AdminSubjectsR        _ = requirePrivilege PrivTeacher
+  isAuthorized AdminTeachersR        _ = requirePrivilege PrivTeacher
+  isAuthorized AdminStudentsR        _ = requirePrivilege PrivTeacher
+  isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
+  isAuthorized HomepageR             _ = requirePrivilege PrivNone
+  isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
+  isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
+  isAuthorized AuthStatusR           _ = requirePrivilege PrivNone
+
   -- | App root
   approot = ApprootStatic "http://localhost:8080"
 
@@ -134,6 +163,9 @@ instance Yesod LabDeclarationApp where
   -- | Always upload to memory.
   fileUpload _ _ = FileUploadMemory lbsBackEnd
 
+  -- | Route for authentication
+  authRoute _ = Just $ AuthR LoginR
+
 instance YesodAuth LabDeclarationApp where
   type AuthId LabDeclarationApp = T.Text
   authHttpManager = getHttpManager
@@ -145,6 +177,37 @@ instance YesodAuth LabDeclarationApp where
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
+
+data Privilege = PrivNone
+               | PrivTeacher
+               | PrivAdmin
+               deriving (Show, Eq, Ord)
+
+requirePrivilege :: Privilege -> Handler AuthResult
+requirePrivilege privReq
+  | privReq == PrivNone = return Authorized
+  | otherwise = maybe
+                AuthenticationRequired
+                (bool (Unauthorized "Insufficient privileges.") Authorized . (>= privReq))
+                <$> getPrivilege
+
+getPrivilege :: Handler (Maybe Privilege)
+getPrivilege = do
+  mu <- maybeAuthId
+  case mu of
+   Nothing -> return Nothing
+   Just aid -> do
+     if aid == "qzy@qzy.io"
+       then return $ Just PrivAdmin
+       else do
+        acid <- getAcid <$> ask
+        mbIdentity <- liftIO $ Acid.query acid $ LookupTeacherByEmail (Email aid)
+        case mbIdentity of
+         Nothing -> return $ Just PrivNone
+         Just identity -> do
+           case identity ^. teacherIsAdmin of
+            True -> return $ Just PrivAdmin
+            False -> return $ Just PrivTeacher
 
 -- | Generically handles a database query. Sends either a normal JSON
 -- response, or establishes a WebSocket connection for push
