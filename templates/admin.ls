@@ -873,11 +873,11 @@
                                  (getModalWrapper)))
                               (e "div" (className "btn-group" role "toolbar" "aria-label" "Status Buttons")
                                 (cond (= sub.tag "SubmissionNotOpen")
-                                      (e "button" (type "button" className "btn btn-danger btn-xs active" onClick onUnlockClick title "Click to unlock submission.") lockicon " Locked")
+                                      (e "button" (type "button" className "btn btn-danger btn-xs active" onClick onUnlockClick title "Click to unlock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Locked")))
                                       (= sub.tag "SubmissionOpen")
-                                      (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon " Unlocked")
+                                      (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Unlocked")))
                                       (= sub.tag "SubmissionCompleted")
-                                      (e "button" (type "button" className "btn btn-success btn-xs active" onClick onCompleteClick title "Click to view submitted information.") completeicon " Completed"))))
+                                      (e "button" (type "button" className "btn btn-success btn-xs active" onClick onCompleteClick title "Click to view submitted information.") completeicon (e "span" (className "presentation-text" "data-text" " Completed"))))))
                             "Status"))))))
 
    (defcomponent Page

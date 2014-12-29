@@ -1591,21 +1591,30 @@ $(function() {
                                     className: "btn btn-danger btn-xs active",
                                     onClick: onUnlockClick,
                                     title: "Click to unlock submission."
-                                },lockicon," Locked") :
+                                },lockicon,React_createElement("span",{
+                                    className: "presentation-text",
+                                    "data-text": " Locked"
+                                })) :
                                 ((sub.tag === "SubmissionOpen") ?
                                     React_createElement("button",{
                                         type: "button",
                                         className: "btn btn-primary btn-xs",
                                         onClick: onLockClick,
                                         title: "Click to lock submission."
-                                    },lockicon," Unlocked") :
+                                    },lockicon,React_createElement("span",{
+                                        className: "presentation-text",
+                                        "data-text": " Unlocked"
+                                    })) :
                                     ((sub.tag === "SubmissionCompleted") ?
                                         React_createElement("button",{
                                             type: "button",
                                             className: "btn btn-success btn-xs active",
                                             onClick: onCompleteClick,
                                             title: "Click to view submitted information."
-                                        },completeicon," Completed") :
+                                        },completeicon,React_createElement("span",{
+                                            className: "presentation-text",
+                                            "data-text": " Completed"
+                                        })) :
                                         undefined))));
                         },
                         "Status"
