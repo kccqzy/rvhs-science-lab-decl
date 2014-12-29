@@ -569,6 +569,9 @@ searchByField = checkMMap fw bw textField
            "teacher" -> do
              tid <- runInputGet (ireq intField "id")
              checkMMapOk . QueryEvent crit $ ListStudentsWithWitnesser (TeacherId tid)
+           "name" -> do
+             name <- runInputGet (ireq textField "name")
+             checkMMapOk . QueryEvent crit $ SearchStudentsByName name
            _ -> return $ Left ("no such criteria" :: T.Text)
 
 getStudentsR :: Handler Value

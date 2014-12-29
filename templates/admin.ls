@@ -715,6 +715,13 @@
                      (e "input" (type "text" className "form-control" disabled true value "")))))
                (e "div" (className "radio")
                  (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "name" onChange onRadioChange))
+                   "I’d like to search for students by approximate name. (Add space if unsure)"
+                   (if (= this.state.selected "name")
+                     (e "input" (type "text" className "form-control" name "name" placeholder "Enter an approximate name, e.g. Xin Yi"))
+                     (e "input" (type "text" className "form-control" disabled true value "")))))
+               (e "div" (className "radio")
+                 (e "label" ()
                    (e "input" (type "radio" name "searchby" value "teacher" onChange onRadioChange))
                    "I’d like to view students whose witness is a particular teacher."
                    (if (= this.state.selected "teacher")

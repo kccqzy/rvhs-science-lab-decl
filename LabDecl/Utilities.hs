@@ -68,3 +68,10 @@ tryDecodeEncoding encoding bs = do
 tryDecodeAllEncodings :: C.ByteString -> IO (Maybe T.Text)
 tryDecodeAllEncodings = foldr1 go . mapM tryDecodeEncoding ("gb18030" : delete "gb18030" ICU.converterNames)
   where go io1 io2 = io1 >>= maybe io2 (return . Just)
+
+textIndex :: Bool -> T.Text -> [T.Text]
+textIndex withShort = filter (not . T.null) . nub . concatMap (if withShort then gen else gen3gram) . T.words . T.toCaseFold . T.strip
+  where gen3gram p | T.length p <= 3 = [p]
+                   | otherwise = T.take 3 p : gen3gram (T.tail p)
+        genShort p = [T.take 2 p, T.drop (T.length p - 2) p]
+        gen = liftM2 (++) gen3gram genShort

@@ -1237,6 +1237,25 @@ $(function() {
             },React_createElement("label",{},React_createElement("input",{
                 type: "radio",
                 name: "searchby",
+                value: "name",
+                onChange: onRadioChange
+            }),"I’d like to search for students by approximate name. (Add space if unsure)",((this.state.selected === "name") ?
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    name: "name",
+                    placeholder: "Enter an approximate name, e.g. Xin Yi"
+                }) :
+                React_createElement("input",{
+                    type: "text",
+                    className: "form-control",
+                    disabled: true,
+                    value: ""
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
                 value: "teacher",
                 onChange: onRadioChange
             }),"I’d like to view students whose witness is a particular teacher.",((this.state.selected === "teacher") ?

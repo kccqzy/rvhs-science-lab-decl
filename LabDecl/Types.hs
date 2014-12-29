@@ -169,7 +169,8 @@ instance Indexable Student where
     ixFun $ (^. studentSubmission . ssCca),
     ixFun $ Set.toList . (^. studentSubjectCombi),
     ixFun $ (:[]) . isJust . (^? studentSubmission . ssSignature),
-    ixFun $ maybeToList . (^. studentWitnesser)
+    ixFun $ maybeToList . (^. studentWitnesser),
+    ixFun $ textIndex True . (^. studentName)
     ]
 
 -- | A table in the database, with the actual IxSet database and a

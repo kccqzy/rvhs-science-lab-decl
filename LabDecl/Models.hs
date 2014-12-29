@@ -114,6 +114,9 @@ listStudentsWithSubject   = redactSignatureDeclaration . searchEntitiesEq
 listStudentsWithWitnesser = redactSignatureDeclaration . searchEntitiesEq
 listStudentsByStatus      = redactSignatureDeclaration . searchEntitiesEq
 
+searchStudentsByName :: T.Text -> IQuery (Set Student)
+searchStudentsByName name = redactSignatureDeclaration $ searchEntities [(@* textIndex False name)]
+
 redactSignatureDeclaration :: (Functor f) => f (Set Student) -> f (Set Student)
 redactSignatureDeclaration = fmap $ Set.map $ (studentSubmission . ssSignature .~ Nothing) . (studentSubmission . ssFinalDeclaration .~ Nothing)
 
@@ -396,6 +399,7 @@ eventNames = [
     'listStudentsWithSubject,
     'listStudentsWithWitnesser,
     'listStudentsByStatus,
+    'searchStudentsByName,
     'addCca,
     'addSubject,
     'addTeacher,
