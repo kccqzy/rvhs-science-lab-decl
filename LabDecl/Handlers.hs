@@ -51,6 +51,7 @@ import Data.Conduit.Binary (sinkLbs)
 import Data.Time.Calendar (Day(..))
 import Data.Time.Clock (utctDay, getCurrentTime)
 import qualified Network.HTTP.Types as HTTP
+import qualified Network.HTTP.Client as HTTP
 import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
@@ -64,6 +65,8 @@ import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
 import Yesod.EmbeddedStatic
+import Yesod.Auth
+import Yesod.Auth.GoogleEmail2
 
 import LabDecl.Utilities
 import LabDecl.Types
@@ -76,7 +79,8 @@ import LabDecl.ErrMsg
 data LabDeclarationApp = LabDeclarationApp {
   getStatic :: EmbeddedStatic,
   getAcid :: Acid.AcidState Database,
-  getNotifyChan :: TChan ()
+  getNotifyChan :: TChan (),
+  getHttpManager :: HTTP.Manager
   }
 
 $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
@@ -109,11 +113,17 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/subjects           AdminSubjectsR GET
 /admin/teachers           AdminTeachersR GET
 /admin/students           AdminStudentsR GET
+/admin/logout             AdminLogoutR   GET
 /                         HomepageR      GET
 /static                   StaticR        EmbeddedStatic getStatic
+/auth                     AuthR          Auth getAuth
+/authstatus AuthStatusR GET
 |])
 
 instance Yesod LabDeclarationApp where
+  -- | App root
+  approot = ApprootStatic "http://localhost:8080"
+
   -- | Static files.
   addStaticContent = embedStaticContent getStatic StaticR minifym
 
@@ -123,6 +133,15 @@ instance Yesod LabDeclarationApp where
 
   -- | Always upload to memory.
   fileUpload _ _ = FileUploadMemory lbsBackEnd
+
+instance YesodAuth LabDeclarationApp where
+  type AuthId LabDeclarationApp = T.Text
+  authHttpManager = getHttpManager
+  authPlugins _ = [ authGoogleEmail "950258003533-9tcea77akv60t4h2t94747eh48bdqcuo.apps.googleusercontent.com" "camnLwKj_w2wtwmWYBqliwdv"]
+  loginDest _ = AuthStatusR
+  logoutDest _ = AdminLogoutR
+  getAuthId = return . Just . credsIdent
+  maybeAuthId = lookupSession "_ID"
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
@@ -655,6 +674,19 @@ postManyStudentsR = do
 -- |
 -- = HTML handlers
 
+getAuthStatusR :: Handler Html
+getAuthStatusR = do
+    maid <- maybeAuthId
+    defaultLayout
+        [whamlet|
+            $maybe e <- maid
+                <p>You are logged in as #{e}.
+                    <a href=@{AuthR LogoutR}>Logout
+            $nothing
+                <p>You are not logged in.
+                    <a href=@{AuthR LoginR}>Go to the login page
+        |]
+
 adminSite :: Widget
 adminSite = do
   addStylesheet $ StaticR bootstrap_min_css
@@ -664,6 +696,15 @@ adminSite = do
   addScript $ StaticR react_dev_js
   addScript $ StaticR bootstrap_js
   toWidget $(juliusFileReload "templates/admin.js")
+
+getAdminLogoutR :: Handler Html
+getAdminLogoutR = defaultLayout $ do
+  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful"
+  addStylesheet $ StaticR bootstrap_min_css
+  addStylesheet $ StaticR bootstrapt_min_css
+  addScript $ StaticR jquery_js
+  addScript $ StaticR bootstrap_js
+  toWidget $(hamletFileReload "templates/didlogout.hamlet")
 
 getAdminHomeR :: Handler Html
 getAdminHomeR = defaultLayout $ do

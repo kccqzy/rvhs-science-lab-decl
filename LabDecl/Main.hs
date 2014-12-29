@@ -36,9 +36,12 @@ main = do
   -- queues and channels
   notifyChan <- atomically newBroadcastTChan
 
+  -- HTTP manager
+  httpManager <- HTTP.newManager HTTP.tlsManagerSettings
+
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
-    toWaiApp (LabDeclarationApp eStatic acid notifyChan) >>= Warp.runSettings (setSettings Warp.defaultSettings)
+    toWaiApp (LabDeclarationApp eStatic acid notifyChan httpManager) >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState def
         acidFinally = Acid.createCheckpointAndClose
         errNoTempDir = do
