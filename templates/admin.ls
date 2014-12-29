@@ -605,10 +605,6 @@
            (that.state.conn.close)
            (that.setState (obj conn (APIConnection newProps.wsUrl))))))
 
-     componentDidMount
-     (fn ()
-       (-> ($ "body") (.popover (obj selector ".has-popover"))))
-
      render
      (fn ()
        (defvar that this)
@@ -758,6 +754,28 @@
    (defun lookupForeign (dataset id)
      (|| (_.find dataset.data (fn (v) (= id v.id))) "??"))
 
+   (defcomponent SubmissionCompleteModal
+     propTypes
+     (obj
+      sub React_PropTypes.object.isRequired
+      ccaInfo React_PropTypes.object.isRequired)
+     render
+     (fn ()
+       (defvar that this)
+       (defvar button
+         (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "OK"))
+       (e Modal (canClose true title "Student-Submitted Information" buttons button)
+         (e "table" (className "table")
+           (e "tbody" ()
+             (e "tr" ()
+               (e "th" () "Email") (e "td" () this.props.sub.email))
+             (e "tr" ()
+               (e "th" () "Phone Number") (e "td" () this.props.sub.phone))
+             (e "tr" ()
+               (e "th" () "Date of Submission") (e "td" () this.props.sub.date))
+             (e "tr" ()
+               (e "th" () "CCAs") (e "td" () (|| (-> (__map this.props.sub.cca (fn (s) (.name (lookupForeign that.props.ccaInfo s)))) (.join ", ")) "None"))))))))
+
    (defvar pageSpec
      (obj "/admin"
           (obj pageName "Home"
@@ -842,17 +860,17 @@
                                 ($.ajax (+ (+ "/api/students/" entity.id) "/unlock") (obj type "POST")))
                               (defun onLockClick ()
                                 ($.ajax (+ (+ "/api/students/" entity.id) "/lock") (obj type "POST")))
+                              (defun onCompleteClick ()
+                                (React.render
+                                 (e SubmissionCompleteModal (ccaInfo that.ccaInfo sub sub))
+                                 (getModalWrapper)))
                               (e "div" (className "btn-group" role "toolbar" "aria-label" "Status Buttons")
                                 (cond (= sub.tag "SubmissionNotOpen")
                                       (e "button" (type "button" className "btn btn-danger btn-xs active" onClick onUnlockClick title "Click to unlock submission.") lockicon " Locked")
                                       (= sub.tag "SubmissionOpen")
                                       (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon " Unlocked")
                                       (= sub.tag "SubmissionCompleted")
-                                      (do
-                                        (defvar popoverContent (-> (array "Email: " sub.email
-                                                                          "; Phone: " sub.phone
-                                                                          "; CCAs: " (|| (-> (__map sub.cca (fn (s) (.name (lookupForeign that.ccaInfo s)))) (.join ", ")) "None")) (.join "")))
-                                        (e "button" (type "button" className "btn btn-success btn-xs active has-popover" title "Submission has been completed." "data-title" "Submitted Information" "data-content" popoverContent "data-placement" "top") completeicon " Completed")))))
+                                      (e "button" (type "button" className "btn btn-success btn-xs active" onClick onCompleteClick title "Click to view submitted information.") completeicon " Completed"))))
                             "Status"))))))
 
    (defcomponent Page
@@ -866,6 +884,7 @@
                     (e "a" (href (if (= route pathname) "#" route))
                       (.pageName page))))))
        (e "div" (id "content-wrapper")
+         (e "div" (id "popover-wrapper"))
          (e "div" (id "modal-wrapper"))
          (e "div" (className "container")
            (e "div" (className "page-header")

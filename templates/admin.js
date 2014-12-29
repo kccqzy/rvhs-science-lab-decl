@@ -1040,11 +1040,6 @@ $(function() {
                 })() :
                 undefined);
         },
-        componentDidMount: function() {
-            return ($("body")).popover({
-                selector: ".has-popover"
-            });
-        },
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -1330,6 +1325,35 @@ $(function() {
             return (id === v.id);
         }) || "??");
     };
+    var SubmissionCompleteModal = React_createClass(_.defaults({
+        propTypes: {
+            sub: React_PropTypes.object.isRequired,
+            ccaInfo: React_PropTypes.object.isRequired
+        },
+        render: function() {
+            var that = this;
+            var button = React_createElement("button",{
+                type: "button",
+                className: "btn btn-default",
+                "data-dismiss": "modal"
+            },"OK");
+            return React_createElement(Modal,{
+                canClose: true,
+                title: "Student-Submitted Information",
+                buttons: button
+            },React_createElement("table",{
+                className: "table"
+            },React_createElement("tbody",{},React_createElement("tr",{},React_createElement("th",{},"Email"),React_createElement("td",{},this.props.sub.email)),React_createElement("tr",{},React_createElement("th",{},"Phone Number"),React_createElement("td",{},this.props.sub.phone)),React_createElement("tr",{},React_createElement("th",{},"Date of Submission"),React_createElement("td",{},this.props.sub.date)),React_createElement("tr",{},React_createElement("th",{},"CCAs"),React_createElement("td",{},((__map(this.props.sub.cca,function(s) {
+                return (lookupForeign(that.props.ccaInfo,s)).name;
+            })).join(", ") || "None"))))));
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        SubmissionCompleteModal: "displayName"
+    })));
     var pageSpec = {
         "/admin": {
             pageName: "Home",
@@ -1532,6 +1556,12 @@ $(function() {
                                     type: "POST"
                                 });
                             };
+                            var onCompleteClick = function() {
+                                return React.render(React_createElement(SubmissionCompleteModal,{
+                                    ccaInfo: that.ccaInfo,
+                                    sub: sub
+                                }),getModalWrapper());
+                            };
                             return React_createElement("div",{
                                 className: "btn-group",
                                 role: "toolbar",
@@ -1551,26 +1581,12 @@ $(function() {
                                         title: "Click to lock submission."
                                     },lockicon," Unlocked") :
                                     ((sub.tag === "SubmissionCompleted") ?
-                                        (function() {
-                                            var popoverContent = ([
-                                                "Email: ",
-                                                sub.email,
-                                                "; Phone: ",
-                                                sub.phone,
-                                                "; CCAs: ",
-                                                ((__map(sub.cca,function(s) {
-                                                    return (lookupForeign(that.ccaInfo,s)).name;
-                                                })).join(", ") || "None")
-                                            ]).join("");
-                                            return React_createElement("button",{
-                                                type: "button",
-                                                className: "btn btn-success btn-xs active has-popover",
-                                                title: "Submission has been completed.",
-                                                "data-title": "Submitted Information",
-                                                "data-content": popoverContent,
-                                                "data-placement": "top"
-                                            },completeicon," Completed");
-                                        })() :
+                                        React_createElement("button",{
+                                            type: "button",
+                                            className: "btn btn-success btn-xs active",
+                                            onClick: onCompleteClick,
+                                            title: "Click to view submitted information."
+                                        },completeicon," Completed") :
                                         undefined))));
                         },
                         "Status"
@@ -1598,6 +1614,8 @@ $(function() {
             return React_createElement("div",{
                 id: "content-wrapper"
             },React_createElement("div",{
+                id: "popover-wrapper"
+            }),React_createElement("div",{
                 id: "modal-wrapper"
             }),React_createElement("div",{
                 className: "container"

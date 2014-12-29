@@ -10,8 +10,7 @@ module LabDecl.Types where
 
 import Control.Monad
 import Control.Lens (Lens', makePrisms, makeLenses, (^.), (^?))
-import Data.Maybe
-import Data.Either
+import Control.Error
 import Data.List
 import Data.Char
 import Data.Function
@@ -54,6 +53,12 @@ instance ToJSON ByteString64 where
     toJSON (ByteString64 bs) = toJSON (T.decodeUtf8 $ C64.encode bs)
 instance FromJSON ByteString64 where
     parseJSON o = parseJSON o >>= either fail (return . ByteString64) . C64.decode . T.encodeUtf8
+
+-- | A better string representation of @Day@.
+instance ToJSON Day where
+  toJSON = toJSON . show
+instance FromJSON Day where
+  parseJSON = parseJSON >=> readZ
 
 -- | A few newtypes to wrap some values to be used as fields in
 -- ADT. This is because IxSet requires every index to have a different
@@ -224,7 +229,7 @@ $(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Ema
 -- data.
 $(liftM concat . mapM (deriveJSON defaultOptions {
   fieldLabelModifier = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
-  }) $ [''Cca, ''Subject, ''Teacher, ''Day, ''StudentSubmission, ''Student])
+  }) $ [''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student])
 
 class ToHTTPStatus a where
   toHttpStatus :: a -> HTTP.Status
