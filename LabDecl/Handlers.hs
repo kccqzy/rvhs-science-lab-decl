@@ -95,6 +95,9 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 !/api/subjects/#SubjectId SubjectR       GET PUT DELETE
 /api/teachers             TeachersR      GET POST DELETE
 /api/teachers/#TeacherId  TeacherR       GET PUT DELETE
+/api/classes              ClassesR       GET
+/api/classes/#Class       ClassR         GET
+/api/classes/#Class/#Int  PublicStudentR GET
 /api/students             StudentsR      GET POST DELETE
 /api/students/many        ManyStudentsR  POST
 !/api/students/#StudentId StudentR       GET PUT DELETE
@@ -106,6 +109,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/subjects           AdminSubjectsR GET
 /admin/teachers           AdminTeachersR GET
 /admin/students           AdminStudentsR GET
+/                         HomepageR      GET
 /static                   StaticR        EmbeddedStatic getStatic
 |])
 
@@ -355,7 +359,7 @@ studentForm sid = unMFormInput $ do
 
 classField :: Field Handler Class
 classField = checkMMap fw bw textField
-  where bw (Class (l, c)) = T.pack $ show l ++ [c]
+  where bw = toPathPiece
         fw = return . parseClass . T.encodeUtf8
 
 parseClass :: C.ByteString -> Either T.Text Class
@@ -365,6 +369,10 @@ parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
   c <- PC.satisfy $ PC.inClass "A-NP-Z"
   PC.endOfInput
   return $ Class (l, c)
+
+instance PathPiece Class where
+  toPathPiece (Class (l, c)) = T.pack $ show l ++ [c]
+  fromPathPiece = hush . parseClass . T.encodeUtf8
 
 nricField :: Field Handler Nric
 nricField = checkMMap fw bw textField
@@ -522,6 +530,20 @@ deleteTeacherR = acidUpdateHandler . RemoveTeacher
 deleteTeachersR :: Handler Value
 deleteTeachersR = acidUpdateHandler RemoveAllTeachers
 
+getClassesR :: Handler Value
+getClassesR = acidQueryHandler PublicListClasses
+
+getClassR :: Class -> Handler Value
+getClassR = acidQueryHandler . PublicListStudentsFromClass
+
+getPublicStudentR :: Class -> Int -> Handler Value
+getPublicStudentR klass index = do
+  nric <- runInputGet (ireq nricField "nric")
+  acidQueryHandler $ PublicLookupStudentByClassIndexNumber klass index nric
+
+postStudentSubmitR :: StudentId -> Handler Value
+postStudentSubmitR = acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission)
+
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),
                               Acid.QueryEvent ev,
                               ToJSON (Acid.MethodResult ev),
@@ -568,9 +590,6 @@ deleteStudentR = acidUpdateHandler . RemoveStudent
 
 deleteStudentsR :: Handler Value
 deleteStudentsR = acidUpdateHandler RemoveAllStudents
-
-postStudentSubmitR :: StudentId -> Handler Value
-postStudentSubmitR = acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission)
 
 postUnlockSubmissionR :: StudentId -> Handler Value
 postUnlockSubmissionR = acidUpdateHandler . TeacherUnlockSubmission
@@ -668,3 +687,15 @@ getAdminStudentsR = defaultLayout $ do
   setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
   toWidget $(cassiusFile "templates/hover.cassius")
   adminSite
+
+-- | The user-facing frontend.
+getHomepageR :: Handler Html
+getHomepageR = defaultLayout $ do
+  setTitle "River Valley High School Science Lab Declaration"
+  toWidgetHead $(hamletFile "templates/app.head.hamlet")
+  addScript $ StaticR jquery_js
+  addScript $ StaticR jquery_mobile_custom_js
+  addScript $ StaticR underscore_js
+  toWidget $(juliusFileReload "templates/app.julius")
+  toWidget $(hamletFileReload "templates/app.hamlet")
+  toWidget $(cassiusFileReload "templates/app.cassius")

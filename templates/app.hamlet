@@ -17,21 +17,81 @@
              <h1 .main-title>Choose Your Name
              <p .explanation>Choose your name from this class list below to access your personal information. If you cannot find your name, please ask your science teacher for assistance.
              <div .interactive-content>
-                 <ol>
+                 <ul>
          <div #page3 .page>
-             <h1 .main-title>Personal Information
-             <p .explanation>Please check that the details shown below are correct, and then fill in your email address and mobile phone number.
+             <h1 .main-title>Authentication
+             <p .explanation>In order to verify your identity and prevent someone else from accessing on behalf of you, you need to enter your NRIC/FIN. You only need to enter the last five digits (four decimal digits and one letter).
              <div .interactive-content>
                      <table>
-                         <tr>
-                             <th>Name
-                             <td #table-name>&nbsp;
                          <tr>
                              <th>Class
                              <td #table-class>&nbsp;
                          <tr>
-                             <th>Science Subjects
-                             <td #table-subj-combi>&nbsp;
+                             <th>Index Number
+                             <td #table-index>&nbsp;
+                         <tr>
+                             <th>NRIC
+                             <td>
+                                 <input name=nric type=text inputmode=verbatim autocomplete=off #submit-nric placeholder="Tap to enter NRIC/FIN">
+                     <button .continue-button type=submit>
+         <div #page4 .page>
+             <h1 .main-title>Science Laboratory Rules
+             <p .explanation>Please read through the following rules. You must comply with all the following rules and then click Continue.
+             <div .interactive-content>
+                <div .boring-text>
+                  <p>Students are to comply with the following rules concerning the use of all science laboratories, including the Design and Technology workshops. The term “laboratory” herein refers to all science laboratories and workshops, unless otherwise differentiated.
+                  <ol>
+                      <li .uncopyable data-text="No student is allowed to enter or carry out any practical work in the laboratory unless a teacher is present. Laboratory stores and preparation rooms are out of bounds to all students.">
+                      <li .uncopyable data-text="Personal belongings which are not related to practical work (e.g. bags, books and files) should be placed outside or on the shelves in the laboratory. Only necessary items such as lesson materials, calculator, stationery and personal learning device(s) should be brought to the workbench.">
+                      <li .uncopyable data-text="Students must be properly attired with secured clothing and covered footwear. No school tie should be worn, long hair must be tied back and long sleeves must be folded up to avoid any interference with practical work. Aprons must be worn and hand accessories (e.g. watches) should be removed when working in the workshop.">
+                      <li .uncopyable data-text="Students must be seated according to the seating plan and no changing of seats is allowed. They should only work within the designated areas in the laboratory.">
+                      <li .uncopyable data-text="All windows and all doors should be open when the laboratory is in use.">
+                      <li .uncopyable data-text="No food and drinks are to be brought into or consumed in the laboratory.">
+                      <li .uncopyable data-text="Students must always work thoughtfully and purposefully. Pranks, vandalism, irresponsible behaviour and acts of carelessness are strictly prohibited and will be dealt with seriously.">
+                      <li .uncopyable data-text="All accidents, however slight, must be reported immediately to the teacher or laboratory staff.">
+                      <li .uncopyable data-text="Be familiar with the use and location of safety equipment such as the first aid box, eye-wash point and emergency stop button in the laboratory.">
+                      <li .uncopyable data-text="Safety goggles must be worn at all times in the Chemistry laboratory or whenever there is any risk of injury or irritation to the eyes in the laboratories.">
+                      <li .uncopyable data-text="All spillages, leakages, faulty or broken tools, apparatus, equipment and machines must be reported immediately to the teacher or laboratory staff. Do not use items which are not in proper working condition. Students who have broken any tool or apparatus (e.g. glassware) must record the occurrence on the “Breakage Record Form” immediately.">
+                      <li .uncopyable data-text="Handle all tools, apparatus, equipment, machines and chemicals with care and safety in mind.">
+                      <li .uncopyable data-text="Do not touch any tool, apparatus, equipment, machine or chemical that is not required for the practical lesson. Do not operate any equipment or machine unless proper instruction has been provided by the teacher or laboratory staff.">
+                      <li .uncopyable data-text="Oven gloves must be worn when handling hot objects. Put on a face mask to avoid breathing in dust and fumes. Use the safety guards or protective gear provided when operating machines in the workshop.">
+                      <li .uncopyable data-text="Read the labels on the containers to ensure that the correct chemicals and the appropriate quantity of the chemicals are collected. Do not take excessive chemicals or obtain chemicals from unlabelled containers.">
+                      <li .uncopyable data-text="Excess or unused chemicals must never be returned to the stock container to prevent contamination of the stock samples or solutions.">
+                      <li .uncopyable data-text="Chemicals must never be tasted or smelled directly unless with specific instruction from the teacher or laboratory staff.">
+                      <li .uncopyable data-text="Do not touch chemicals with bare hands unless they are known to have minimal hazard. Use a spatula to transfer solids and a dropper or a pipette fitted with a pipette filler for liquids.">
+                      <li .uncopyable data-text="Appropriate gloves must be worn for all procedures that may involve direct or accidental contact with toxic, corrosive or bio-hazardous materials. After use, remove and dispose the gloves.">
+                      <li .uncopyable data-text="Keep flammable liquids away from naked flames.">
+                      <li .uncopyable data-text="Experiments involving highly toxic, pungent or flammable gases must be carried out in a fume cupboard.">
+                      <li .uncopyable data-text="Areas around electrical equipment should always be kept dry. Switches or electric cables must never be handled with wet hands. Electric cables must be kept away from heaters and naked flames. Disconnect electric circuits or equipment from their power supplies first before altering or adjusting them.">
+                      <li .uncopyable data-text="Clean and return all tools, apparatus and equipment to their original place after use. ">
+                      <li .uncopyable data-text="Waste materials (e.g. excess chemicals and used filter papers) must be disposed of properly in the waste bin. No material should be discarded in the sink unless with specific instruction from the teacher or laboratory staff. Sharp objects (e.g. rusty pins and broken glassware) should not be discarded in the waste bin or trash bag. They should be disposed in the container labelled “Sharp Bin”.">
+                      <li .uncopyable data-text="Turn off the water and gas taps; switch off the equipment and machines after use.">
+                      <li .uncopyable data-text="Keep the laboratory, including the workbench clean and tidy at all times. At the end of the practical lesson, students must clear up, clean and dry the workbench after use.">
+                      <li .uncopyable data-text="Wash hands thoroughly, switch off all fans and lights, close all windows and shut all doors before leaving the laboratory.">
+                      <li .uncopyable data-text="No tool, apparatus, equipment, machine (including broken items) and chemical should be taken out of the laboratory without permission from the teacher or laboratory staff.">
+                      <li .uncopyable data-text="Pay careful attention and strictly adhere to any special instructions given by the teacher. When in doubt, always ask the teacher or laboratory staff.">
+                      <li .uncopyable data-text="Students are not allowed to enter areas around the laboratories declared out of bounds for practical tests and examinations.">
+                <button .continue-button type=submit>
+         <div #page5 .page>
+             <h1 .main-title>Personal Information
+             <p .explanation>Please check that the details shown below are correct, and then fill in your email address, phone number and CCA.
+             <div .interactive-content>
+                     <table>
+                         <tr>
+                             <th>Chinese Name
+                             <td #table-chinesename>&nbsp;
+                         <tr>
+                             <th>Subjects
+                             <td #table-subjects>&nbsp;
+                         <tr>
+                             <th>First CCA
+                             <td>
+                         <tr>
+                             <th>Second CCA
+                             <td>
+                         <tr>
+                             <th>Third CCA
+                             <td>
                          <tr>
                              <th>Email Address
                              <td>
@@ -41,13 +101,14 @@
                              <td>
                                  <input name=phone type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter phone number">
                      <button .continue-button type=submit>
-        <div #page4 .page>
+        <div #page6 .page>
             <h1 .main-title>Declaration
             <p .explanation>By signing in the box below, I agree that a) I have attended the Laboratory Briefing by your science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser; b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
             <div .interactive-content>
                 <div .canvas>
-                <input type=hidden name=signature #submit-signature>
+                <input type=hidden name=sig #submit-signature>
+                <input type=hidden name=ua #submit-ua>
                 <button .continue-button type=submit>
-        <div #page5 .page>
+        <div #page7 .page>
             <h1 .main-title>Completed
             <p .explanation>You have completed the exercise. You will receive an email with your declaration in a few minutes’ time. You can close this tab now.

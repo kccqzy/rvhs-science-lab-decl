@@ -1,6 +1,7 @@
 "use strict";
 $(function () {
-    var submitClassName, submitIndexNumber;
+    var submitClassName, submitIndexNumber, submitNric;
+    var studentData;
 
     var PageController = function () {
         var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
@@ -46,10 +47,12 @@ $(function () {
 
     var pageController = PageController();
 
+    var development = true;
+
     pageController
         .register(
             0, function () {
-                if (document.ontouchmove === undefined) {
+                if (!development && document.ontouchmove === undefined) {
                     $("#page0 .main-title").text("Device Unsupported");
                     $("#page0 .explanation").text("To use this website, you need a touchscreen. Your device and/or your browser does not support touch.");
                     $("#page0 .interactive-content").empty();
@@ -67,11 +70,12 @@ $(function () {
             }, function () {
                 $.getJSON("/api/classes").done(function (classes) {
                     $.each(classes.data, function (_, className) {
-                        $("#page1 .interactive-content ul").append($("<li/>").attr("id", className).text(className));
+                        $("#page1 .interactive-content ul").append($("<li/>").attr("id", className.join("")).text(className.join("")));
                     });
                     $("#page1 .interactive-content ul").off("tap").on("tap", "li", function () {
                         submitClassName = $(this).attr("id");
                         pageController.forward();
+                        return false;
                     });
                 });
             })
@@ -79,15 +83,16 @@ $(function () {
         .register(
             2, function () {
                 if (!submitClassName) throw 'No class name';
-                $("#page2 .interactive-content ol").empty();
+                $("#page2 .interactive-content ul").empty();
             }, function () {
                 $.getJSON("/api/classes/" + submitClassName).done(function (students) {
                     $.each(students.data, function(_, studentInfo) {
-                        $("#page2 .interactive-content ol").append($("<li/>").attr("id", "student" + studentInfo[0]).text(studentInfo[1]));
+                        $("#page2 .interactive-content ul").append($("<li/>").attr("id", "student" + studentInfo[0]).text(studentInfo[0] + ". " + studentInfo[1]));
                     });
-                    $("#page2 .interactive-content ol").off("tap").on("tap", "li", function () {
+                    $("#page2 .interactive-content ul").off("tap").on("tap", "li", function () {
                         submitIndexNumber = $(this).attr("id").slice(7);
                         pageController.forward();
+                        return false;
                     });
                 });
             })
@@ -96,11 +101,69 @@ $(function () {
             3, function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
             }, function () {
-                $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber).done (function (student) {
-                    $("#table-name").text(student.data.getName);
-                    $("#table-class").text(submitClassName);
-                    $("#table-subj-combi").text(student.data.getSubjectCombination.join(", "));
+                $("#table-class").text(submitClassName);
+                $("#table-index").text(submitIndexNumber);
+                var canocNric = function (s) {
+                    var match = s.trim().toUpperCase().match(/^(?:[STFG][0-9]{0,3})?[0-9]{4}[JZIHGFEDCBAXWUTRQPNMLK]$/);
+                    return match && match[0];
+                };
+                $("#submit-nric").off("change").on("change", function () {
+                    var cano = canocNric($(this).val());
+                    $(this)[cano ? "removeClass" : "addClass"]("invalid");
+                    cano && $(this).val(cano);
+                });
+                $("#form").off("submit").on("submit", function () {
+                    var okay = canocNric($("#submit-nric").val());
+                    if (okay) {
+                        submitNric = okay;
+                        console.log(submitNric);
+                        $.getJSON("/api/classes/" + submitClassName + "/" + submitIndexNumber, {nric: submitNric}).done (function (student) {
+                            studentData = student.data;
+                            if (studentData.submission.tag === "SubmissionOpen") {
+                                pageController.forward();
+                            } else if (studentData.submission.tag === "SubmissionNotOpen") {
+                                alert("Submission is not open yet. Check back later.");
+                            } else {
+                                alert("You have already submitted before. You cannot submit again.");
+                            }
+                        }).fail(function () {
+                            alert("The NRIC is incorrect.");
+                        });
+                    } else {
+                        alert("The NRIC is incorrect.");
+                    }
+                    return false; // stopPropagation, preventDefault
+                });
+            })
 
+        .register(
+            4, function () {
+                if (!submitClassName || !submitIndexNumber || !submitNric) throw 'No class name or index number or nric';
+            }, function () {
+                $("#form").off("submit").on("submit", function () {
+                    pageController.forward();
+                    return false;
+                });
+            })
+
+        .register(
+            5, function () {
+                if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
+            }, function () {
+                    $("#table-chinesename").text(studentData.chinese_name);
+                    $.getJSON("/api/subjects").done(function (subjectInfo) {
+                        var combi = studentData.subject_combi;
+                        console.log(combi);
+                        $("#table-subjects").text(
+                            $.map(combi, function(sid) {
+                                console.log(_.find(subjectInfo.data, function (su) { return su.id === sid; }).name);
+                                return _.find(subjectInfo.data, function (su) { return su.id === sid; }).name;
+                            }).join(", ") || "—"
+                        );
+                    });
+                    $.getJSON("/api/ccas").done(function (ccaInfo) {
+                        // TODO
+                    });
                     var canonicalisers = {
                         "#submit-email": function (s) {
                             var match = s.trim().match(/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/);
@@ -126,21 +189,21 @@ $(function () {
                         $.each(canonicalisers, function (sel, func) {
                             return okay = okay && !!func($(sel).val());
                         });
+                        console.log(okay);
                         okay ? pageController.forward() : alert("The email address or phone number is incorrect. Please correct this before continuing.");
                         return false; // stopPropagation, preventDefault
                     });
-                });
             })
 
         .register(
-            4, function () {
+            6, function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
-                $("#page4 .interactive-content .canvas").empty();
+                $("#page6 .interactive-content .canvas").empty();
             }, function () {
                 $(document).on("scrollstart", false);
                 var scaleFactor = window.devicePixelRatio || 1;
-                $("#page4 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
-                var canvas = $("#page4 .interactive-content canvas").get(0);
+                $("#page6 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
+                var canvas = $("#page6 .interactive-content canvas").get(0);
                 var ctx = canvas.getContext("2d");
                 ctx.lineCap = "round";
                 ctx.lineWidth = 2 * scaleFactor;
@@ -169,7 +232,7 @@ $(function () {
                     return interpStroke;
                 };
 
-                $("#page4").on("webkitTransitionEnd", function() {
+                $("#page6").on("webkitTransitionEnd", function() {
                     var offsetX = +$(canvas).offset().left,
                         offsetY = +$(canvas).offset().top;
 
@@ -192,13 +255,14 @@ $(function () {
 
                 $("#form").off("submit").on("submit", function () {
                     $("#submit-signature").val(canvas.toDataURL("image/png"));
-                    $.post("/api/classes/" + submitClassName + "/" + submitIndexNumber, $(this).serialize(), function () {
+                    $("#submit-ua").val(navigator.userAgent);
+                    $.post("/api/students/" + studentData.id + "/submit", $(this).serialize(), function () {
                         pageController.forward();
                     });
                     return false;
                 });
             })
-        .register(5, function () {
+        .register(7, function () {
             $("#back-button").addClass("donotpresent").off("tap");
         })
         .run();
