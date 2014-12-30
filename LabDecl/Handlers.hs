@@ -463,7 +463,7 @@ studentForm sid = unMFormInput $ do
 classField :: Field Handler Class
 classField = checkMMap fw bw textField
   where bw = toPathPiece
-        fw = return . parseClass . T.encodeUtf8
+        fw = return . parseClass . T.encodeUtf8 . T.toUpper . T.strip
 
 parseClass :: C.ByteString -> Either T.Text Class
 parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
