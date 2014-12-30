@@ -5,6 +5,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Error
 import Control.Exception
+import Control.Concurrent
 import Control.Concurrent.STM
 import Data.String (fromString)
 import Data.Default (def)
@@ -22,6 +23,7 @@ import System.Exit
 import Yesod.Core.Dispatch (toWaiApp)
 
 import LabDecl.Handlers
+import LabDecl.AsyncServ
 
 main = do
   -- no, we do not use /tmp, you must pass the temp dir explicitly
@@ -33,15 +35,23 @@ main = do
   port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
   let setSettings = foldr (.) (Warp.setServerName "Warp") $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
 
-  -- queues and channels
-  notifyChan <- atomically newBroadcastTChan
-
   -- HTTP manager
   httpManager <- HTTP.newManager HTTP.tlsManagerSettings
 
+  -- queues and channels
+  notifyChan <- atomically newBroadcastTChan
+  mailQueue <- atomically newTQueue
+  renderQueue <- atomically newTQueue
+
+  forkIO $ sendMailThread httpManager return mailQueue
+  rendererTempDir <- createTempDirectory dir "renderer"
+  renderer <- makePDFRenderer rendererTempDir
+  forkIO $ renderMailThread renderer (atomically . writeTQueue mailQueue) renderQueue
+
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
-    toWaiApp (LabDeclarationApp eStatic acid notifyChan httpManager) >>= Warp.runSettings (setSettings Warp.defaultSettings)
+    toWaiApp (LabDeclarationApp eStatic acid notifyChan httpManager renderQueue mailQueue)
+    >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState def
         acidFinally = Acid.createCheckpointAndClose
         errNoTempDir = do

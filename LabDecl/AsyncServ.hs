@@ -1,8 +1,14 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module LabDecl.AsyncServ where
 
 import Control.Monad
+import Control.Arrow (first, second)
+import Control.Exception (SomeException)
+import Control.Lens
+import Control.Concurrent.STM
+import Control.Concurrent.Async
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
@@ -11,16 +17,26 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Aeson as JSON
 import Data.Aeson.TH
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
+import Text.Shakespeare.Text (textFile)
+import qualified Codec.Archive.Tar as Tar
+import qualified Codec.Compression.GZip as GZip
+import System.Log.Logger (Priority(..), logM) -- TODO use System.Log.FastLogger instead
+import System.Posix.Files (setFileMode, ownerExecuteMode)
+import System.IO (openFile, hClose, IOMode(..))
+import System.IO.Temp (withTempDirectory, withSystemTempDirectory, createTempDirectory)
+import qualified System.Process as Process
+import System.Exit (ExitCode(..))
+
 import qualified RNCryptor
 
+import LabDecl.TeXRenderAssets
 import LabDecl.Types
 import LabDecl.Utilities
-
-import Debug.Trace
 
 data GAEMail = GAEMail {
   mailSender :: T.Text,
@@ -56,3 +72,86 @@ sendMail :: HTTP.Manager -> GAEMail -> IO ()
 sendMail manager mail = do
   packagedMail <- packageMail mail
   void $ HTTP.httpNoBody packagedMail manager
+
+
+-- | The TeX Render environment is an environment that can take a job
+-- name, a list of files and render into a PDF bytestring. It is
+-- caller's responsibility to ensure jobname.tex exists.
+newtype PDFRenderer = PDFRenderer {
+  getPDFRenderer :: String -> [(FilePath, CL.ByteString)] -> IO C.ByteString
+  }
+
+-- | Prepare a small TeX Live 2014 distribution and the templates.
+-- Takes a directory to place the TeX distribution, the templates
+-- files and returns a TeXRenderEnv. This should be called once at the
+-- beginning of program.
+makePDFRenderer :: FilePath -> IO PDFRenderer
+makePDFRenderer dir = do
+  Tar.unpack dir  . Tar.read . GZip.decompress $ texliveTarGz
+  let lualatex = dir ++ "/texlive-2014-portable/bin/x86_64-linux/lualatex"
+  setFileMode lualatex ownerExecuteMode
+  return . PDFRenderer $ \jobname files -> withTempDirectory dir "latexjob" $ \dir -> do
+    Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
+    let reportDir = dir ++ "/report/"
+    mapM_ (uncurry CL.writeFile . first (reportDir++)) $ files
+    runTeX lualatex "report" reportDir
+    runTeX lualatex "report" reportDir
+    C.readFile $ reportDir ++ "/" ++ jobname ++ ".pdf"
+  where runTeX tex jobname cwd = do
+          devNullR <- openFile "/dev/null" ReadMode
+          devNullW <- openFile "/dev/null" WriteMode
+          let texProcess = (Process.proc tex ["-interaction=batchmode", jobname]) {
+                Process.cwd = Just cwd,
+                Process.env = Just [("PATH", ":")], -- used by luaotfload to detect system type
+                Process.std_in = Process.UseHandle devNullR,
+                Process.std_out = Process.UseHandle devNullW,
+                Process.std_err = Process.UseHandle devNullW }
+          (_, _, _, ph) <- Process.createProcess texProcess
+          ec <- Process.waitForProcess ph
+          hClose devNullR
+          hClose devNullW
+          return ec
+
+-- | Generate a TeX file to render into PDF.
+generateTeX :: Student -> CL.ByteString
+generateTeX student = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/report.tex") id
+  where name = student ^. studentName
+        indexNumber = student ^. studentIndexNumber
+        className = let (Class (l, c)) = student ^. studentClass in show l ++ [c]
+        subjects = "Insert Subjects Here" :: T.Text
+
+renderMail :: PDFRenderer -> Student -> IO GAEMail
+renderMail renderer student = do
+  let tex = generateTeX student
+  let signature =
+        case join $ student ^? studentSubmission . ssSignature of
+         Nothing -> error "renderMail: Cannot render for a student who has not completed submission."
+         Just (ByteString64 bs) -> CL.fromChunks [bs]
+  let email =
+        case student ^? studentSubmission . ssEmail of
+         Nothing -> error "renderMail: Cannot render for a student who has not completed submission."
+         Just (Email e) -> T.concat [ student ^. studentName, " <", e, ">" ]
+  pdf <- getPDFRenderer renderer "report" [("sig.png", signature), ("report.tex", tex)]
+  return GAEMail {
+    mailSender = "River Valley High School Science Department <qzy@qzy.io>",
+    mailTo = email,
+    mailSubject = "Completion of Science Lab Undertaking Form",
+    mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed declaration form is in the attachment for your reference.",
+    mailAttachments = [("Completed_Declaration_Form.pdf", ByteString64 pdf)]
+    }
+
+-- | A worker thread that consumes values from a TQueue.
+queuedThread :: (a -> IO ()) -> (a -> SomeException -> IO ()) -> TQueue a -> IO ()
+queuedThread op onError queue = forever $ do
+  input <- atomically $ readTQueue queue
+  asyncOp <- async $ op input
+  result <- waitCatch asyncOp
+  either (onError input) return result
+
+-- | A thread that renders emails asynchronously (but not concurrently).
+renderMailThread :: PDFRenderer -> (GAEMail -> IO ()) -> TQueue Student -> IO ()
+renderMailThread renderer next = queuedThread (renderMail renderer >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+
+-- | A thread that sends emails asynchronously (but not concurrently).
+sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GAEMail -> IO ()
+sendMailThread httpManager next = queuedThread (sendMail httpManager >=> next) $ \mail exc -> logM "sendMailThread" ERROR $ "sendMail failed (details = " ++ show exc ++ ") when sending mail to " ++ (T.unpack $ mailTo mail)

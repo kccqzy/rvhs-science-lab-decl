@@ -19,6 +19,7 @@ import Control.Monad.Reader (ReaderT(..), ask)
 import Control.Monad.State (get, put, evalStateT, execStateT, StateT)
 import Control.Monad.STM (STM, atomically)
 import Control.Concurrent.STM.TChan
+import Control.Concurrent.STM.TQueue
 import Control.Concurrent.Async hiding (race)
 import Control.Concurrent
 import Control.Error
@@ -74,13 +75,16 @@ import LabDecl.AcidicModels
 import LabDecl.StudentCSV
 import LabDecl.Models
 import LabDecl.ErrMsg
+import LabDecl.AsyncServ
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
   getStatic :: EmbeddedStatic,
   getAcid :: Acid.AcidState Database,
   getNotifyChan :: TChan (),
-  getHttpManager :: HTTP.Manager
+  getHttpManager :: HTTP.Manager,
+  getRenderQueue :: TQueue Student,
+  getMailQueue :: TQueue GAEMail
   }
 
 $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
@@ -645,7 +649,13 @@ getPublicStudentR klass index = do
   acidQueryHandler $ PublicLookupStudentByClassIndexNumber klass index nric
 
 postStudentSubmitR :: StudentId -> Handler Value
-postStudentSubmitR = acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission)
+postStudentSubmitR sid = do
+  rv <- acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission) sid
+  acid <- getAcid <$> ask
+  Just student <- liftIO $ Acid.query acid $ LookupStudentById sid
+  renderQueue <- getRenderQueue <$> ask
+  liftIO . atomically $ writeTQueue renderQueue student
+  return rv
 
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),
                               Acid.QueryEvent ev,

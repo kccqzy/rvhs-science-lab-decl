@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-module TeXRenderAssets (texliveTarGz, reportTarGz) where
+module LabDecl.TeXRenderAssets (texliveTarGz, reportTarGz) where
 
 import Control.Applicative ((<$>))
 import qualified Language.Haskell.TH as TH

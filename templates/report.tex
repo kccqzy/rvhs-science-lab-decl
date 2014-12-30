@@ -35,8 +35,8 @@ All students are to comply with the rules concerning the use of all science labo
 \begin{center}
   \begin{tikzpicture}[font=\small]
     \matrix (form one) [matrix of nodes, column 1/.style={text width=8em, align=center, font=\bfseries}, column 2/.style={text width=21em, align=center}, row sep=1em, column sep=1em, nodes={anchor=base}] {
-      Name of Student & |(student name) | {#{name} (#{indexNumber})} \\
-      Subject(s) & |(subjects) | {#{T.intercalate ", " (map describeSubject (Set.elems subj))}} \\
+      Name of Student & |(student name) | {\scshape {#{name}} (#{indexNumber})} \\
+      Science Subject(s) & |(subjects) | {#{subjects}} \\
     };
 
     \matrix [column sep=.5em, matrix of nodes, every odd column/.style={font=\bfseries}] at (form one.south west) [anchor=north west] {
