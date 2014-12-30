@@ -47,12 +47,10 @@ $(function () {
 
     var pageController = PageController();
 
-    var development = true;
-
     pageController
         .register(
             0, function () {
-                if (!development && document.ontouchmove === undefined) {
+                if (document.ontouchmove === undefined) {
                     $("#page0 .main-title").text("Device Unsupported");
                     $("#page0 .explanation").text("To use this website, you need a touchscreen. Your device and/or your browser does not support touch.");
                     $("#page0 .interactive-content").empty();

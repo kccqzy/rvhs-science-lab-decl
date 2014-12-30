@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -56,9 +57,6 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
-import Text.Cassius (cassiusFile, cassiusFileReload)
-import Text.Hamlet (hamletFile, hamletFileReload)
-import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
 import Codec.Text.Detect (detectEncodingName)
 import qualified Codec.Picture.Png as Png
@@ -124,6 +122,13 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 
 instance Yesod LabDeclarationApp where
 
+#ifdef DEVELOPMENT
+
+  isAuthorized _ _ = requirePrivilege PrivNone
+  approot = ApprootStatic "http://localhost:8080"
+
+#else
+
   -- | Authorisation table
   isAuthorized CcasR                 w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized (CcaR _)              w = requirePrivilege (if w then PrivAdmin else PrivNone)
@@ -153,7 +158,9 @@ instance Yesod LabDeclarationApp where
   isAuthorized AuthStatusR           _ = requirePrivilege PrivNone
 
   -- | App root
-  approot = ApprootStatic "http://localhost:8080"
+  approot = ApprootStatic "http://gce.qzy.st"
+
+#endif
 
   -- | Static files.
   addStaticContent = embedStaticContent getStatic StaticR minifym
@@ -744,7 +751,7 @@ postManyStudentsR = do
 -- = HTML handlers
 
 getAuthStatusR :: Handler Html
-getAuthStatusR = do
+getAuthStatusR = do -- will be removed
     maid <- maybeAuthId
     defaultLayout
         [whamlet|
@@ -764,7 +771,7 @@ adminSite = do
   addScript $ StaticR underscore_js
   addScript $ StaticR react_dev_js
   addScript $ StaticR bootstrap_js
-  toWidget $(juliusFileReload "templates/admin.js")
+  toWidget $(juliusFileAuto "templates/admin.js")
 
 getAdminLogoutR :: Handler Html
 getAdminLogoutR = defaultLayout $ do
@@ -773,7 +780,7 @@ getAdminLogoutR = defaultLayout $ do
   addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js
   addScript $ StaticR bootstrap_js
-  toWidget $(hamletFileReload "templates/didlogout.hamlet")
+  toWidget $(hamletFileAuto "templates/didlogout.hamlet")
 
 getAdminHomeR :: Handler Html
 getAdminHomeR = defaultLayout $ do
@@ -798,17 +805,17 @@ getAdminSubjectsR = defaultLayout $ do
 getAdminStudentsR :: Handler Html
 getAdminStudentsR = defaultLayout $ do
   setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
-  toWidget $(cassiusFile "templates/hover.cassius")
+  toWidget $(cassiusFileAuto "templates/hover.cassius")
   adminSite
 
 -- | The user-facing frontend.
 getHomepageR :: Handler Html
 getHomepageR = defaultLayout $ do
   setTitle "River Valley High School Science Lab Declaration"
-  toWidgetHead $(hamletFile "templates/app.head.hamlet")
+  toWidgetHead $(hamletFileAuto "templates/app.head.hamlet")
   addScript $ StaticR jquery_js
   addScript $ StaticR jquery_mobile_custom_js
   addScript $ StaticR underscore_js
-  toWidget $(juliusFileReload "templates/app.julius")
-  toWidget $(hamletFileReload "templates/app.hamlet")
-  toWidget $(cassiusFileReload "templates/app.cassius")
+  toWidget $(juliusFileAuto "templates/app.julius")
+  toWidget $(hamletFileAuto "templates/app.hamlet")
+  toWidget $(cassiusFileAuto "templates/app.cassius")

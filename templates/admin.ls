@@ -582,7 +582,7 @@
        (e "div" (className "row")
          (e "div" (className "col-sm-11 col-md-8 col-lg-7")
            (e "h2" () "Welcome")
-           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. XXX Be verbose.")
+           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. ")
            (e "h2" () "Quick Guide")
            (e "p" () "TODO")
            (e "h2" () "API Documentation")

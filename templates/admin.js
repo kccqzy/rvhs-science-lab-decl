@@ -1014,7 +1014,7 @@ $(function() {
                 className: "row"
             },React_createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
-            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. XXX Be verbose."),React_createElement("h2",{},"Quick Guide"),React_createElement("p",{},"TODO"),React_createElement("h2",{},"API Documentation"),React_createElement("p",{},"If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")));
+            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. "),React_createElement("h2",{},"Quick Guide"),React_createElement("p",{},"TODO"),React_createElement("h2",{},"API Documentation"),React_createElement("p",{},"If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")));
         }
     },{
         render: function() {

@@ -25,7 +25,7 @@ import LabDecl.Handlers
 
 main = do
   -- no, we do not use /tmp, you must pass the temp dir explicitly
-  tmpdir <- join $ maybe errNoTempDir return <$> lookupEnv "TMPDIR"
+  tmpdir <- join $ maybe errNoTempDir return <$> lookupEnv "TEMPFOLDR"
   withTempDirectory tmpdir "labdecld" $ \dir -> do
 
   -- warp configuration from environment variables

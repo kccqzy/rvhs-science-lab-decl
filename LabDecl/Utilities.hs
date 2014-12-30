@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module LabDecl.Utilities where
 
 import Control.Monad
@@ -20,6 +21,9 @@ import qualified Data.Text.ICU.Convert as ICU
 import qualified Data.Set as Set
 import Data.Maybe
 import Language.Haskell.TH
+import Text.Cassius (cassiusFile, cassiusFileReload)
+import Text.Hamlet (hamletFile, hamletFileReload)
+import Text.Julius (juliusFile, juliusFileReload)
 
 unique :: Set a -> Maybe a
 unique s = case Set.toList s of
@@ -75,3 +79,13 @@ textIndex withShort = filter (not . T.null) . nub . concatMap (if withShort then
                    | otherwise = T.take 3 p : gen3gram (T.tail p)
         genShort p = [T.take 2 p, T.drop (T.length p - 2) p]
         gen = liftM2 (++) gen3gram genShort
+
+#ifdef DEVELOPMENT
+juliusFileAuto = juliusFileReload
+hamletFileAuto = hamletFileReload
+cassiusFileAuto = cassiusFileReload
+#else
+juliusFileAuto = juliusFile
+hamletFileAuto = hamletFile
+cassiusFileAuto = cassiusFile
+#endif
