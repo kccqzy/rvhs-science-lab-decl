@@ -28,6 +28,9 @@ class MailDaemon(webapp2.RequestHandler):
             mail_msg.send()
             self.response.set_status(204)
 
+    def get(self):
+        return webapp2.redirect('http://gce.qzy.st/', code=301)
+
 app = webapp2.WSGIApplication([
     (r'/', MailDaemon),
 ])

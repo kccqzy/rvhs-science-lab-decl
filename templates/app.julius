@@ -52,7 +52,7 @@ $(function () {
             0, function () {
                 if (document.ontouchmove === undefined) {
                     $("#page0 .main-title").text("Device Unsupported");
-                    $("#page0 .explanation").text("To use this website, you need a touchscreen. Your device and/or your browser does not support touch.");
+                    $("#page0 .explanation").html('Welcome to River Valley High School Science Lab Undertaking Declaration Site. You will need to perform a signature, therefore to use this website, you need a touchscreen. Your device and/or your browser does not support touch. <br>If you are a teacher, please <a href="/admin">login in and visit the administrator console</a>.');
                     $("#page0 .interactive-content").empty();
                 }
             }, function () {
