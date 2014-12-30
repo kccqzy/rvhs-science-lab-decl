@@ -31,6 +31,10 @@
    (macro ifentity (attr)
           (if this.props.entity (~attr this.props.entity) ""))
 
+   ;; Identity of current user through cookies (ignored by server).
+   (defvar ident (_.object (__map (-> document.cookie (.split "; ")) (fn (c) (-> c (.split "="))))))
+   (macro whenadmin (thing) (if (= ident.priv "PrivAdmin") ~thing null))
+
    ;; An APIConnection is a wrapper around WebSocket.
    (defun APIConnection (pathname)
      (defvar wsUrl
@@ -104,12 +108,13 @@
                   (defvar value (get (get 0 spec) that.props.entity))
                   (defvar mapper (get 1 spec))
                   (e "td" (key idx) (mapper.apply that.props.auxiliary (array value that.props.entity)))))
-         (e "td" (className "text-right")
-           (e "div" (className "btn-group" role "group")
-             (e "button" (type "button" className "btn btn-default btn-xs" title "Edit" onClick onEditButtonClick)
-               (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
-             (e "button" (type "button" className "btn btn-default btn-xs" title "Delete" onClick onDeleteButtonClick)
-               (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true"))))))))
+         (whenadmin
+           (e "td" (className "text-right")
+             (e "div" (className "btn-group" role "group")
+               (e "button" (type "button" className "btn btn-default btn-xs" title "Edit" onClick onEditButtonClick)
+                 (e "span" (className "glyphicon glyphicon-pencil" "aria-hidden" "true")))
+               (e "button" (type "button" className "btn btn-default btn-xs" title "Delete" onClick onDeleteButtonClick)
+                 (e "span" (className "glyphicon glyphicon-trash" "aria-hidden" "true")))))))))
 
    ;; An EntityCategory is a group of data shared under a category,
    ;; presented as a tbody with a single cell spanning all of them.
@@ -211,7 +216,7 @@
            (e "thead" ()
              (e "tr" ()
                headers
-               (e "th" ())))
+               (whenadmin (e "th" ()))))
            rows))))
 
    ;; The Modal dialog that takes control of input and needs to be
@@ -623,10 +628,11 @@
             (e "p" () (+ (+ (+ (+ "Are you sure you want to delete all " hnamepl) " currently stored in the database? This will also delete all references to these ") hnamepl) ", if they exist.")))
           (getModalWrapper)))
        (e "div" ()
-         (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
-           (if this.props.customButtons this.props.customButtons null)
-           (e "button" (type "button" className "btn btn-default" onClick onAddButtonClick) "Add New")
-           (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All"))
+         (whenadmin
+           (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
+             (if this.props.customButtons this.props.customButtons null)
+             (e "button" (type "button" className "btn btn-default" onClick onAddButtonClick) "Add New")
+             (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All")))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
          (e EntityTable (conn this.state.conn entityEditor editor auxiliary this.props.auxiliary))))
@@ -883,6 +889,7 @@
    (defcomponent Page
      render
      (fn ()
+       (defvar ident (_.object (__map (-> document.cookie (.split "; ")) (fn (c) (-> c (.split "="))))))
        (defvar pathname window.location.pathname)
        (defvar tabs
          (__map pageSpec
@@ -896,7 +903,10 @@
          (e "div" (className "container")
            (e "div" (className "page-header")
              (e "h1" () "RVHS Science Lab Undertaking — For Teachers and Administrators"))
-           (e "p" () "You are logged in as xxx.")
+           (e "p" ()
+             (+ (+ "You are logged in as " ident.user) ". ")
+             (whenadmin "You are an administrator. ")
+             (e "a" (href "/auth/logout") "Click here to logout. "))
            (e "div" (role "tabpanel")
              (e "ul" (className "nav nav-tabs")
                tabs))

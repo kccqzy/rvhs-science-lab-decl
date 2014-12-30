@@ -5,6 +5,9 @@ $(function() {
     var React_createClass = React.createClass;
     var React_PropTypes = React.PropTypes;
     var __map = _.map;
+    var ident = _.object(__map((document.cookie).split("; "),function(c) {
+        return (c).split("=");
+    }));
     var APIConnection = function(pathname) {
         var wsUrl = ((((window.location.protocol === "https:") ?
             "wss://" :
@@ -99,28 +102,30 @@ $(function() {
                     value,
                     that.props.entity
                 ]));
-            }),React_createElement("td",{
-                className: "text-right"
-            },React_createElement("div",{
-                className: "btn-group",
-                role: "group"
-            },React_createElement("button",{
-                type: "button",
-                className: "btn btn-default btn-xs",
-                title: "Edit",
-                onClick: onEditButtonClick
-            },React_createElement("span",{
-                className: "glyphicon glyphicon-pencil",
-                "aria-hidden": "true"
-            })),React_createElement("button",{
-                type: "button",
-                className: "btn btn-default btn-xs",
-                title: "Delete",
-                onClick: onDeleteButtonClick
-            },React_createElement("span",{
-                className: "glyphicon glyphicon-trash",
-                "aria-hidden": "true"
-            })))));
+            }),((ident.priv === "PrivAdmin") ?
+                React_createElement("td",{
+                    className: "text-right"
+                },React_createElement("div",{
+                    className: "btn-group",
+                    role: "group"
+                },React_createElement("button",{
+                    type: "button",
+                    className: "btn btn-default btn-xs",
+                    title: "Edit",
+                    onClick: onEditButtonClick
+                },React_createElement("span",{
+                    className: "glyphicon glyphicon-pencil",
+                    "aria-hidden": "true"
+                })),React_createElement("button",{
+                    type: "button",
+                    className: "btn btn-default btn-xs",
+                    title: "Delete",
+                    onClick: onDeleteButtonClick
+                },React_createElement("span",{
+                    className: "glyphicon glyphicon-trash",
+                    "aria-hidden": "true"
+                })))) :
+                null));
         }
     },{
         render: function() {
@@ -247,7 +252,9 @@ $(function() {
                 className: "table-responsive"
             },React_createElement("table",{
                 className: "table"
-            },React_createElement("thead",{},React_createElement("tr",{},headers,React_createElement("th",{}))),rows));
+            },React_createElement("thead",{},React_createElement("tr",{},headers,((ident.priv === "PrivAdmin") ?
+                React_createElement("th",{}) :
+                null))),rows));
         }
     },{
         render: function() {
@@ -1064,21 +1071,23 @@ $(function() {
                     }
                 },React_createElement("p",{},(((("Are you sure you want to delete all " + hnamepl) + " currently stored in the database? This will also delete all references to these ") + hnamepl) + ", if they exist."))),getModalWrapper());
             };
-            return React_createElement("div",{},React_createElement("div",{
-                className: "pull-right btn-group",
-                role: "toolbar",
-                "aria-label": "Action Buttons"
-            },(this.props.customButtons ?
-                this.props.customButtons :
-                null),React_createElement("button",{
-                type: "button",
-                className: "btn btn-default",
-                onClick: onAddButtonClick
-            },"Add New"),React_createElement("button",{
-                type: "button",
-                className: "btn btn-default",
-                onClick: onRemoveAllButtonClick
-            },"Remove All")),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
+            return React_createElement("div",{},((ident.priv === "PrivAdmin") ?
+                React_createElement("div",{
+                    className: "pull-right btn-group",
+                    role: "toolbar",
+                    "aria-label": "Action Buttons"
+                },(this.props.customButtons ?
+                    this.props.customButtons :
+                    null),React_createElement("button",{
+                    type: "button",
+                    className: "btn btn-default",
+                    onClick: onAddButtonClick
+                },"Add New"),React_createElement("button",{
+                    type: "button",
+                    className: "btn btn-default",
+                    onClick: onRemoveAllButtonClick
+                },"Remove All")) :
+                null),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: this.state.conn,
                 entityEditor: editor,
                 auxiliary: this.props.auxiliary
@@ -1625,6 +1634,9 @@ $(function() {
     };
     var Page = React_createClass(_.defaults({
         render: function() {
+            var ident = _.object(__map((document.cookie).split("; "),function(c) {
+                return (c).split("=");
+            }));
             var pathname = window.location.pathname;
             var tabs = __map(pageSpec,function(page,route) {
                 return React_createElement("li",{
@@ -1649,7 +1661,11 @@ $(function() {
                 className: "container"
             },React_createElement("div",{
                 className: "page-header"
-            },React_createElement("h1",{},"RVHS Science Lab Undertaking — For Teachers and Administrators")),React_createElement("p",{},"You are logged in as xxx."),React_createElement("div",{
+            },React_createElement("h1",{},"RVHS Science Lab Undertaking — For Teachers and Administrators")),React_createElement("p",{},(("You are logged in as " + ident.user) + ". "),((ident.priv === "PrivAdmin") ?
+                "You are an administrator. " :
+                null),React_createElement("a",{
+                href: "/auth/logout"
+            },"Click here to logout. ")),React_createElement("div",{
                 role: "tabpanel"
             },React_createElement("ul",{
                 className: "nav nav-tabs"

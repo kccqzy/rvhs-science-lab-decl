@@ -24,6 +24,7 @@ import Control.Error
 import Control.Lens ((^.))
 import Data.List
 import Data.Function
+import Data.Default
 import qualified Data.Char as Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -49,7 +50,7 @@ import qualified Data.Acid.Advanced as Acid
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
 import Data.Time.Calendar (Day(..))
-import Data.Time.Clock (utctDay, getCurrentTime)
+import Data.Time.Clock (utctDay, getCurrentTime, secondsToDiffTime)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.WebSockets as WS
@@ -61,6 +62,7 @@ import Text.Julius (juliusFile, juliusFileReload)
 import Text.Jasmine (minifym)
 import Codec.Text.Detect (detectEncodingName)
 import qualified Codec.Picture.Png as Png
+import Web.Cookie
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
@@ -186,10 +188,13 @@ data Privilege = PrivNone
 requirePrivilege :: Privilege -> Handler AuthResult
 requirePrivilege privReq
   | privReq == PrivNone = return Authorized
-  | otherwise = maybe
-                AuthenticationRequired
-                (bool (Unauthorized "Insufficient privileges.") Authorized . (>= privReq))
-                <$> getPrivilege
+  | otherwise = do
+      mbPriv <- getPrivilege
+      case mbPriv of
+       Nothing -> return AuthenticationRequired
+       Just priv -> do
+         setCookie (def { setCookieName = "priv", setCookieValue = C.pack (show priv) })
+         return . bool (Unauthorized "Insufficient privileges.") Authorized . (>= privReq) $ priv
 
 getPrivilege :: Handler (Maybe Privilege)
 getPrivilege = do
@@ -197,6 +202,7 @@ getPrivilege = do
   case mu of
    Nothing -> return Nothing
    Just aid -> do
+     setCookie (def { setCookieName = "user", setCookieValue = T.encodeUtf8 aid })
      if aid == "qzy@qzy.io"
        then return $ Just PrivAdmin
        else do
