@@ -133,7 +133,7 @@ renderMail renderer student = do
          Just (Email e) -> T.concat [ student ^. studentName, " <", e, ">" ]
   pdf <- getPDFRenderer renderer "report" [("sig.png", signature), ("report.tex", tex)]
   return GAEMail {
-    mailSender = "River Valley High School Science Department <qzy@qzy.io>",
+    mailSender = "River Valley High School Science Department <wzcoe.science@gmail.com>",
     mailTo = email,
     mailSubject = "Completion of Science Lab Undertaking Form",
     mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed declaration form is in the attachment for your reference.",
