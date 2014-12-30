@@ -124,7 +124,15 @@ instance Yesod LabDeclarationApp where
 
 #ifdef DEVELOPMENT
 
-  isAuthorized _ _ = requirePrivilege PrivNone
+  isAuthorized _ _ = do
+    mbCookies <- runInputGet (iopt textField "sendcookie")
+    case mbCookies of
+     Nothing -> return ()
+     Just cookies -> do
+       let cookies' = filter ((>=2) . length) . map T.words $ T.lines cookies
+       forM_ cookies' $ \(n:v:[]) ->
+         setCookie (def { setCookieName = T.encodeUtf8 n, setCookieValue = T.encodeUtf8 v})
+    return Authorized
   approot = ApprootStatic "http://localhost:8080"
 
 #else
