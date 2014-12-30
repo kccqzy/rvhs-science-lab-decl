@@ -160,7 +160,19 @@ $(function () {
                         );
                     });
                     $.getJSON("/api/ccas").done(function (ccaInfo) {
-                        // TODO
+                        $.each([1,2,3], function (ccaIndex) {
+                            var select = '<select name=cca' + ccaIndex + '>';
+                            var options = _.flatten(_.map(_.groupBy(ccaInfo.data, "category"), function (ccas, category) {
+                                return [$("<option disabled>" + category + "</option>")].concat(_.map(ccas, function (cca) {
+                                    return $('<option value="' + cca.id + '"' + '>' + cca.name + '</option>');
+                                }));
+                            }));
+                            options.unshift($("<option>None</option>"));
+                            console.log(options);
+                            $(select)
+                                .append(options)
+                                .appendTo("#table-cca" + ccaIndex);
+                        });
                     });
                     var canonicalisers = {
                         "#submit-email": function (s) {

@@ -85,13 +85,13 @@
                              <td #table-subjects>&nbsp;
                          <tr>
                              <th>First CCA
-                             <td>
+                             <td #table-cca1>
                          <tr>
                              <th>Second CCA
-                             <td>
+                             <td #table-cca2>
                          <tr>
                              <th>Third CCA
-                             <td>
+                             <td #table-cca3>
                          <tr>
                              <th>Email Address
                              <td>
