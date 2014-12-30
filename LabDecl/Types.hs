@@ -229,7 +229,7 @@ $(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Ema
 -- | ToJSON and FromJSON instances for use when returning structured
 -- data.
 $(liftM concat . mapM (deriveJSON defaultOptions {
-  fieldLabelModifier = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
+  fieldLabelModifier = jsonLabel
   }) $ [''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student])
 
 class ToHTTPStatus a where
