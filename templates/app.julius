@@ -160,7 +160,7 @@ $(function () {
                         );
                     });
                     $.getJSON("/api/ccas").done(function (ccaInfo) {
-                        $.each([1,2,3], function (ccaIndex) {
+                        $.each([1,2,3], function (wtf, ccaIndex) {
                             var select = '<select name=cca' + ccaIndex + '>';
                             var options = _.flatten(_.map(_.groupBy(ccaInfo.data, "category"), function (ccas, category) {
                                 return [$("<option disabled>" + category + "</option>")].concat(_.map(ccas, function (cca) {
@@ -168,10 +168,7 @@ $(function () {
                                 }));
                             }));
                             options.unshift($("<option>None</option>"));
-                            console.log(options);
-                            $(select)
-                                .append(options)
-                                .appendTo("#table-cca" + ccaIndex);
+                            $("#table-cca" + ccaIndex).empty().append($(select).append(options));
                         });
                     });
                     var canonicalisers = {
