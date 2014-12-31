@@ -73,24 +73,10 @@ sendMail manager mail = do
   packagedMail <- packageMail mail
   void $ HTTP.httpNoBody packagedMail manager
 
-
--- | The TeX Render environment is an environment that can take a job
--- name, a list of files and render into a PDF bytestring. It is
--- caller's responsibility to ensure jobname.tex exists.
-newtype PDFRenderer = PDFRenderer {
-  getPDFRenderer :: String -> [(FilePath, CL.ByteString)] -> IO C.ByteString
-  }
-
--- | Prepare a small TeX Live 2014 distribution and the templates.
--- Takes a directory to place the TeX distribution, the templates
--- files and returns a TeXRenderEnv. This should be called once at the
--- beginning of program.
-makePDFRenderer :: FilePath -> IO PDFRenderer
-makePDFRenderer dir = do
-  Tar.unpack dir  . Tar.read . GZip.decompress $ texliveTarGz
-  let lualatex = dir ++ "/texlive-2014-portable/bin/x86_64-linux/lualatex"
-  setFileMode lualatex ownerExecuteMode
-  return . PDFRenderer $ \jobname files -> withTempDirectory dir "latexjob" $ \dir -> do
+-- | Render a PDF file, given a binary to lualatex, a working
+-- directory, a jobname and other supporting files.
+renderPDF :: FilePath -> FilePath -> String -> [(FilePath, CL.ByteString)] -> IO C.ByteString
+renderPDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir -> do
     Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
     let reportDir = dir ++ "/report/"
     mapM_ (uncurry CL.writeFile . first (reportDir++)) $ files
@@ -120,8 +106,8 @@ generateTeX student = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/rep
         className = let (Class (l, c)) = student ^. studentClass in show l ++ [c]
         subjects = "Insert Subjects Here" :: T.Text
 
-renderMail :: PDFRenderer -> Student -> IO GAEMail
-renderMail renderer student = do
+generateMail :: FilePath -> FilePath -> Student -> IO GAEMail
+generateMail lualatex dir student = do
   let tex = generateTeX student
   let signature =
         case join $ student ^? studentSubmission . ssSignature of
@@ -131,7 +117,7 @@ renderMail renderer student = do
         case student ^? studentSubmission . ssEmail of
          Nothing -> error "renderMail: Cannot render for a student who has not completed submission."
          Just (Email e) -> T.concat [ student ^. studentName, " <", e, ">" ]
-  pdf <- getPDFRenderer renderer "report" [("sig.png", signature), ("report.tex", tex)]
+  pdf <- renderPDF lualatex dir "report" [("sig.png", signature), ("report.tex", tex)]
   return GAEMail {
     mailSender = "River Valley High School Science Department <wzcoe.science@gmail.com>",
     mailTo = email,
@@ -149,8 +135,8 @@ queuedThread op onError queue = forever $ do
   either (onError input) return result
 
 -- | A thread that renders emails asynchronously (but not concurrently).
-renderMailThread :: PDFRenderer -> (GAEMail -> IO ()) -> TQueue Student -> IO ()
-renderMailThread renderer next = queuedThread (renderMail renderer >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
+renderMailThread :: FilePath -> FilePath -> (GAEMail -> IO ()) -> TQueue Student -> IO ()
+renderMailThread lualatex dir next = queuedThread (generateMail lualatex dir >=> next) $ \student exc -> logM "renderMailThread" ERROR $ "LaTeX render failed (details = " ++ show exc ++ ") when rendering for student " ++ show student
 
 -- | A thread that sends emails asynchronously (but not concurrently).
 sendMailThread :: HTTP.Manager -> (() -> IO ()) -> TQueue GAEMail -> IO ()

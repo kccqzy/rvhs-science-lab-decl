@@ -35,6 +35,7 @@ main = do
   -- get all the credentials and configurations we need
   googleClientId <- T.pack <$> getEnv "GOOGLE_CLIENT_ID"
   googleClientSecret <- T.pack <$> getEnv "GOOGLE_CLIENT_SECRET"
+  lualatex <- getEnv "LUALATEX"
 
   -- warp configuration from environment variables
   host <- liftM fromString <$> lookupEnv "HOST"
@@ -51,8 +52,7 @@ main = do
 
   forkIO $ sendMailThread httpManager return mailQueue
   rendererTempDir <- createTempDirectory dir "renderer"
-  renderer <- makePDFRenderer rendererTempDir
-  forkIO $ renderMailThread renderer (atomically . writeTQueue mailQueue) renderQueue
+  forkIO $ renderMailThread lualatex rendererTempDir (atomically . writeTQueue mailQueue) renderQueue
 
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
