@@ -11,12 +11,14 @@ import Data.String (fromString)
 import Data.Default (def)
 import qualified Data.ByteString.Char8 as C
 import qualified Data.Attoparsec.ByteString.Char8 as PC
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Acid.Local as Acid
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
-import System.Environment (lookupEnv)
+import System.Environment (getEnv, lookupEnv)
 import System.IO.Temp (withTempDirectory, createTempDirectory)
 import System.IO
 import System.Exit
@@ -27,8 +29,12 @@ import LabDecl.AsyncServ
 
 main = do
   -- no, we do not use /tmp, you must pass the temp dir explicitly
-  tmpdir <- join $ maybe errNoTempDir return <$> lookupEnv "TEMPFOLDR"
+  tmpdir <- getEnv "LATEX_RUN_FOLDER"
   withTempDirectory tmpdir "labdecld" $ \dir -> do
+
+  -- get all the credentials and configurations we need
+  googleClientId <- T.pack <$> getEnv "GOOGLE_CLIENT_ID"
+  googleClientSecret <- T.pack <$> getEnv "GOOGLE_CLIENT_SECRET"
 
   -- warp configuration from environment variables
   host <- liftM fromString <$> lookupEnv "HOST"
@@ -50,10 +56,13 @@ main = do
 
   -- acid state
   bracket acidBegin acidFinally $ \acid ->
-    toWaiApp (LabDeclarationApp eStatic acid notifyChan httpManager renderQueue mailQueue)
-    >>= Warp.runSettings (setSettings Warp.defaultSettings)
+    toWaiApp (LabDeclarationApp { getStatic = eStatic,
+                                  getAcid = acid,
+                                  getNotifyChan = notifyChan,
+                                  getHttpManager = httpManager,
+                                  getRenderQueue = renderQueue,
+                                  getMailQueue = mailQueue,
+                                  getGoogleCredentials = (googleClientId, googleClientSecret)
+                                }) >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState def
         acidFinally = Acid.createCheckpointAndClose
-        errNoTempDir = do
-          hPutStrLn stderr "No temporary directory specified; pass TMPDIR as environment variable"
-          exitFailure

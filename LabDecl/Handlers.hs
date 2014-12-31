@@ -84,7 +84,8 @@ data LabDeclarationApp = LabDeclarationApp {
   getNotifyChan :: TChan (),
   getHttpManager :: HTTP.Manager,
   getRenderQueue :: TQueue Student,
-  getMailQueue :: TQueue GAEMail
+  getMailQueue :: TQueue GAEMail,
+  getGoogleCredentials :: (T.Text, T.Text)
   }
 
 $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
@@ -190,7 +191,7 @@ instance Yesod LabDeclarationApp where
 instance YesodAuth LabDeclarationApp where
   type AuthId LabDeclarationApp = T.Text
   authHttpManager = getHttpManager
-  authPlugins _ = [ authGoogleEmail "950258003533-9tcea77akv60t4h2t94747eh48bdqcuo.apps.googleusercontent.com" "camnLwKj_w2wtwmWYBqliwdv"]
+  authPlugins = (:[]) . uncurry authGoogleEmail <$> getGoogleCredentials
   loginDest _ = AuthStatusR
   logoutDest _ = AdminLogoutR
   getAuthId = return . Just . credsIdent
