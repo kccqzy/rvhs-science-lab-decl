@@ -951,5 +951,5 @@
 ;;; eval: (put 'e 'lisp-indent-function 2)
 ;;; eval: (put 'if 'lisp-indent-function 1)
 ;;; eval: (put 'do 'lisp-indent-function 0)
-;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls") (shell-command "/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar ../../scratch/closure-compiler/compiler.jar --compilation_level SIMPLE_OPTIMIZATIONS --language_in ECMASCRIPT5_STRICT --js admin.js > admin.min.js")) nil t)
+;;; eval: (add-hook 'after-save-hook (lambda () (shell-command "lispy admin.ls") (shell-command "/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar ../../scratch/closure-compiler/compiler.jar --compilation_level SIMPLE_OPTIMIZATIONS --language_in ECMASCRIPT5_STRICT --js admin.js > ../static/admin.min.js")) nil t)
 ;;; End:

@@ -274,3 +274,8 @@ $(function () {
         })
         .run();
 });
+
+
+// Local variables:
+// eval: (add-hook 'after-save-hook (lambda () (shell-command "/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar ../../scratch/closure-compiler/compiler.jar --compilation_level SIMPLE_OPTIMIZATIONS --language_in ECMASCRIPT5_STRICT --js app.js > ../static/app.min.js")) nil t)
+// End:

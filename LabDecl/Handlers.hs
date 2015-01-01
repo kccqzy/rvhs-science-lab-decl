@@ -58,7 +58,6 @@ import qualified Network.HTTP.Client as HTTP
 import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
-import Text.Jasmine (minifym)
 import Codec.Text.Detect (detectEncodingName)
 import qualified Codec.Picture.Png as Png
 import Web.Cookie
@@ -175,7 +174,7 @@ instance Yesod LabDeclarationApp where
 #endif
 
   -- | Static files.
-  addStaticContent = embedStaticContent getStatic StaticR minifym
+  addStaticContent = embedStaticContent getStatic StaticR Right
 
   -- | Use JSON for InvalidArgs error, which happends during form submission.
   errorHandler (InvalidArgs ia) = return . toTypedContent $ object [ "meta" .= object [ "code" .= (400 :: Int), "details" .= ia ] ]
@@ -792,9 +791,14 @@ adminSite = do
   addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js
   addScript $ StaticR underscore_js
-  addScript $ StaticR react_dev_js
   addScript $ StaticR bootstrap_js
+#ifdef DEVELOPMENT
+  addScript $ StaticR react_dev_js
   toWidget $(juliusFileAuto "templates/admin.js")
+#else
+  addScript $ StaticR react_js
+  addScript $ StaticR admin_min_js
+#endif
 
 getAdminLogoutR :: Handler Html
 getAdminLogoutR = defaultLayout $ do
@@ -839,6 +843,10 @@ getHomepageR = defaultLayout $ do
   addScript $ StaticR jquery_js
   addScript $ StaticR jquery_mobile_custom_js
   addScript $ StaticR underscore_js
-  toWidget $(juliusFileAuto "templates/app.julius")
+#ifdef DEVELOPMENT
+  toWidget $(juliusFileAuto "templates/app.js")
+#else
+  addScript $ StaticR app_min_js
+#endif
   toWidget $(hamletFileAuto "templates/app.hamlet")
   toWidget $(cassiusFileAuto "templates/app.cassius")
