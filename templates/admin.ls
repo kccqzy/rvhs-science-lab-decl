@@ -583,7 +583,7 @@
        (e "div" (className "row")
          (e "div" (className "col-sm-11 col-md-8 col-lg-7")
            (e "h2" () "Welcome")
-           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students." (whenadmin "As an administrator, you can also manage other things from the above tabs."))))))
+           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students." (whenadmin " As an administrator, you can also manage other things from the above tabs."))))))
 
    (defcomponent EntityPage
      propTypes
@@ -921,7 +921,9 @@
          (e "div" (id "modal-wrapper"))
          (e "div" (className "container")
            (e "div" (className "page-header")
-             (e "h1" () "RVHS Science Lab Undertaking — For Teachers and Administrators"))
+             (e "h1" ()
+               (e "img" (src "/static/res/rv.png" style (obj height "1em" position "relative" top "-0.2em" margin "0 0.3em 0 0")))
+               "RVHS Science Lab Undertaking — For Teachers"))
            (e "p" ()
              (+ (+ "You are logged in as " ident.user) ". ")
              (whenadmin "You are an administrator. ")

@@ -1016,7 +1016,7 @@ $(function() {
             },React_createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
             },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",((ident.priv === "PrivAdmin") ?
-                "As an administrator, you can also manage other things from the above tabs." :
+                " As an administrator, you can also manage other things from the above tabs." :
                 null))));
         }
     },{
@@ -1714,7 +1714,15 @@ $(function() {
                 className: "container"
             },React_createElement("div",{
                 className: "page-header"
-            },React_createElement("h1",{},"RVHS Science Lab Undertaking — For Teachers and Administrators")),React_createElement("p",{},(("You are logged in as " + ident.user) + ". "),((ident.priv === "PrivAdmin") ?
+            },React_createElement("h1",{},React_createElement("img",{
+                src: "/static/res/rv.png",
+                style: {
+                    height: "1em",
+                    position: "relative",
+                    top: "-0.2em",
+                    margin: "0 0.3em 0 0"
+                }
+            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + ident.user) + ". "),((ident.priv === "PrivAdmin") ?
                 "You are an administrator. " :
                 null),React_createElement("a",{
                 href: "/auth/logout"

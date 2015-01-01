@@ -4,7 +4,10 @@
     <div #main-content>
        <form #form>
          <div #page0 .page>
-             <h1 .main-title>Science Lab Undertaking Exercise
+             <h1 .main-title>
+                 <img src=@{StaticR rvcrayon_jpg} style="height: 1em">
+                 <br>
+                 Science Lab Undertaking Exercise
              <p .explanation>Welcome!<br>In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.
              <div .interactive-content>
                  <button .continue-button type=submit>
