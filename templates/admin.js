@@ -1600,7 +1600,7 @@ $(function() {
                                 React_createElement("a",{
                                     className: "btn btn-default btn-xs",
                                     target: "_blank",
-                                    href: ("https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" + sub.final_declaration_filename)
+                                    href: ("https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" + encodeURIComponent(sub.final_declaration_filename))
                                 },React_createElement("span",{
                                     className: "glyphicon glyphicon-floppy-save",
                                     "aria-hidden": "true"

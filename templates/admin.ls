@@ -879,7 +879,7 @@
                      (array "submission"
                             (fn (sub)
                               (if sub.final_declaration_filename
-                                (e "a" (className "btn btn-default btn-xs" target "_blank" href (+ "https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" sub.final_declaration_filename))
+                                (e "a" (className "btn btn-default btn-xs" target "_blank" href (+ "https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" (encodeURIComponent sub.final_declaration_filename)))
                                   (e "span" (className "glyphicon glyphicon-floppy-save" "aria-hidden" "true")))))
                             "PDF")
                      (array "submission"
