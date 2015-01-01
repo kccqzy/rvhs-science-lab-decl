@@ -98,10 +98,22 @@ formatClass klass = let (Class (l, c)) = klass in T.pack $ show l ++ [c]
 
 generateTeX :: Student -> Set Subject -> CL.ByteString
 generateTeX student scienceSubjects = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/report.tex") id
-  where name = student ^. studentName
+  where name = escapeLaTeX $ student ^. studentName
         indexNumber = student ^. studentIndexNumber
         className = formatClass (student ^. studentClass)
-        subjects = T.intercalate ", " $ map (^. subjectName) $ Set.toList scienceSubjects
+        subjects = escapeLaTeX . T.intercalate ", " . map (^. subjectName) . Set.toList $ scienceSubjects
+
+escapeLaTeX :: T.Text -> T.Text
+escapeLaTeX = foldr1 (.) . map (uncurry T.replace) $ [("~", "\\textasciitilde "),
+                                                      ("^", "\\textasciicircum "),
+                                                      ("&", "\\&"),
+                                                      ("%", "\\%"),
+                                                      ("$", "\\$"),
+                                                      ("#", "\\#"),
+                                                      ("_", "\\_"),
+                                                      ("{", "\\{"),
+                                                      ("}", "\\}"),
+                                                      ("\\", "\\textbackslash ")]
 
 -- | Render a PDF file, given a binary to lualatex, a working
 -- directory, a jobname and other supporting files.
