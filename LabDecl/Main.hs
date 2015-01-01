@@ -53,7 +53,7 @@ main = do
 
   -- acid state
   bracket acidBegin acidFinally $ \acid -> do
-    forkIO $ asyncMain acid httpManager lualatex rendererTempDir asyncQueue
+    forkIO $ asyncMain acid httpManager lualatex rendererTempDir notifyChan asyncQueue
     toWaiApp (LabDeclarationApp { getStatic = eStatic,
                                   getAcid = acid,
                                   getNotifyChan = notifyChan,

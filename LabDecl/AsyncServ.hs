@@ -158,8 +158,8 @@ generateMail student pdf = do
 
 type AsyncInput = (Student, Set Subject, CL.ByteString)
 
-asyncMain :: Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TQueue AsyncInput -> IO ()
-asyncMain acid manager lualatex dir queue = forever $ do
+asyncMain :: Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> IO ()
+asyncMain acid manager lualatex dir notifyChan queue = forever $ do
   (student, subjects, signaturePng) <- atomically $ readTQueue queue
   let tex = generateTeX student subjects
   genPDFOp <- async $ generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
@@ -178,4 +178,5 @@ asyncMain acid manager lualatex dir queue = forever $ do
      case eitherSendMail of
       Left e -> logM "sendMail" ERROR $ "Send mail failed (details = " ++ show e ++ ") when rendering for student " ++ show student
       _ -> return ()
-     void $ Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) filename
+     Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) filename
+     liftIO . atomically $ writeTChan notifyChan ()
