@@ -136,7 +136,7 @@ data StudentSubmission = SubmissionNotOpen
                        | SubmissionCompleted {
                          _ssPhone :: Phone,
                          _ssEmail :: Email,
-                         _ssCca :: [CcaId],
+                         _ssCca :: Set CcaId,
                          _ssInfoHasError :: Bool,
                          _ssFinalDeclarationFilename :: Maybe T.Text,
                          _ssDate :: Day,
@@ -165,7 +165,7 @@ $(makeLenses ''Student)
 -- status, witnesser (during teacher deletes).
 instance Indexable Student where
   empty = ixSet $ $(mapQ 'ixLitField [ 'studentId, 'studentClass, 'studentIndexNumber ]) ++ [
-    ixFun $ (^. studentSubmission . ssCca),
+    ixFun $ Set.toList . (^. studentSubmission . ssCca),
     ixFun $ Set.toList . (^. studentSubjectCombi),
     ixFun $ maybeToList . (^. studentWitnesser),
     ixFun $ textIndex True . (^. studentName)

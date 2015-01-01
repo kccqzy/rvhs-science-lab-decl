@@ -445,7 +445,7 @@ studentSubmitForm sid = unMFormInput $ do
   cca1 <- miopt ccaIdField "cca1"
   cca2 <- miopt ccaIdField "cca2"
   cca3 <- miopt ccaIdField "cca3"
-  let cca = catMaybes [cca1, cca2, cca3]
+  let cca = Set.fromList $ catMaybes [cca1, cca2, cca3]
   hasError <- mireq checkBoxField "haserror"
   today <- mireq todayField "today"
   ua <- mireq textField "ua"

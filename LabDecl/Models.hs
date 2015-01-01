@@ -334,7 +334,7 @@ publicStudentDoSubmission (sid, nric, submission) = do
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
     guard . not $ (_SubmissionCompleted `isn't` submission)
     guard $ Just Nothing == submission ^? ssFinalDeclarationFilename
-    guard $ all (`Set.member` validCcas) (submission ^. ssCca)
+    guard $ all (`Set.member` validCcas) (Set.toList (submission ^. ssCca))
     guard $ student ^. studentNric `nricMatch` nric
     return $ student & studentSubmission .~ submission
   replaceEntity True changedStudent
