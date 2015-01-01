@@ -862,7 +862,7 @@
                      (array "index_number" _.identity "Index #")
                      (array "name" _.identity "Name")
                      (array "chinese_name" _.identity "Chinese")
-                     (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "ID")
+                     (array "nric" (fn (v) (-> v (.slice -5))) "ID")
                      (array "subject_combi"
                             (fn (ss)
                               (defvar that this)
