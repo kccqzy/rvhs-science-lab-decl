@@ -938,7 +938,8 @@ $(function() {
                     "")
             },([
                 React_createElement("option",{
-                    key: 0
+                    key: 0,
+                    value: ""
                 },"None")
             ]).concat(__map(this.props.auxiliary.teacherInfo.data,function(teacher) {
                 return React_createElement("option",{

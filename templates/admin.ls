@@ -537,7 +537,7 @@
          (e "div" (className "form-group")
            (e "label" (htmlFor "witnesser") "Witness")
            (e "select" (className "form-control" name "witness" defaultValue (ifentity .witnesser))
-             (-> (array (e "option" (key 0) "None"))
+             (-> (array (e "option" (key 0 value "") "None"))
                  (.concat
                   (__map this.props.auxiliary.teacherInfo.data
                          (fn (teacher)

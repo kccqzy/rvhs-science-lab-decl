@@ -157,7 +157,7 @@ $(function () {
                                     return $('<option value="' + cca.id + '"' + '>' + cca.name + '</option>');
                                 }));
                             }));
-                            options.unshift($("<option>None</option>"));
+                            options.unshift($('<option value="">None</option>'));
                             $("#table-cca" + ccaIndex).empty().append($(select).append(options));
                         });
                     });
