@@ -136,16 +136,6 @@ $(function () {
 
         .register(
             4, function () {
-                if (!submitClassName || !submitIndexNumber || !submitNric) throw 'No class name or index number or nric';
-            }, function () {
-                $("#form").off("submit").on("submit", function () {
-                    pageController.forward();
-                    return false;
-                });
-            })
-
-        .register(
-            5, function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
             }, function () {
                     $("#table-chinesename").text(studentData.chinese_name);
@@ -203,14 +193,14 @@ $(function () {
             })
 
         .register(
-            6, function () {
+            5, function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
-                $("#page6 .interactive-content .canvas").empty();
+                $("#page5 .interactive-content .canvas").empty();
             }, function () {
                 $(document).on("scrollstart", false);
                 var scaleFactor = window.devicePixelRatio || 1;
-                $("#page6 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
-                var canvas = $("#page6 .interactive-content canvas").get(0);
+                $("#page5 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
+                var canvas = $("#page5 .interactive-content canvas").get(0);
                 var ctx = canvas.getContext("2d");
                 ctx.lineCap = "round";
                 ctx.lineWidth = 2 * scaleFactor;
@@ -239,7 +229,7 @@ $(function () {
                     return interpStroke;
                 };
 
-                $("#page6").on("webkitTransitionEnd", function() {
+                $("#page5").on("webkitTransitionEnd", function() {
                     var offsetX = +$(canvas).offset().left,
                         offsetY = +$(canvas).offset().top;
 
@@ -269,7 +259,9 @@ $(function () {
                     return false;
                 });
             })
-        .register(7, function () {
+
+        .register(
+            6, function () {
             $("#back-button").addClass("donotpresent").off("tap");
         })
         .run();
