@@ -1014,7 +1014,9 @@ $(function() {
                 className: "row"
             },React_createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
-            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. "),React_createElement("h2",{},"Quick Guide"),React_createElement("p",{},"TODO"),React_createElement("h2",{},"API Documentation"),React_createElement("p",{},"If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")));
+            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",((ident.priv === "PrivAdmin") ?
+                "As an administrator, you can also manage other things from the above tabs." :
+                null))));
         }
     },{
         render: function() {
@@ -1152,6 +1154,7 @@ $(function() {
             var ccaConn = APIConnection("/api/ccas");
             var teacherConn = APIConnection("/api/teachers");
             var subjectConn = APIConnection("/api/subjects");
+            var classConn = APIConnection("/api/classes");
             ccaConn.registerCallback(function(d) {
                 return that.setState({
                     ccaInfo: d
@@ -1167,6 +1170,11 @@ $(function() {
                     subjectInfo: d
                 });
             });
+            classConn.registerCallback(function(d) {
+                return that.setState({
+                    classInfo: d
+                });
+            });
             var emptyData = {
                 data: []
             };
@@ -1178,7 +1186,8 @@ $(function() {
                 subjectConn: subjectConn,
                 ccaInfo: emptyData,
                 teacherInfo: emptyData,
-                subjectInfo: emptyData
+                subjectInfo: emptyData,
+                classInfo: emptyData
             };
         },
         componentWillUnmount: function() {
@@ -1212,7 +1221,8 @@ $(function() {
             var auxiliary = {
                 teacherInfo: that.state.teacherInfo,
                 ccaInfo: that.state.ccaInfo,
-                subjectInfo: that.state.subjectInfo
+                subjectInfo: that.state.subjectInfo,
+                classInfo: that.state.classInfo
             };
             return React_createElement("div",{},React_createElement("div",{
                 className: "row"
@@ -1229,18 +1239,20 @@ $(function() {
                 value: "class",
                 defaultChecked: true,
                 onChange: onRadioChange
-            }),"I’d like to view students from a particular class.",((this.state.selected === "class") ?
-                React_createElement("input",{
-                    type: "text",
+            }),"Search by class",((this.state.selected === "class") ?
+                React_createElement("select",{
                     className: "form-control",
-                    name: "class",
-                    placeholder: "Enter a class, e.g. 5N"
-                }) :
-                React_createElement("input",{
-                    type: "text",
+                    name: "class"
+                },__map(auxiliary.classInfo.data,function(klass) {
+                    var klassstr = (klass[0] + klass[1]);
+                    return React_createElement("option",{
+                        value: klassstr,
+                        key: klassstr
+                    },klassstr);
+                })) :
+                React_createElement("select",{
                     className: "form-control",
-                    disabled: true,
-                    value: ""
+                    disabled: true
                 })))),React_createElement("div",{
                 className: "radio"
             },React_createElement("label",{},React_createElement("input",{
@@ -1248,7 +1260,7 @@ $(function() {
                 name: "searchby",
                 value: "name",
                 onChange: onRadioChange
-            }),"I’d like to search for students by approximate name. (Add space if unsure)",((this.state.selected === "name") ?
+            }),"Search by approximate name (Add space if unsure)",((this.state.selected === "name") ?
                 React_createElement("input",{
                     type: "text",
                     className: "form-control",
@@ -1265,29 +1277,9 @@ $(function() {
             },React_createElement("label",{},React_createElement("input",{
                 type: "radio",
                 name: "searchby",
-                value: "teacher",
-                onChange: onRadioChange
-            }),"I’d like to view students whose witness is a particular teacher.",((this.state.selected === "teacher") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "id"
-                },__map(auxiliary.teacherInfo.data,function(teacher) {
-                    return React_createElement("option",{
-                        value: teacher.id,
-                        key: teacher.id
-                    },teacher.name," (",teacher.witness_name,")");
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
-                type: "radio",
-                name: "searchby",
                 value: "subject",
                 onChange: onRadioChange
-            }),"I’d like to view students who takes a particular subject.",((this.state.selected === "subject") ?
+            }),"Search by Subject",((this.state.selected === "subject") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "id"
@@ -1309,7 +1301,7 @@ $(function() {
                 name: "searchby",
                 value: "cca",
                 onChange: onRadioChange
-            }),"I’d like to view students from a particular CCA.",((this.state.selected === "cca") ?
+            }),"Search by CCA",((this.state.selected === "cca") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "id"
@@ -1327,9 +1319,29 @@ $(function() {
             },React_createElement("label",{},React_createElement("input",{
                 type: "radio",
                 name: "searchby",
+                value: "teacher",
+                onChange: onRadioChange
+            }),"Search by witness",((this.state.selected === "teacher") ?
+                React_createElement("select",{
+                    className: "form-control",
+                    name: "id"
+                },__map(auxiliary.teacherInfo.data,function(teacher) {
+                    return React_createElement("option",{
+                        value: teacher.id,
+                        key: teacher.id
+                    },teacher.name," (",teacher.witness_name,")");
+                })) :
+                React_createElement("select",{
+                    className: "form-control",
+                    disabled: true
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
                 value: "all",
                 onChange: onRadioChange
-            }),"I’d like to view ",React_createElement("em",{},"all")," students. (",React_createElement("strong",{},"NOT RECOMMENDED:")," very taxing on the network)")),React_createElement("button",{
+            }),"View ",React_createElement("em",{},"all")," students. (",React_createElement("strong",{},"NOT RECOMMENDED:")," very taxing on the network)")),React_createElement("button",{
                 type: "submit",
                 className: "btn btn-primary",
                 onClick: onViewButtonClick
@@ -1385,11 +1397,13 @@ $(function() {
     var pageSpec = {
         "/admin": {
             pageName: "Home",
+            onlyAdmin: false,
             component: AdminHomeR,
             dataSpec: null
         },
         "/admin/ccas": {
             pageName: "Manage CCAs",
+            onlyAdmin: true,
             component: AdminCcasR,
             dataSpec: {
                 humanName: "CCA",
@@ -1412,6 +1426,7 @@ $(function() {
         },
         "/admin/subjects": {
             pageName: "Manage Subjects",
+            onlyAdmin: true,
             component: AdminSubjectsR,
             dataSpec: {
                 humanName: "Subject",
@@ -1456,6 +1471,7 @@ $(function() {
         },
         "/admin/teachers": {
             pageName: "Manage Teachers",
+            onlyAdmin: true,
             component: AdminTeachersR,
             dataSpec: {
                 humanName: "Teacher",
@@ -1498,6 +1514,7 @@ $(function() {
         },
         "/admin/students": {
             pageName: "Manage Students",
+            onlyAdmin: false,
             component: AdminStudentsR,
             dataSpec: {
                 humanName: "Student",
@@ -1513,7 +1530,7 @@ $(function() {
                     [
                         "index_number",
                         _.identity,
-                        "Reg #"
+                        "Index #"
                     ],
                     [
                         "name",
@@ -1533,7 +1550,7 @@ $(function() {
                                 "data-text": (v).slice(-5)
                             });
                         },
-                        "NRIC"
+                        "ID"
                     ],
                     [
                         "subject_combi",
@@ -1551,7 +1568,7 @@ $(function() {
                                 },codes) :
                                 "—");
                         },
-                        "Subjects"
+                        "Subject(s)"
                     ],
                     [
                         "witnesser",
@@ -1561,6 +1578,36 @@ $(function() {
                                 (lookupForeign(this.teacherInfo,tid)).name);
                         },
                         "Witness"
+                    ],
+                    [
+                        "submission",
+                        function(sub) {
+                            return (sub.email || "—");
+                        },
+                        "Email"
+                    ],
+                    [
+                        "submission",
+                        function(sub) {
+                            return (sub.phone || "—");
+                        },
+                        "Phone"
+                    ],
+                    [
+                        "submission",
+                        function(sub) {
+                            return (sub.final_declaration_filename ?
+                                React_createElement("a",{
+                                    className: "btn btn-default btn-xs",
+                                    target: "_blank",
+                                    href: ("https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" + sub.final_declaration_filename)
+                                },React_createElement("span",{
+                                    className: "glyphicon glyphicon-floppy-save",
+                                    "aria-hidden": "true"
+                                })) :
+                                undefined);
+                        },
+                        "PDF"
                     ],
                     [
                         "submission",
@@ -1639,7 +1686,7 @@ $(function() {
             }));
             var pathname = window.location.pathname;
             var tabs = __map(pageSpec,function(page,route) {
-                return React_createElement("li",{
+                var tab = React_createElement("li",{
                     key: route,
                     role: "presentation",
                     className: ((route === pathname) ?
@@ -1650,6 +1697,11 @@ $(function() {
                         "#" :
                         route)
                 },(page).pageName));
+                return ((page).onlyAdmin ?
+                    ((ident.priv === "PrivAdmin") ?
+                        tab :
+                        null) :
+                    tab);
             });
             return React_createElement("div",{
                 id: "content-wrapper"

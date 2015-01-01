@@ -34,6 +34,7 @@
    ;; Identity of current user through cookies (ignored by server).
    (defvar ident (_.object (__map (-> document.cookie (.split "; ")) (fn (c) (-> c (.split "="))))))
    (macro whenadmin (thing) (if (= ident.priv "PrivAdmin") ~thing null))
+   (macro whennotadmin (thing) (if (= ident.priv "PrivAdmin") null ~thing))
 
    ;; An APIConnection is a wrapper around WebSocket.
    (defun APIConnection (pathname)
@@ -582,11 +583,7 @@
        (e "div" (className "row")
          (e "div" (className "col-sm-11 col-md-8 col-lg-7")
            (e "h2" () "Welcome")
-           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. ")
-           (e "h2" () "Quick Guide")
-           (e "p" () "TODO")
-           (e "h2" () "API Documentation")
-           (e "p" () "If you know some basics of programming, you can use it to add or remove things automatically via the HTTP JSON API.")))))
+           (e "p" () "Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students." (whenadmin "As an administrator, you can also manage other things from the above tabs."))))))
 
    (defcomponent EntityPage
      propTypes
@@ -669,10 +666,12 @@
        (defvar ccaConn (APIConnection "/api/ccas"))
        (defvar teacherConn (APIConnection "/api/teachers"))
        (defvar subjectConn (APIConnection "/api/subjects"))
+       (defvar classConn (APIConnection "/api/classes"))
        ;; TODO what if the callback sets the state before this function returns?
        (ccaConn.registerCallback (fn (d) (that.setState (obj ccaInfo d))))
        (teacherConn.registerCallback (fn (d) (that.setState (obj teacherInfo d))))
        (subjectConn.registerCallback (fn (d) (that.setState (obj subjectInfo d))))
+       (classConn.registerCallback (fn (d) (that.setState (obj classInfo d))))
        (defvar emptyData (obj data (array)))
        (obj queryString "searchby=none"
             selected "class"
@@ -681,7 +680,8 @@
             subjectConn subjectConn
             ccaInfo emptyData
             teacherInfo emptyData
-            subjectInfo emptyData))
+            subjectInfo emptyData
+            classInfo emptyData))
 
      componentWillUnmount
      (fn ()
@@ -706,7 +706,8 @@
        (defvar auxiliary
          (obj teacherInfo that.state.teacherInfo
               ccaInfo that.state.ccaInfo
-              subjectInfo that.state.subjectInfo))
+              subjectInfo that.state.subjectInfo
+              classInfo that.state.classInfo))
        (e "div" ()
          (e "div" (className "row")
            (e "div" (className "col-sm-11 col-md-8 col-lg-7")
@@ -715,31 +716,25 @@
                (e "div" (className "radio")
                  (e "label" ()
                    (e "input" (type "radio" name "searchby" value "class" defaultChecked true onChange onRadioChange))
-                   "I’d like to view students from a particular class."
+                   "Search by class"
                    (if (= this.state.selected "class")
-                     (e "input" (type "text" className "form-control" name "class" placeholder "Enter a class, e.g. 5N"))
-                     (e "input" (type "text" className "form-control" disabled true value "")))))
+                     (e "select" (className "form-control" name "class")
+                       (__map auxiliary.classInfo.data
+                              (fn (klass)
+                                (defvar klassstr (+ (get 0 klass) (get 1 klass)))
+                                (e "option" (value klassstr key klassstr) klassstr))))
+                     (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
                    (e "input" (type "radio" name "searchby" value "name" onChange onRadioChange))
-                   "I’d like to search for students by approximate name. (Add space if unsure)"
+                   "Search by approximate name (Add space if unsure)"
                    (if (= this.state.selected "name")
                      (e "input" (type "text" className "form-control" name "name" placeholder "Enter an approximate name, e.g. Xin Yi"))
                      (e "input" (type "text" className "form-control" disabled true value "")))))
                (e "div" (className "radio")
                  (e "label" ()
-                   (e "input" (type "radio" name "searchby" value "teacher" onChange onRadioChange))
-                   "I’d like to view students whose witness is a particular teacher."
-                   (if (= this.state.selected "teacher")
-                     (e "select" (className "form-control" name "id")
-                       (__map auxiliary.teacherInfo.data
-                              (fn (teacher)
-                                (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")"))))
-                     (e "select" (className "form-control" disabled true)))))
-               (e "div" (className "radio")
-                 (e "label" ()
                    (e "input" (type "radio" name "searchby" value "subject" onChange onRadioChange))
-                   "I’d like to view students who takes a particular subject."
+                   "Search by Subject"
                    (if (= this.state.selected "subject")
                      (e "select" (className "form-control" name "id")
                        (__map auxiliary.subjectInfo.data
@@ -749,7 +744,7 @@
                (e "div" (className "radio")
                  (e "label" ()
                    (e "input" (type "radio" name "searchby" value "cca" onChange onRadioChange))
-                   "I’d like to view students from a particular CCA."
+                   "Search by CCA"
                    (if (= this.state.selected "cca")
                      (e "select" (className "form-control" name "id")
                        (__map auxiliary.ccaInfo.data
@@ -758,8 +753,18 @@
                      (e "select" (className "form-control" disabled true)))))
                (e "div" (className "radio")
                  (e "label" ()
+                   (e "input" (type "radio" name "searchby" value "teacher" onChange onRadioChange))
+                   "Search by witness"
+                   (if (= this.state.selected "teacher")
+                     (e "select" (className "form-control" name "id")
+                       (__map auxiliary.teacherInfo.data
+                              (fn (teacher)
+                                (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")"))))
+                     (e "select" (className "form-control" disabled true)))))
+               (e "div" (className "radio")
+                 (e "label" ()
                    (e "input" (type "radio" name "searchby" value "all" onChange onRadioChange))
-                   "I’d like to view " (e "em" () "all") " students. (" (e "strong" () "NOT RECOMMENDED:") " very taxing on the network)"))
+                   "View " (e "em" () "all") " students. (" (e "strong" () "NOT RECOMMENDED:") " very taxing on the network)"))
                (e "button" (type "submit" className "btn btn-primary" onClick onViewButtonClick) "View"))))
          (e "div" (className "row")
            (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary customButtons customButtons))))))
@@ -792,11 +797,13 @@
    (defvar pageSpec
      (obj "/admin"
           (obj pageName "Home"
+               onlyAdmin false
                component AdminHomeR
                dataSpec null)
 
           "/admin/ccas"
           (obj pageName "Manage CCAs"
+               onlyAdmin true
                component AdminCcasR
                dataSpec
                (obj humanName "CCA"
@@ -808,6 +815,7 @@
 
           "/admin/subjects"
           (obj pageName "Manage Subjects"
+               onlyAdmin true
                component AdminSubjectsR
                dataSpec
                (obj humanName "Subject"
@@ -823,6 +831,7 @@
 
           "/admin/teachers"
           (obj pageName "Manage Teachers"
+               onlyAdmin true
                component AdminTeachersR
                dataSpec
                (obj humanName "Teacher"
@@ -840,6 +849,7 @@
 
           "/admin/students"
           (obj pageName "Manage Students"
+               onlyAdmin false
                component AdminStudentsR
                dataSpec
                (obj humanName "Student"
@@ -849,21 +859,29 @@
                     categoryColumn (array "class" _.identity "Class")
                     columns
                     (array
-                     (array "index_number" _.identity "Reg #")
+                     (array "index_number" _.identity "Index #")
                      (array "name" _.identity "Name")
                      (array "chinese_name" _.identity "Chinese")
-                     (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "NRIC")
+                     (array "nric" (fn (v) (e "span" (className "hover-view" "data-text" (-> v (.slice -5))))) "ID")
                      (array "subject_combi"
                             (fn (ss)
                               (defvar that this)
                               (defvar codes (-> (__map ss (fn (s) (.code (lookupForeign that.subjectInfo s)))) (.join ", ")))
                               (defvar names (-> (__map ss (fn (s) (.name (lookupForeign that.subjectInfo s)))) (.join ", ")))
                               (if codes (e "span" (title names) codes) "—"))
-                            "Subjects")
+                            "Subject(s)")
                      (array "witnesser"
                             (fn (tid)
                               (if (null? tid) (e "i" () "None") (.name (lookupForeign this.teacherInfo tid))))
                             "Witness")
+                     (array "submission" (fn (sub) (|| sub.email "—")) "Email")
+                     (array "submission" (fn (sub) (|| sub.phone "—")) "Phone")
+                     (array "submission"
+                            (fn (sub)
+                              (if sub.final_declaration_filename
+                                (e "a" (className "btn btn-default btn-xs" target "_blank" href (+ "https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" sub.final_declaration_filename))
+                                  (e "span" (className "glyphicon glyphicon-floppy-save" "aria-hidden" "true")))))
+                            "PDF")
                      (array "submission"
                             (fn (sub entity)
                               (defvar that this)
@@ -894,9 +912,10 @@
        (defvar tabs
          (__map pageSpec
                 (fn (page route)
-                  (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
-                    (e "a" (href (if (= route pathname) "#" route))
-                      (.pageName page))))))
+                  (defvar tab (e "li" (key route role "presentation" className (if (= route pathname) "active" ""))
+                                (e "a" (href (if (= route pathname) "#" route))
+                                  (.pageName page))))
+                  (if (.onlyAdmin page) (whenadmin tab) tab))))
        (e "div" (id "content-wrapper")
          (e "div" (id "popover-wrapper"))
          (e "div" (id "modal-wrapper"))
