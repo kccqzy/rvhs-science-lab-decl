@@ -1606,7 +1606,16 @@ $(function() {
                                     className: "glyphicon glyphicon-floppy-save",
                                     "aria-hidden": "true"
                                 })) :
-                                undefined);
+                                ((sub.tag === "SubmissionCompleted") ?
+                                    React_createElement("img",{
+                                        src: "/static/res/loading.gif",
+                                        width: 16,
+                                        height: 16,
+                                        style: {
+                                            margin: "0 4px"
+                                        }
+                                    }) :
+                                    undefined));
                         },
                         "PDF"
                     ],

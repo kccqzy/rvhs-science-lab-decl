@@ -878,9 +878,11 @@
                      (array "submission" (fn (sub) (|| sub.phone "—")) "Phone")
                      (array "submission"
                             (fn (sub)
-                              (if sub.final_declaration_filename
-                                (e "a" (className "btn btn-default btn-xs" target "_blank" href (+ "https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" (encodeURIComponent sub.final_declaration_filename)))
-                                  (e "span" (className "glyphicon glyphicon-floppy-save" "aria-hidden" "true")))))
+                              (cond sub.final_declaration_filename
+                                    (e "a" (className "btn btn-default btn-xs" target "_blank" href (+ "https://rvhs-sci-lab-undertaking.appspot.com/storage?filename=" (encodeURIComponent sub.final_declaration_filename)))
+                                      (e "span" (className "glyphicon glyphicon-floppy-save" "aria-hidden" "true")))
+                                    (= sub.tag "SubmissionCompleted")
+                                    (e "img" (src "/static/res/loading.gif" width 16 height 16 style (obj margin "0 4px")))))
                             "PDF")
                      (array "submission"
                             (fn (sub entity)
