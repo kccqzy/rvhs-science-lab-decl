@@ -11,5 +11,5 @@ libraries:
   version: latest
 
 handlers:
-- url: /
-  script: mailer.app
+- url: .*
+  script: app.app

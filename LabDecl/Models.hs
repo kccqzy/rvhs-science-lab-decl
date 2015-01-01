@@ -82,7 +82,7 @@ listStudents :: IQuery (Set Student)
 listCcas     = listEntities
 listSubjects = listEntities
 listTeachers = listEntities
-listStudents = redactSignatureDeclaration listEntities
+listStudents = listEntities
 
 lookupCcaById                   :: CcaId         -> IQuery (Maybe Cca)
 lookupSubjectById               :: SubjectId     -> IQuery (Maybe Subject)
@@ -108,17 +108,14 @@ listStudentsWithSubject   :: SubjectId -> IQuery (Set Student)
 listStudentsWithWitnesser :: TeacherId -> IQuery (Set Student)
 listStudentsByStatus      :: Bool      -> IQuery (Set Student)
 listSubjectsByLevel       = searchEntitiesEq
-listStudentsFromClass     = redactSignatureDeclaration . searchEntitiesEq
-listStudentsFromCca       = redactSignatureDeclaration . searchEntitiesEq
-listStudentsWithSubject   = redactSignatureDeclaration . searchEntitiesEq
-listStudentsWithWitnesser = redactSignatureDeclaration . searchEntitiesEq
-listStudentsByStatus      = redactSignatureDeclaration . searchEntitiesEq
+listStudentsFromClass     = searchEntitiesEq
+listStudentsFromCca       = searchEntitiesEq
+listStudentsWithSubject   = searchEntitiesEq
+listStudentsWithWitnesser = searchEntitiesEq
+listStudentsByStatus      = searchEntitiesEq
 
 searchStudentsByName :: T.Text -> IQuery (Set Student)
-searchStudentsByName name = redactSignatureDeclaration $ searchEntities [(@* textIndex False name)]
-
-redactSignatureDeclaration :: (Functor f) => f (Set Student) -> f (Set Student)
-redactSignatureDeclaration = fmap $ Set.map $ (studentSubmission . ssSignature .~ Nothing) . (studentSubmission . ssFinalDeclaration .~ Nothing)
+searchStudentsByName name = searchEntities [(@* textIndex False name)]
 
 -- |
 -- = Updates
@@ -336,12 +333,22 @@ publicStudentDoSubmission (sid, nric, submission) = do
     student <- maybeStudent
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
     guard . not $ (_SubmissionCompleted `isn't` submission)
-    guard . isJust . join $ submission ^? ssSignature
-    guard $ Just Nothing == submission ^? ssFinalDeclaration
+    guard $ Just Nothing == submission ^? ssFinalDeclarationFilename
     guard $ all (`Set.member` validCcas) (submission ^. ssCca)
     guard $ student ^. studentNric `nricMatch` nric
     return $ student & studentSubmission .~ submission
   replaceEntity True changedStudent
+
+publicStudentSubmissionPdfRendered :: StudentId -> T.Text -> IUpdate
+publicStudentSubmissionPdfRendered sid filename = do
+  maybeStudent <- liftQuery $ lookupStudentById sid
+  changedStudent <- lift . note TL.empty $ do
+    student <- maybeStudent
+    guard . not $ (_SubmissionCompleted `isn't` (student ^. studentSubmission))
+    guard $ Just Nothing == student ^? studentSubmission . ssFinalDeclarationFilename
+    return $ student & studentSubmission . ssFinalDeclarationFilename .~ Just filename
+  replaceEntity True changedStudent
+
 
 teacherChangeSubmissionStatus :: (Student -> TL.Text) -> APrism' StudentSubmission a -> StudentSubmission -> StudentId -> IUpdate
 teacherChangeSubmissionStatus errMsg currentStatus newStatus sid = do
@@ -421,6 +428,7 @@ eventNames = [
     'publicListStudentsFromClass,
     'publicLookupStudentByClassIndexNumber,
     'publicStudentDoSubmission,
+    'publicStudentSubmissionPdfRendered,
     'teacherUnlockSubmission,
     'teacherLockSubmission
     ]

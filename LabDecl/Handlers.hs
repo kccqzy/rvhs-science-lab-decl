@@ -83,8 +83,7 @@ data LabDeclarationApp = LabDeclarationApp {
   getAcid :: Acid.AcidState Database,
   getNotifyChan :: TChan (),
   getHttpManager :: HTTP.Manager,
-  getRenderQueue :: TQueue Student,
-  getMailQueue :: TQueue GAEMail,
+  getAsyncQueue :: TQueue AsyncInput,
   getGoogleCredentials :: (T.Text, T.Text)
   }
 
@@ -138,7 +137,7 @@ instance Yesod LabDeclarationApp where
        forM_ cookies' $ \(n:v:[]) ->
          setCookie (def { setCookieName = T.encodeUtf8 n, setCookieValue = T.encodeUtf8 v})
     return Authorized
-  approot = ApprootStatic "http://localhost:8080"
+  approot = ApprootStatic "http://localhost:8081"
 
 #else
 
@@ -448,10 +447,12 @@ studentSubmitForm sid = unMFormInput $ do
   cca3 <- miopt ccaIdField "cca3"
   let cca = catMaybes [cca1, cca2, cca3]
   hasError <- mireq checkBoxField "haserror"
-  sig <- mireq pngField "sig"
   today <- mireq todayField "today"
   ua <- mireq textField "ua"
-  return $ (sid, nric, SubmissionCompleted phone email cca hasError (Just sig) Nothing today ua)
+  return $ (sid, nric, SubmissionCompleted phone email cca hasError Nothing today ua)
+
+studentSubmitPngForm :: FormInput Handler CL.ByteString
+studentSubmitPngForm = ireq pngField "sig"
 
 studentForm :: StudentId -> FormInput Handler Student
 studentForm sid = unMFormInput $ do
@@ -511,17 +512,17 @@ todayField = checkMMap fw bw checkBoxField
           today <- liftIO $ utctDay <$> getCurrentTime
           checkMMapOk today
 
-pngField :: Field Handler ByteString64
+pngField :: Field Handler CL.ByteString
 pngField = checkMMap fw bw textField
-  where bw = undefined -- XXX
+  where bw = T.decodeUtf8 . CL.toStrict . CL.append "data:image/png;base64," . CL64.encode
         fw = return . parsePngData . T.encodeUtf8
 
-parsePngData :: C.ByteString -> Either T.Text ByteString64
+parsePngData :: C.ByteString -> Either T.Text CL.ByteString
 parsePngData bs = note "invalid image data" . hush $ do
   data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
   d <- C64.decode data64
   Png.decodePng d
-  return $ ByteString64 d
+  return $ CL.fromStrict d
 
 ccaIdField :: Field Handler CcaId
 ccaIdField = checkMMap fw bw intField
@@ -651,11 +652,14 @@ getPublicStudentR klass index = do
 
 postStudentSubmitR :: StudentId -> Handler Value
 postStudentSubmitR sid = do
+  pngData <- runInputPost studentSubmitPngForm
   rv <- acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission) sid
   acid <- getAcid <$> ask
   Just student <- liftIO $ Acid.query acid $ LookupStudentById sid
-  renderQueue <- getRenderQueue <$> ask
-  liftIO . atomically $ writeTQueue renderQueue student
+  allSubjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel $ let (Class (l, _)) = student ^. studentClass in l
+  let subjects = Set.filter (\s -> isNothing (s ^. subjectCode) || (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi)) allSubjects
+  asyncQueue <- getAsyncQueue <$> ask
+  liftIO . atomically $ writeTQueue asyncQueue (student, subjects, pngData)
   return rv
 
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),

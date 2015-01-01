@@ -47,21 +47,18 @@ main = do
 
   -- queues and channels
   notifyChan <- atomically newBroadcastTChan
-  mailQueue <- atomically newTQueue
-  renderQueue <- atomically newTQueue
+  asyncQueue <- atomically newTQueue
 
-  forkIO $ sendMailThread httpManager return mailQueue
   rendererTempDir <- createTempDirectory dir "renderer"
-  forkIO $ renderMailThread lualatex rendererTempDir (atomically . writeTQueue mailQueue) renderQueue
 
   -- acid state
-  bracket acidBegin acidFinally $ \acid ->
+  bracket acidBegin acidFinally $ \acid -> do
+    forkIO $ asyncMain acid httpManager lualatex rendererTempDir asyncQueue
     toWaiApp (LabDeclarationApp { getStatic = eStatic,
                                   getAcid = acid,
                                   getNotifyChan = notifyChan,
                                   getHttpManager = httpManager,
-                                  getRenderQueue = renderQueue,
-                                  getMailQueue = mailQueue,
+                                  getAsyncQueue = asyncQueue,
                                   getGoogleCredentials = (googleClientId, googleClientSecret)
                                 }) >>= Warp.runSettings (setSettings Warp.defaultSettings)
   where acidBegin = Acid.openLocalState def

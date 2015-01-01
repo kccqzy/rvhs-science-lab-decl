@@ -138,8 +138,7 @@ data StudentSubmission = SubmissionNotOpen
                          _ssEmail :: Email,
                          _ssCca :: [CcaId],
                          _ssInfoHasError :: Bool,
-                         _ssSignature :: Maybe ByteString64,
-                         _ssFinalDeclaration :: Maybe ByteString64,
+                         _ssFinalDeclarationFilename :: Maybe T.Text,
                          _ssDate :: Day,
                          _ssUserAgent :: T.Text
                          }
@@ -168,7 +167,6 @@ instance Indexable Student where
   empty = ixSet $ $(mapQ 'ixLitField [ 'studentId, 'studentClass, 'studentIndexNumber ]) ++ [
     ixFun $ (^. studentSubmission . ssCca),
     ixFun $ Set.toList . (^. studentSubjectCombi),
-    ixFun $ (:[]) . isJust . (^? studentSubmission . ssSignature),
     ixFun $ maybeToList . (^. studentWitnesser),
     ixFun $ textIndex True . (^. studentName)
     ]
