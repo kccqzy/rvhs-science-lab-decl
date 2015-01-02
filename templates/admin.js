@@ -1228,20 +1228,25 @@ $(function() {
             };
             return React_createElement("div",{},React_createElement("div",{
                 className: "row"
-            },React_createElement("div",{
-                className: "col-sm-11 col-md-8 col-lg-7"
-            },React_createElement("h4",{},"Which students would you like to see?"),React_createElement("form",{
+            },React_createElement("h4",{
+                className: "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2"
+            },"Which students would you like to see?")),React_createElement("form",{
                 role: "form",
-                id: "searchbyForm"
+                id: "searchbyForm",
+                className: "form-horizontal"
             },React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "class",
                 defaultChecked: true,
                 onChange: onRadioChange
-            }),"Search by class",((this.state.selected === "class") ?
+            }),"Search By Class"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "class") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "class"
@@ -1256,13 +1261,18 @@ $(function() {
                     className: "form-control",
                     disabled: true
                 })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "level",
+                defaultChecked: false,
                 onChange: onRadioChange
-            }),"Search by level",((this.state.selected === "level") ?
+            }),"Search By Level"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "level") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "level"
@@ -1278,32 +1288,42 @@ $(function() {
                     className: "form-control",
                     disabled: true
                 })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "name",
+                defaultChecked: false,
                 onChange: onRadioChange
-            }),"Search by approximate name (Add space if unsure)",((this.state.selected === "name") ?
+            }),"Search By Approx. Name"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "name") ?
                 React_createElement("input",{
                     type: "text",
                     className: "form-control",
                     name: "name",
-                    placeholder: "Enter an approximate name, e.g. Xin Yi"
+                    placeholder: "Enter an approximate name, e.g. Xin Yi",
+                    value: ""
                 }) :
                 React_createElement("input",{
                     type: "text",
                     className: "form-control",
-                    disabled: true,
-                    value: ""
+                    disabled: true
                 })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "subject",
+                defaultChecked: false,
                 onChange: onRadioChange
-            }),"Search by Subject",((this.state.selected === "subject") ?
+            }),"Search By Subject"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "subject") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "id"
@@ -1319,13 +1339,18 @@ $(function() {
                     className: "form-control",
                     disabled: true
                 })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "cca",
+                defaultChecked: false,
                 onChange: onRadioChange
-            }),"Search by CCA",((this.state.selected === "cca") ?
+            }),"Search By CCA"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "cca") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "id"
@@ -1339,13 +1364,18 @@ $(function() {
                     className: "form-control",
                     disabled: true
                 })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
+                className: "radio form-group"
+            },React_createElement("label",{
+                className: "col-sm-3 col-md-2 col-lg-2 control-label"
+            },React_createElement("input",{
                 type: "radio",
                 name: "searchby",
                 value: "teacher",
+                defaultChecked: false,
                 onChange: onRadioChange
-            }),"Search by witness",((this.state.selected === "teacher") ?
+            }),"Search By Witness"),React_createElement("div",{
+                className: "col-sm-9 col-md-7 col-lg-6"
+            },((this.state.selected === "teacher") ?
                 React_createElement("select",{
                     className: "form-control",
                     name: "id"
@@ -1362,7 +1392,7 @@ $(function() {
                 type: "submit",
                 className: "btn btn-primary",
                 onClick: onViewButtonClick
-            },"View")))),React_createElement("div",{
+            },"View")),React_createElement("div",{
                 className: "row"
             },React_createElement(EntityPage,{
                 wsUrl: ("/api/students?" + this.state.queryString),
