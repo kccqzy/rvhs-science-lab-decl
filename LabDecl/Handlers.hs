@@ -524,6 +524,18 @@ parsePngData bs = note "invalid image data" . hush $ do
   Png.decodePng d
   return $ CL.fromStrict d
 
+-- This does not check existence of ids. Only used for directly
+-- manipulating the referenced entities, not for creating foreign
+-- references.
+rawIdsField :: (HasPrimaryKey a i) => Field Handler [i]
+rawIdsField = checkMMap fw bw textField
+  where bw = undefined -- XXX
+        fw = return . parseIntList . T.encodeUtf8
+
+parseIntList :: (HasPrimaryKey a i) => C.ByteString -> Either T.Text [i]
+parseIntList = ((note "wrong id list" . hush) . ) . PC.parseOnly $
+               map idConstructor <$> PC.sepBy1 PC.decimal (PC.char ',') <* PC.endOfInput
+
 ccaIdField :: Field Handler CcaId
 ccaIdField = checkMMap fw bw intField
   where bw (CcaId i) = i
@@ -563,11 +575,11 @@ acidFormUpdateHandler :: (Acid.UpdateEvent ev,
                           ToJSON r, ToJSON e,
                           Acid.MethodResult ev ~ Either e r,
                           Acid.MethodState ev ~ Database) =>
-                         (i -> FormInput Handler a) ->
                          (Bool -> a -> ev) ->
-                         i -> Handler Value
-acidFormUpdateHandler form eventCon eid = do
-  entity <- runInputPost (form eid)
+                         FormInput Handler a ->
+                         Handler Value
+acidFormUpdateHandler eventCon form = do
+  entity <- runInputPost form
   force <- runInputPost (ireq checkBoxField "force")
   acidUpdateHandler $ eventCon force entity
 
@@ -577,7 +589,7 @@ getCcasR = acidQueryHandler ListCcas
 
 -- | Add new CCA. Requires admin.
 postCcasR :: Handler Value
-postCcasR = acidFormUpdateHandler ccaForm AddCca (CcaId 0)
+postCcasR = acidFormUpdateHandler AddCca $ ccaForm (CcaId 0)
 
 -- | Get information about a single Cca. Public.
 getCcaR :: CcaId -> Handler Value
@@ -585,32 +597,32 @@ getCcaR = acidQueryHandler . LookupCcaById
 
 -- | Edit CCA. Requires admin.
 putCcaR :: CcaId -> Handler Value
-putCcaR = acidFormUpdateHandler ccaForm ReplaceCca
+putCcaR = acidFormUpdateHandler ReplaceCca . ccaForm
 
 -- | Delete CCA. Requires Admin.
 deleteCcaR :: CcaId -> Handler Value
 deleteCcaR = acidUpdateHandler . RemoveCca
 
 deleteCcasR :: Handler Value
-deleteCcasR = acidUpdateHandler RemoveAllCcas
+deleteCcasR = acidFormUpdateHandler (const RemoveCcas) (iopt rawIdsField "ids")
 
 getSubjectsR :: Handler Value
 getSubjectsR = acidQueryHandler ListSubjects
 
 postSubjectsR :: Handler Value
-postSubjectsR = acidFormUpdateHandler subjectForm AddSubject (SubjectId 0)
+postSubjectsR = acidFormUpdateHandler AddSubject $ subjectForm (SubjectId 0)
 
 getSubjectR :: SubjectId -> Handler Value
 getSubjectR = acidQueryHandler . LookupSubjectById
 
 putSubjectR :: SubjectId -> Handler Value
-putSubjectR = acidFormUpdateHandler subjectForm ReplaceSubject
+putSubjectR = acidFormUpdateHandler ReplaceSubject . subjectForm
 
 deleteSubjectR :: SubjectId -> Handler Value
 deleteSubjectR = acidUpdateHandler . RemoveSubject
 
 deleteSubjectsR :: Handler Value
-deleteSubjectsR = acidUpdateHandler RemoveAllSubjects
+deleteSubjectsR = acidFormUpdateHandler (const RemoveSubjects) (iopt rawIdsField "ids")
 
 getTestDecodeR :: Handler Value
 getTestDecodeR = do
@@ -625,19 +637,19 @@ getTeachersR :: Handler Value
 getTeachersR = acidQueryHandler ListTeachers
 
 postTeachersR :: Handler Value
-postTeachersR = acidFormUpdateHandler teacherForm AddTeacher (TeacherId 0)
+postTeachersR = acidFormUpdateHandler AddTeacher $ teacherForm (TeacherId 0)
 
 getTeacherR :: TeacherId -> Handler Value
 getTeacherR = acidQueryHandler . LookupTeacherById
 
 putTeacherR :: TeacherId -> Handler Value
-putTeacherR = acidFormUpdateHandler teacherForm ReplaceTeacher
+putTeacherR = acidFormUpdateHandler ReplaceTeacher . teacherForm
 
 deleteTeacherR :: TeacherId -> Handler Value
 deleteTeacherR = acidUpdateHandler . RemoveTeacher
 
 deleteTeachersR :: Handler Value
-deleteTeachersR = acidUpdateHandler RemoveAllTeachers
+deleteTeachersR = acidFormUpdateHandler (const RemoveTeachers) (iopt rawIdsField "ids")
 
 getClassesR :: Handler Value
 getClassesR = acidQueryHandler PublicListClasses
@@ -653,7 +665,7 @@ getPublicStudentR klass index = do
 postStudentSubmitR :: StudentId -> Handler Value
 postStudentSubmitR sid = do
   pngData <- runInputPost studentSubmitPngForm
-  rv <- acidFormUpdateHandler studentSubmitForm (const PublicStudentDoSubmission) sid
+  rv <- acidFormUpdateHandler (const PublicStudentDoSubmission) $ studentSubmitForm sid
   acid <- getAcid <$> ask
   Just student <- liftIO $ Acid.query acid $ LookupStudentById sid
   allSubjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel $ let (Class (l, _)) = student ^. studentClass in l
@@ -704,19 +716,19 @@ getStudentsR = do
   acidQueryHandler ev
 
 postStudentsR :: Handler Value
-postStudentsR = acidFormUpdateHandler studentForm AddStudent (StudentId 0)
+postStudentsR = acidFormUpdateHandler AddStudent $ studentForm (StudentId 0)
 
 getStudentR :: StudentId -> Handler Value
 getStudentR = acidQueryHandler . LookupStudentById
 
 putStudentR :: StudentId -> Handler Value
-putStudentR = acidFormUpdateHandler studentForm ReplaceStudent
+putStudentR = acidFormUpdateHandler ReplaceStudent . studentForm
 
 deleteStudentR :: StudentId -> Handler Value
 deleteStudentR = acidUpdateHandler . RemoveStudent
 
 deleteStudentsR :: Handler Value
-deleteStudentsR = acidUpdateHandler RemoveAllStudents
+deleteStudentsR = acidFormUpdateHandler (const RemoveStudents) (iopt rawIdsField "ids")
 
 postUnlockSubmissionR :: StudentId -> Handler Value
 postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionOpen

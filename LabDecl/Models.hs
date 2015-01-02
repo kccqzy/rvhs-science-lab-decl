@@ -161,8 +161,8 @@ removeEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
 removeEntity i = dbField'._2 %= deleteIx i
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
--- | Remove all entities from a table. This physically deletes
--- everything.
+-- | Remove all entities from a table. This is a primitive operation
+-- that never fails.
 removeAllEntities :: forall a i. (HasPrimaryKey a i) => Proxy a -> IUpdate
 removeAllEntities _ = dbField'._2 .= empty
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
@@ -287,14 +287,14 @@ removeSubject = ensureIdExistThen removeEntity
 removeTeacher = ensureIdExistThen removeEntity
 removeStudent = ensureIdExistThen removeEntity
 
-removeAllCcas     :: IUpdate
-removeAllSubjects :: IUpdate
-removeAllTeachers :: IUpdate
-removeAllStudents :: IUpdate
-removeAllCcas     = removeAllEntities (Proxy :: Proxy Cca)
-removeAllSubjects = removeAllEntities (Proxy :: Proxy Subject)
-removeAllTeachers = removeAllEntities (Proxy :: Proxy Teacher)
-removeAllStudents = removeAllEntities (Proxy :: Proxy Student)
+removeCcas     :: Maybe [CcaId]     -> IUpdate
+removeSubjects :: Maybe [SubjectId] -> IUpdate
+removeTeachers :: Maybe [TeacherId] -> IUpdate
+removeStudents :: Maybe [StudentId] -> IUpdate
+removeCcas     = maybe (removeAllEntities (Proxy :: Proxy Cca))     (mapM_ removeCca)
+removeSubjects = maybe (removeAllEntities (Proxy :: Proxy Subject)) (mapM_ removeSubject)
+removeTeachers = maybe (removeAllEntities (Proxy :: Proxy Teacher)) (mapM_ removeTeacher)
+removeStudents = maybe (removeAllEntities (Proxy :: Proxy Student)) (mapM_ removeStudent)
 
 -- |
 -- = Public and Teacher (Restricted) Queries and Updates
@@ -393,10 +393,10 @@ eventNames = [
     'removeSubject,
     'removeTeacher,
     'removeStudent,
-    'removeAllCcas,
-    'removeAllSubjects,
-    'removeAllTeachers,
-    'removeAllStudents,
+    'removeCcas,
+    'removeSubjects,
+    'removeTeachers,
+    'removeStudents,
     'publicListClasses,
     'publicListStudentsFromClass,
     'publicLookupStudentByClassIndexNumber,
