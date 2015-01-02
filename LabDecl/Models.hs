@@ -350,23 +350,12 @@ publicStudentSubmissionPdfRendered sid filename = do
   replaceEntity True changedStudent
 
 
-teacherChangeSubmissionStatus :: (Student -> TL.Text) -> APrism' StudentSubmission a -> StudentSubmission -> StudentId -> IUpdate
-teacherChangeSubmissionStatus errMsg currentStatus newStatus sid = do
+teacherChangeSubmissionStatus :: StudentSubmission -> StudentId -> IUpdate
+teacherChangeSubmissionStatus newStatus sid = do
   maybeStudent <- liftQuery $ lookupStudentById sid
   student <- lift . note (errEntityNotExist (undefined :: Student)) $ maybeStudent
-  lift . note (errMsg student) . guard . not $ (currentStatus `isn't` (student ^. studentSubmission))
   let newStudent = student & studentSubmission .~ newStatus
   replaceEntity True newStudent
-
--- | Lets a teacher unlock submission. Submission must currently be
--- locked.
-teacherUnlockSubmission :: StudentId -> IUpdate
-teacherUnlockSubmission = teacherChangeSubmissionStatus errSubmissionNotLocked _SubmissionNotOpen SubmissionOpen
-
--- | Lets a teacher lock submission. Submission must currently be
--- unlocked.
-teacherLockSubmission :: StudentId -> IUpdate
-teacherLockSubmission = teacherChangeSubmissionStatus errSubmissionNotUnlocked _SubmissionOpen SubmissionNotOpen
 
 
 -- |
@@ -429,6 +418,5 @@ eventNames = [
     'publicLookupStudentByClassIndexNumber,
     'publicStudentDoSubmission,
     'publicStudentSubmissionPdfRendered,
-    'teacherUnlockSubmission,
-    'teacherLockSubmission
+    'teacherChangeSubmissionStatus
     ]

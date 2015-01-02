@@ -261,6 +261,8 @@
    ;; The target for rendering the Modal.
    (defun getModalWrapper () (-> ($ "#modal-wrapper") (.get 0)))
 
+   (defun dismissModal () (-> ($ "#modal") (.modal "hide")))
+
    ;; An action modal, with custom content, a Cancel button and an
    ;; action button.
    (defcomponent ActionModal
@@ -281,7 +283,7 @@
        (defun onActionButtonClick (e)
          (e.preventDefault)
          (defun setSpinner (v) (that.setState (obj spinner v)))
-         (that.props.next (fn () (-> ($ "#modal") (.modal "hide"))) setSpinner))
+         (that.props.next (fn () (dismissModal)) setSpinner))
        (defvar buttons
          (e "div" ()
            ;; Note that we must render both elements in both cases
@@ -776,12 +778,16 @@
      propTypes
      (obj
       sub React_PropTypes.object.isRequired
-      ccaInfo React_PropTypes.object.isRequired)
+      ccaInfo React_PropTypes.object.isRequired
+      onLockClick React_PropTypes.func.isRequired
+      onUnlockClick React_PropTypes.func.isRequired)
      render
      (fn ()
        (defvar that this)
        (defvar button
          (e "button" (type "button" className "btn btn-default" "data-dismiss" "modal") "OK"))
+       (defun onLockClick () (that.props.onLockClick) (dismissModal))
+       (defun onUnlockClick () (that.props.onUnlockClick) (dismissModal))
        (e Modal (canClose true title "Student-Submitted Information" buttons button)
          (e "table" (className "table")
            (e "tbody" ()
@@ -792,7 +798,13 @@
              (e "tr" ()
                (e "th" () "Date of Submission") (e "td" () this.props.sub.date))
              (e "tr" ()
-               (e "th" () "CCAs") (e "td" () (|| (-> (__map this.props.sub.cca (fn (s) (.name (lookupForeign that.props.ccaInfo s)))) (.join ", ")) "None"))))))))
+               (e "th" () "CCAs") (e "td" () (|| (-> (__map this.props.sub.cca (fn (s) (.name (lookupForeign that.props.ccaInfo s)))) (.join ", ")) "None")))
+             (e "tr" ()
+               (e "th" () "Delete Submission")
+               (e "td" ()
+                 (e "div" (className "btn-toolbar" role "toolbar")
+                   (e "button" (type "button" className "btn btn-default" onClick onUnlockClick) "Delete and Unlock")
+                   (e "button" (type "button" className "btn btn-default" onClick onLockClick) "Delete and Lock")))))))))
 
    (defvar pageSpec
      (obj "/admin"
@@ -895,15 +907,15 @@
                                 ($.ajax (+ (+ "/api/students/" entity.id) "/lock") (obj type "POST")))
                               (defun onCompleteClick ()
                                 (React.render
-                                 (e SubmissionCompleteModal (ccaInfo that.ccaInfo sub sub))
+                                 (e SubmissionCompleteModal (ccaInfo that.ccaInfo sub sub onLockClick onLockClick onUnlockClick onUnlockClick))
                                  (getModalWrapper)))
                               (e "div" (className "btn-group" role "toolbar" "aria-label" "Status Buttons")
                                 (cond (= sub.tag "SubmissionNotOpen")
-                                      (e "button" (type "button" className "btn btn-danger btn-xs active" onClick onUnlockClick title "Click to unlock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Locked")))
+                                      (e "button" (type "button" className "btn btn-danger btn-xs" onClick onUnlockClick title "Click to unlock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Locked")))
                                       (= sub.tag "SubmissionOpen")
                                       (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Unlocked")))
                                       (= sub.tag "SubmissionCompleted")
-                                      (e "button" (type "button" className "btn btn-success btn-xs active" onClick onCompleteClick title "Click to view submitted information.") completeicon (e "span" (className "presentation-text" "data-text" " Completed"))))))
+                                      (e "button" (type "button" className "btn btn-success btn-xs" onClick onCompleteClick title "Click to view submitted information.") completeicon (e "span" (className "presentation-text" "data-text" " Completed"))))))
                             "Status"))))))
 
    (defcomponent Page

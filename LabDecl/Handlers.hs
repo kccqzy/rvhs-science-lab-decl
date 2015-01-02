@@ -715,10 +715,10 @@ deleteStudentsR :: Handler Value
 deleteStudentsR = acidUpdateHandler RemoveAllStudents
 
 postUnlockSubmissionR :: StudentId -> Handler Value
-postUnlockSubmissionR = acidUpdateHandler . TeacherUnlockSubmission
+postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionOpen
 
 postLockSubmissionR :: StudentId -> Handler Value
-postLockSubmissionR = acidUpdateHandler . TeacherLockSubmission
+postLockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionNotOpen
 
 postManyStudentsR :: Handler Value
 postManyStudentsR = do

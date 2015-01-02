@@ -319,6 +319,9 @@ $(function() {
     var getModalWrapper = function() {
         return ($("#modal-wrapper")).get(0);
     };
+    var dismissModal = function() {
+        return ($("#modal")).modal("hide");
+    };
     var ActionModal = React_createClass(_.defaults({
         propTypes: {
             actionButtonType: React_PropTypes.string,
@@ -343,7 +346,7 @@ $(function() {
                     });
                 };
                 return that.props.next(function() {
-                    return ($("#modal")).modal("hide");
+                    return dismissModal();
                 },setSpinner);
             };
             var buttons = React_createElement("div",{},React_createElement("img",{
@@ -1367,7 +1370,9 @@ $(function() {
     var SubmissionCompleteModal = React_createClass(_.defaults({
         propTypes: {
             sub: React_PropTypes.object.isRequired,
-            ccaInfo: React_PropTypes.object.isRequired
+            ccaInfo: React_PropTypes.object.isRequired,
+            onLockClick: React_PropTypes.func.isRequired,
+            onUnlockClick: React_PropTypes.func.isRequired
         },
         render: function() {
             var that = this;
@@ -1376,6 +1381,14 @@ $(function() {
                 className: "btn btn-default",
                 "data-dismiss": "modal"
             },"OK");
+            var onLockClick = function() {
+                that.props.onLockClick();
+                return dismissModal();
+            };
+            var onUnlockClick = function() {
+                that.props.onUnlockClick();
+                return dismissModal();
+            };
             return React_createElement(Modal,{
                 canClose: true,
                 title: "Student-Submitted Information",
@@ -1384,7 +1397,18 @@ $(function() {
                 className: "table"
             },React_createElement("tbody",{},React_createElement("tr",{},React_createElement("th",{},"Email"),React_createElement("td",{},this.props.sub.email)),React_createElement("tr",{},React_createElement("th",{},"Phone Number"),React_createElement("td",{},this.props.sub.phone)),React_createElement("tr",{},React_createElement("th",{},"Date of Submission"),React_createElement("td",{},this.props.sub.date)),React_createElement("tr",{},React_createElement("th",{},"CCAs"),React_createElement("td",{},((__map(this.props.sub.cca,function(s) {
                 return (lookupForeign(that.props.ccaInfo,s)).name;
-            })).join(", ") || "None"))))));
+            })).join(", ") || "None"))),React_createElement("tr",{},React_createElement("th",{},"Delete Submission"),React_createElement("td",{},React_createElement("div",{
+                className: "btn-toolbar",
+                role: "toolbar"
+            },React_createElement("button",{
+                type: "button",
+                className: "btn btn-default",
+                onClick: onUnlockClick
+            },"Delete and Unlock"),React_createElement("button",{
+                type: "button",
+                className: "btn btn-default",
+                onClick: onLockClick
+            },"Delete and Lock")))))));
         }
     },{
         render: function() {
@@ -1639,7 +1663,9 @@ $(function() {
                             var onCompleteClick = function() {
                                 return React.render(React_createElement(SubmissionCompleteModal,{
                                     ccaInfo: that.ccaInfo,
-                                    sub: sub
+                                    sub: sub,
+                                    onLockClick: onLockClick,
+                                    onUnlockClick: onUnlockClick
                                 }),getModalWrapper());
                             };
                             return React_createElement("div",{
@@ -1649,7 +1675,7 @@ $(function() {
                             },((sub.tag === "SubmissionNotOpen") ?
                                 React_createElement("button",{
                                     type: "button",
-                                    className: "btn btn-danger btn-xs active",
+                                    className: "btn btn-danger btn-xs",
                                     onClick: onUnlockClick,
                                     title: "Click to unlock submission."
                                 },lockicon,React_createElement("span",{
@@ -1669,7 +1695,7 @@ $(function() {
                                     ((sub.tag === "SubmissionCompleted") ?
                                         React_createElement("button",{
                                             type: "button",
-                                            className: "btn btn-success btn-xs active",
+                                            className: "btn btn-success btn-xs",
                                             onClick: onCompleteClick,
                                             title: "Click to view submitted information."
                                         },completeicon,React_createElement("span",{

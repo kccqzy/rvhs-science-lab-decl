@@ -53,14 +53,6 @@ errEntityNotExist what = [stext| The #{whatName} referenced in the
   error. If you’re using the JSON REST API, check the id again. |]
   where whatName = T.toLower . T.pack . show $ what
 
-errSubmissionNotUnlocked student = [stext| Cannot lock submission for
-  student “#{student ^. studentName}” because it is not unlocked in
-  the first place. |]
-
-errSubmissionNotLocked student = [stext| Cannot unlock submission for
-  student “#{student ^. studentName}” because it is not locked in the
-  first place. |]
-
 errInvalidPublicSubmission = [stext| “You don’t try to game the
   system!” Mrs Look shouts. Uh-oh. ;( But then of course, every
   teenager has some anti-authority, anti-establishment streak. So it’s
