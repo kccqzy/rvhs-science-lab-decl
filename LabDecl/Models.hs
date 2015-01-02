@@ -154,17 +154,11 @@ unsafeAddEntity a = dbField %= \(ctr, ixset) ->
 unsafeAddEntityKeepId :: (HasPrimaryKey a i) => a -> IUpdate
 unsafeAddEntityKeepId a = dbField._2 %= IxSet.insert a
 
--- | Remove an entity from a table. It only logically deletes the
--- entity by setting the id to zero, ensuring it will never be found
--- via a normal lookup. It is not an error to delete nonexistent or
--- already deleted entities. This is a primitive operation that never
+-- | Remove an entity from a table. It is not an error to delete
+-- nonexistent entities. This is a primitive operation that never
 -- fails.
 removeEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
-removeEntity i = do
-  maybeEntity <- liftQuery $ searchUniqueEntityEq i
-  case maybeEntity of
-   Nothing -> return ()
-   Just entity -> dbField'._2 %= updateIx i (entity & idField .~ idConstructor 0)
+removeEntity i = dbField'._2 %= deleteIx i
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
 -- | Remove all entities from a table. This physically deletes
@@ -360,24 +354,11 @@ teacherChangeSubmissionStatus newStatus sid = do
   replaceEntity True newStudent
 
 
--- |
--- = Internal Operations
-
--- | Maintenance work: scrubbing dead foreign references.
-internalScrubDeadReferences :: IUpdate
-internalScrubDeadReferences = lift $ Left "internalScrubDeadReferences: unimplemented"
-
--- | Physically delete the logically deleted entities.
-internalPhysicalDelete :: IUpdate
-internalPhysicalDelete = lift $ Left "internalPhysicalDelete: unimplemented"
-
 -- ============================================================
 
 -- | The exported update/query event names. These events will be made
 -- acidic, and they do not contain type variables.
 eventNames = [
-    'internalScrubDeadReferences,
-    'internalPhysicalDelete,
     'listNothing,
     'listCcas,
     'listSubjects,
