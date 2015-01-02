@@ -12,6 +12,7 @@ import Control.Exception (SomeException)
 import Control.Lens
 import Control.Concurrent.STM
 import Control.Concurrent.Async
+import Control.Concurrent
 import Data.Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -135,7 +136,9 @@ generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir
                 Process.std_out = Process.UseHandle devNullW,
                 Process.std_err = Process.UseHandle devNullW }
           (_, _, _, ph) <- Process.createProcess texProcess
+          timer <- async (threadDelay 300000000 >> Process.terminateProcess ph)
           ec <- Process.waitForProcess ph
+          cancel timer
           hClose devNullR
           hClose devNullW
           return ec
