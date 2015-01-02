@@ -18,10 +18,8 @@ $(function() {
         var connect = function() {
             return (((Date.now() - timeConnected) > 2000) ?
                 (function() {
+                    timeConnected = Date.now();
                     conn = new WebSocket(wsUrl);
-                    conn.onopen = function() {
-                        timeConnected = Date.now();
-                    };
                     conn.onmessage = callback;
                     conn.onerror = function() {
                         console.log("WS connection errored.");

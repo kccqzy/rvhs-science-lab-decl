@@ -48,8 +48,8 @@
      (defun connect ()
        (if (> (- (Date.now) timeConnected) 2000)
          (do
+           (set timeConnected (Date.now))
            (set conn (new WebSocket wsUrl))
-           (set conn.onopen (fn () (set timeConnected (Date.now))))
            (set conn.onmessage callback)
            (set conn.onerror (fn ()
                                (console.log "WS connection errored.")
