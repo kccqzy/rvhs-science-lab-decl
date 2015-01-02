@@ -656,7 +656,10 @@ postStudentSubmitR sid = do
   acid <- getAcid <$> ask
   Just student <- liftIO $ Acid.query acid $ LookupStudentById sid
   allSubjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel $ let (Class (l, _)) = student ^. studentClass in l
-  let subjects = Set.filter (\s -> isNothing (s ^. subjectCode) || (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi)) allSubjects
+  let subjects = (`Set.filter` allSubjects) $
+                 \s -> (s ^. subjectIsScience) &&
+                       (isNothing (s ^. subjectCode) ||
+                        (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi))
   asyncQueue <- getAsyncQueue <$> ask
   liftIO . atomically $ writeTQueue asyncQueue (student, subjects, pngData)
   return rv
