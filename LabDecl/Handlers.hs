@@ -680,6 +680,9 @@ searchByField = checkMMap fw bw textField
            "class" -> do
              klass <- runInputGet (ireq classField "class")
              checkMMapOk . QueryEvent crit $ ListStudentsFromClass klass
+           "level" -> do
+             level <- runInputGet (ireq intField "level")
+             checkMMapOk . QueryEvent crit $ ListStudentsByLevel level
            "cca" -> do
              cid <- runInputGet (ireq intField "id")
              checkMMapOk . QueryEvent crit $ ListStudentsFromCca (CcaId cid)

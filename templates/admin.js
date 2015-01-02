@@ -1260,6 +1260,28 @@ $(function() {
             },React_createElement("label",{},React_createElement("input",{
                 type: "radio",
                 name: "searchby",
+                value: "level",
+                onChange: onRadioChange
+            }),"Search by level",((this.state.selected === "level") ?
+                React_createElement("select",{
+                    className: "form-control",
+                    name: "level"
+                },__map(_.uniq(auxiliary.classInfo.data,false,function(k) {
+                    return k[0];
+                }),function(klass) {
+                    return React_createElement("option",{
+                        value: klass[0],
+                        key: klass[0]
+                    },"Year ",klass[0]);
+                })) :
+                React_createElement("select",{
+                    className: "form-control",
+                    disabled: true
+                })))),React_createElement("div",{
+                className: "radio"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "radio",
+                name: "searchby",
                 value: "name",
                 onChange: onRadioChange
             }),"Search by approximate name (Add space if unsure)",((this.state.selected === "name") ?
@@ -1336,14 +1358,7 @@ $(function() {
                 React_createElement("select",{
                     className: "form-control",
                     disabled: true
-                })))),React_createElement("div",{
-                className: "radio"
-            },React_createElement("label",{},React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "all",
-                onChange: onRadioChange
-            }),"View ",React_createElement("em",{},"all")," students. (",React_createElement("strong",{},"NOT RECOMMENDED:")," very taxing on the network)")),React_createElement("button",{
+                })))),React_createElement("button",{
                 type: "submit",
                 className: "btn btn-primary",
                 onClick: onViewButtonClick

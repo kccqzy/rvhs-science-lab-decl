@@ -102,6 +102,7 @@ lookupSubjectByCodeLevel code level               = unique <$> searchEntities [(
 lookupStudentByClassIndexNumber klass indexNumber = unique <$> searchEntities [(@= klass), (@= indexNumber)]
 
 listSubjectsByLevel       :: Int       -> IQuery (Set Subject)
+listStudentsByLevel       :: Int       -> IQuery (Set Student)
 listStudentsFromClass     :: Class     -> IQuery (Set Student)
 listStudentsFromCca       :: CcaId     -> IQuery (Set Student)
 listStudentsWithSubject   :: SubjectId -> IQuery (Set Student)
@@ -113,6 +114,7 @@ listStudentsFromCca       = searchEntitiesEq
 listStudentsWithSubject   = searchEntitiesEq
 listStudentsWithWitnesser = searchEntitiesEq
 listStudentsByStatus      = searchEntitiesEq
+listStudentsByLevel     l = searchEntities [(@>=<= (Class (l, 'A'), Class (l, 'Z')))]
 
 searchStudentsByName :: T.Text -> IQuery (Set Student)
 searchStudentsByName name = searchEntities [(@* textIndex False name)]
@@ -395,6 +397,7 @@ eventNames = [
     'listStudentsWithSubject,
     'listStudentsWithWitnesser,
     'listStudentsByStatus,
+    'listStudentsByLevel,
     'searchStudentsByName,
     'addCca,
     'addSubject,
