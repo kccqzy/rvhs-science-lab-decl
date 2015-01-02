@@ -205,11 +205,13 @@ $(function () {
                 ctx.lineCap = "round";
                 ctx.lineWidth = 2 * scaleFactor;
                 var currentStroke = [];
+                var hasDrawn = false;
 
                 var drawZigzag = function(stroke) {
                     ctx.moveTo.apply(ctx, stroke[0]);
                     $.each(stroke.slice(1), function (_, a) {ctx.lineTo.apply(ctx, a);});
                     ctx.stroke();
+                    hasDrawn = true;
                 };
 
                 var makeBSpline = function (currentStroke, ipps) {
@@ -251,11 +253,15 @@ $(function () {
                 });
 
                 $("#form").off("submit").on("submit", function () {
-                    $("#submit-signature").val(canvas.toDataURL("image/png"));
-                    $("#submit-ua").val(navigator.userAgent);
-                    $.post("/api/students/" + studentData.id + "/submit", $(this).serialize(), function () {
-                        pageController.forward();
-                    });
+                    if (hasDrawn) {
+                        $("#submit-signature").val(canvas.toDataURL("image/png"));
+                        $("#submit-ua").val(navigator.userAgent);
+                        $.post("/api/students/" + studentData.id + "/submit", $(this).serialize(), function () {
+                            pageController.forward();
+                        });
+                    } else {
+                        alert("You have not signed yet.");
+                    }
                     return false;
                 });
             })
