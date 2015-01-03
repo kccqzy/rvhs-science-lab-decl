@@ -142,7 +142,8 @@
      (obj
       conn React_PropTypes.object.isRequired
       entityEditor React_PropTypes.any.isRequired
-      auxiliary React_PropTypes.object)
+      auxiliary React_PropTypes.object
+      customFilter React_PropTypes.func)
 
      ;; Assume no data for initial state.
      getInitialState
@@ -157,7 +158,7 @@
           (that.setState (obj tableData d)))))
 
      ;; When updated, it is probably because a new connection is here;
-     ;; re-register the callback.
+     ;; re-register the callback. It doesn't hurt to register again.
      componentDidUpdate
      (fn ()
        (defvar that this)
@@ -179,7 +180,7 @@
      (fn ()
        (defvar that this)
        (defvar dataSpec (.dataSpec (get window.location.pathname pageSpec)))
-       (defvar rawData this.state.tableData.data)
+       (defvar rawData ((|| this.props.customFilter _.identity) this.state.tableData.data))
        (defvar rows (if (null? dataSpec.categoryColumn)
                       (do ; no category column, one row per entry
                           ; without using EntityCategory
@@ -593,7 +594,8 @@
      (obj
       customButtons React_PropTypes.node
       wsUrl React_PropTypes.string
-      auxiliary React_PropTypes.object)
+      auxiliary React_PropTypes.object
+      customFilter React_PropTypes.func)
 
      getInitialState
      (fn ()
@@ -635,7 +637,7 @@
              (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All")))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
-         (e EntityTable (conn this.state.conn entityEditor editor auxiliary this.props.auxiliary))))
+         (e EntityTable (conn this.state.conn entityEditor editor auxiliary this.props.auxiliary customFilter this.props.customFilter))))
 
      ;; Prevent establishing a new connection every time this is
      ;; rerendered.
@@ -678,6 +680,7 @@
        (defvar emptyData (obj data (array)))
        (obj queryString "searchby=none"
             selected "class"
+            hideWithoutWitness true
             ccaConn ccaConn
             teacherConn teacherConn
             subjectConn subjectConn
@@ -703,6 +706,13 @@
        (defun onRadioChange (e)
          (if e.target.checked
            (that.setState (obj selected e.target.value))))
+       (defun onCheckClick (e)
+         (console.log e.target.checked)
+         (that.setState (obj hideWithoutWitness e.target.checked)))
+       (defun customFilter (data)
+         (if that.state.hideWithoutWitness
+           (_.filter data (fn (d) d.witnesser))
+           data))
        (defun onViewButtonClick (e)
          (e.preventDefault)
          (that.setState (obj queryString (-> ($ "#searchbyForm") (.serialize)))))
@@ -718,9 +728,10 @@
                   ~helpText)
                 (e "div" (className "col-sm-9 col-md-7 col-lg-6")
                   (if (= this.state.selected ~radioValue) ~innerActivated ~innerDeactivated))))
+       (defvar offsetClassName "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2")
        (e "div" ()
          (e "div" (className "row")
-           (e "h4" (className "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2") "Which students would you like to see?"))
+           (e "h4" (className offsetClassName) "Which students would you like to see?"))
          (e "form" (role "form" id "searchbyForm" className "form-horizontal")
            (radiodetail "class" true "Search By Class" (e "select" (className "form-control" disabled true))
                         (e "select" (className "form-control" name "class")
@@ -751,9 +762,16 @@
                           (__map auxiliary.teacherInfo.data
                                  (fn (teacher)
                                    (e "option" (value teacher.id key teacher.id) teacher.name " (" teacher.witness_name ")")))))
-           (e "button" (type "submit" className "btn btn-primary" onClick onViewButtonClick) "View"))
+           (e "div" (className "form-group")
+             (e "div" (className offsetClassName)
+               (e "div" (className "checkbox")
+                 (e "label" ()
+                   (e "input" (type "checkbox" defaultChecked true onChange onCheckClick) " Hide Students Without Witness")))))
+           (e "div" (className "form-group")
+             (e "div" (className offsetClassName)
+               (e "button" (type "submit" className "btn btn-primary" onClick onViewButtonClick) "View"))))
          (e "div" (className "row")
-           (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary customButtons customButtons))))))
+           (e EntityPage (wsUrl (+ "/api/students?" this.state.queryString) auxiliary auxiliary customButtons customButtons customFilter customFilter))))))
 
    (defun lookupForeign (dataset id)
      (|| (_.find dataset.data (fn (v) (= id v.id))) "??"))

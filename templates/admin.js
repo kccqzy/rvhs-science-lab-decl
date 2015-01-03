@@ -162,7 +162,8 @@ $(function() {
         propTypes: {
             conn: React_PropTypes.object.isRequired,
             entityEditor: React_PropTypes.any.isRequired,
-            auxiliary: React_PropTypes.object
+            auxiliary: React_PropTypes.object,
+            customFilter: React_PropTypes.func
         },
         getInitialState: function() {
             return {
@@ -198,7 +199,7 @@ $(function() {
         render: function() {
             var that = this;
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var rawData = this.state.tableData.data;
+            var rawData = (this.props.customFilter || _.identity)(this.state.tableData.data);
             var rows = ((dataSpec.categoryColumn === null) ?
                 (function() {
                     var sortName = dataSpec.columns[0][0];
@@ -1030,7 +1031,8 @@ $(function() {
         propTypes: {
             customButtons: React_PropTypes.node,
             wsUrl: React_PropTypes.string,
-            auxiliary: React_PropTypes.object
+            auxiliary: React_PropTypes.object,
+            customFilter: React_PropTypes.func
         },
         getInitialState: function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
@@ -1093,7 +1095,8 @@ $(function() {
                 null),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: this.state.conn,
                 entityEditor: editor,
-                auxiliary: this.props.auxiliary
+                auxiliary: this.props.auxiliary,
+                customFilter: this.props.customFilter
             }));
         },
         shouldComponentUpdate: function(newProps) {
@@ -1182,6 +1185,7 @@ $(function() {
             return {
                 queryString: "searchby=none",
                 selected: "class",
+                hideWithoutWitness: true,
                 ccaConn: ccaConn,
                 teacherConn: teacherConn,
                 subjectConn: subjectConn,
@@ -1213,6 +1217,19 @@ $(function() {
                     }) :
                     undefined);
             };
+            var onCheckClick = function(e) {
+                console.log(e.target.checked);
+                return that.setState({
+                    hideWithoutWitness: e.target.checked
+                });
+            };
+            var customFilter = function(data) {
+                return (that.state.hideWithoutWitness ?
+                    _.filter(data,function(d) {
+                        return d.witnesser;
+                    }) :
+                    data);
+            };
             var onViewButtonClick = function(e) {
                 e.preventDefault();
                 return that.setState({
@@ -1225,10 +1242,11 @@ $(function() {
                 subjectInfo: that.state.subjectInfo,
                 classInfo: that.state.classInfo
             };
+            var offsetClassName = "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2";
             return React_createElement("div",{},React_createElement("div",{
                 className: "row"
             },React_createElement("h4",{
-                className: "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2"
+                className: offsetClassName
             },"Which students would you like to see?")),React_createElement("form",{
                 role: "form",
                 id: "searchbyForm",
@@ -1387,16 +1405,31 @@ $(function() {
                 React_createElement("select",{
                     className: "form-control",
                     disabled: true
-                })))),React_createElement("button",{
+                })))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("div",{
+                className: offsetClassName
+            },React_createElement("div",{
+                className: "checkbox"
+            },React_createElement("label",{},React_createElement("input",{
+                type: "checkbox",
+                defaultChecked: true,
+                onChange: onCheckClick
+            }," Hide Students Without Witness"))))),React_createElement("div",{
+                className: "form-group"
+            },React_createElement("div",{
+                className: offsetClassName
+            },React_createElement("button",{
                 type: "submit",
                 className: "btn btn-primary",
                 onClick: onViewButtonClick
-            },"View")),React_createElement("div",{
+            },"View")))),React_createElement("div",{
                 className: "row"
             },React_createElement(EntityPage,{
                 wsUrl: ("/api/students?" + this.state.queryString),
                 auxiliary: auxiliary,
-                customButtons: customButtons
+                customButtons: customButtons,
+                customFilter: customFilter
             })));
         }
     },{
