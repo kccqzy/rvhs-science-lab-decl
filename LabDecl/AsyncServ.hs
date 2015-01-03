@@ -163,7 +163,7 @@ generateMail student pdf = do
   let mailTo =
         case student ^? studentSubmission . ssEmail of
          Nothing -> error "renderMail: Cannot render for a student who has not completed submission."
-         Just (Email e) -> T.concat [ student ^. studentName, " <", e, ">" ]
+         Just (Email e) -> e
   let mailSender = "River Valley High School Science Department <rvhs.science.oracle@gmail.com>"
   let mailSubject = "Completion of Science Lab Undertaking Form"
   let mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed declaration form is in the attachment for your reference."
