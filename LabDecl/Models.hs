@@ -353,6 +353,8 @@ teacherChangeSubmissionStatus newStatus sid = do
   let newStudent = student & studentSubmission .~ newStatus
   replaceEntity True newStudent
 
+teacherChangeManySubmissionStatus :: StudentSubmission -> [StudentId] -> IUpdate
+teacherChangeManySubmissionStatus newStatus = mapM_ (teacherChangeSubmissionStatus newStatus)
 
 -- ============================================================
 
@@ -402,5 +404,6 @@ eventNames = [
     'publicLookupStudentByClassIndexNumber,
     'publicStudentDoSubmission,
     'publicStudentSubmissionPdfRendered,
-    'teacherChangeSubmissionStatus
+    'teacherChangeSubmissionStatus,
+    'teacherChangeManySubmissionStatus
     ]

@@ -172,7 +172,7 @@ $(function() {
                 }
             };
         },
-        componentDidMount: function() {
+        registerCallback: function() {
             var that = this;
             return this.props.conn.registerCallback(function(d) {
                 return that.setState({
@@ -180,13 +180,11 @@ $(function() {
                 });
             });
         },
+        componentDidMount: function() {
+            return this.registerCallback();
+        },
         componentDidUpdate: function() {
-            var that = this;
-            return this.props.conn.registerCallback(function(d) {
-                return that.setState({
-                    tableData: d
-                });
-            });
+            return this.registerCallback();
         },
         componentWillUnmount: function() {
             return this.props.conn.close();
@@ -204,6 +202,9 @@ $(function() {
                 (function() {
                     var sortName = dataSpec.columns[0][0];
                     var massagedData = _.sortBy(rawData,sortName);
+                    console.log(that.state.tableData);
+                    console.log(rawData);
+                    console.log(massagedData);
                     return React_createElement("tbody",{},__map(massagedData,function(entity) {
                         return React_createElement(EntityRow,{
                             firstRowSpan: 1,
@@ -235,12 +236,17 @@ $(function() {
                         });
                     });
                 })());
+            var displayColumnName = function(columnName) {
+                return ((Object.prototype.toString.call(columnName) === "[object Function]") ?
+                    columnName(rawData) :
+                    columnName);
+            };
             var headers = __map((((dataSpec.categoryColumn === null) ?
                 [] :
                 [
-                    dataSpec.categoryColumn[2]
+                    displayColumnName(dataSpec.categoryColumn[2])
                 ])).concat(__map(dataSpec.columns,function(v) {
-                return v[2];
+                return displayColumnName(v[2]);
             })),function(label,idx) {
                 return React_createElement("th",{
                     key: idx
@@ -629,7 +635,7 @@ $(function() {
                         err: resp.meta.details
                     });
                 };
-                return $.ajax("/api/students/many",{
+                return $.ajax("/api/students/csv",{
                     type: "POST",
                     data: formData,
                     contentType: false,
@@ -1091,7 +1097,7 @@ $(function() {
                     type: "button",
                     className: "btn btn-default",
                     onClick: onRemoveAllButtonClick
-                },"Remove All")) :
+                },"Remove All (Even If Not Shown)")) :
                 null),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: this.state.conn,
                 entityEditor: editor,
@@ -1781,7 +1787,51 @@ $(function() {
                                         })) :
                                         undefined))));
                         },
-                        "Status"
+                        function(rawData) {
+                            var lockicon = React_createElement("span",{
+                                className: "glyphicon glyphicon-lock",
+                                "aria-hidden": "true"
+                            });
+                            var completeicon = React_createElement("span",{
+                                className: "glyphicon glyphicon-ok",
+                                "aria-hidden": "true"
+                            });
+                            var onUnlockAllClick = function() {
+                                var ids = (__map(rawData,"id")).join(",");
+                                return $.ajax("/api/students/many/unlock",{
+                                    type: "POST",
+                                    data: {
+                                        ids: ids
+                                    }
+                                });
+                            };
+                            var onLockAllClick = function() {
+                                var ids = (__map(rawData,"id")).join(",");
+                                return $.ajax("/api/students/many/lock",{
+                                    type: "POST",
+                                    data: {
+                                        ids: ids
+                                    }
+                                });
+                            };
+                            return React_createElement("span",{},React_createElement("button",{
+                                type: "button",
+                                className: "btn btn-primary btn-xs",
+                                onClick: onUnlockAllClick,
+                                title: "Click to unlock submission for all."
+                            },lockicon,React_createElement("span",{
+                                className: "presentation-text",
+                                "data-text": " Unlock All"
+                            }))," ",React_createElement("button",{
+                                type: "button",
+                                className: "btn btn-danger btn-xs",
+                                onClick: onLockAllClick,
+                                title: "Click to lock submission for all."
+                            },lockicon,React_createElement("span",{
+                                className: "presentation-text",
+                                "data-text": " Lock All"
+                            })));
+                        }
                     ]
                 ]
             }

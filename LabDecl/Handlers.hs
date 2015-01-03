@@ -106,8 +106,10 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/classes/#Class       ClassR         GET
 /api/classes/#Class/#Int  PublicStudentR GET
 /api/students             StudentsR      GET POST DELETE
-/api/students/many        ManyStudentsR  POST
+/api/students/csv         ManyStudentsR  POST
 !/api/students/#StudentId StudentR       GET PUT DELETE
+!/api/students/many/lock   LockManySubmissionsR POST
+!/api/students/many/unlock UnlockManySubmissionsR POST
 /api/students/#StudentId/submit      StudentSubmitR POST
 /api/students/#StudentId/unlock      UnlockSubmissionR POST
 /api/students/#StudentId/lock        LockSubmissionR POST
@@ -735,6 +737,12 @@ postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus Submis
 
 postLockSubmissionR :: StudentId -> Handler Value
 postLockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionNotOpen
+
+postLockManySubmissionsR :: Handler Value
+postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionNotOpen)) (ireq rawIdsField "ids")
+
+postUnlockManySubmissionsR :: Handler Value
+postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionOpen)) (ireq rawIdsField "ids")
 
 postManyStudentsR :: Handler Value
 postManyStudentsR = do

@@ -149,22 +149,21 @@
      getInitialState
      (fn () (obj tableData (obj data (array))))
 
-     ;; When mounted, add callback and event handlers.
-     componentDidMount
+     registerCallback
      (fn ()
        (defvar that this)
        (this.props.conn.registerCallback
         (fn (d)
           (that.setState (obj tableData d)))))
 
+     ;; When mounted, add callback and event handlers.
+     componentDidMount
+     (fn () (this.registerCallback))
+
      ;; When updated, it is probably because a new connection is here;
      ;; re-register the callback. It doesn't hurt to register again.
      componentDidUpdate
-     (fn ()
-       (defvar that this)
-       (this.props.conn.registerCallback
-        (fn (d)
-          (that.setState (obj tableData d)))))
+     (fn () (this.registerCallback))
 
      ;; Close connection as appropriate.
      componentWillUnmount
@@ -186,6 +185,9 @@
                           ; without using EntityCategory
                         (defvar sortName (get 0 (get 0 dataSpec.columns)))
                         (defvar massagedData (_.sortBy rawData sortName))
+                        (console.log that.state.tableData)
+                        (console.log rawData)
+                        (console.log massagedData)
                         (e "tbody" ()
                           (__map massagedData
                                  (fn (entity)
@@ -209,10 +211,13 @@
                                  (defvar category (get categoryName (get 0 entities)))
                                  (e EntityCategory (entities entities entityEditor that.props.entityEditor auxiliary that.props.auxiliary key category)))))))
 
+       (defun displayColumnName (columnName)
+         (if (function? columnName) (columnName rawData) columnName))
        (defvar headers (__map (-> (if (null? dataSpec.categoryColumn)
                                     (array)
-                                    (array (get 2 dataSpec.categoryColumn)))
-                                  (.concat (__map dataSpec.columns (fn (v) (get 2 v)))))
+                                    (array (displayColumnName (get 2 dataSpec.categoryColumn))))
+                                  (.concat (__map dataSpec.columns
+                                                  (fn (v) (displayColumnName (get 2 v))))))
                               (fn (label idx) (e "th" (key idx) label))))
        (e "div" (className "table-responsive")
          (e "table" (className "table")
@@ -388,7 +393,7 @@
            (if this.state.compulsory
              (e "input" (type "text" className "form-control" disabled true value "" placeholder "None"))
              (e "input" (type "text" className "form-control" name "code" placeholder "e.g. MA(H3)" defaultValue (ifentity .code))))
-          (e "p" (className "help-block") "Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects."))
+           (e "p" (className "help-block") "Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects."))
          (e "div" (className "form-group")
            (e "label" (htmlFor "level") "Applies To")
            (e "div" (className "checkbox")
@@ -414,7 +419,7 @@
          (defun onError (jqxhr)
            (defvar resp (JSON.parse jqxhr.responseText))
            (that.setState (obj err resp.meta.details)))
-         ($.ajax "/api/students/many"
+         ($.ajax "/api/students/csv"
                  (obj
                   type "POST"
                   data formData
@@ -631,10 +636,10 @@
           (getModalWrapper)))
        (e "div" ()
          (whenadmin
-           (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
-             (if this.props.customButtons this.props.customButtons null)
-             (e "button" (type "button" className "btn btn-default" onClick onAddButtonClick) "Add New")
-             (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All")))
+          (e "div" (className "pull-right btn-group" role "toolbar" "aria-label" "Action Buttons")
+            (if this.props.customButtons this.props.customButtons null)
+            (e "button" (type "button" className "btn btn-default" onClick onAddButtonClick) "Add New")
+            (e "button" (type "button" className "btn btn-default" onClick onRemoveAllButtonClick) "Remove All (Even If Not Shown)")))
          (e "h2" () (+ "View " hnamepl))
          this.props.children
          (e EntityTable (conn this.state.conn entityEditor editor auxiliary this.props.auxiliary customFilter this.props.customFilter))))
@@ -918,7 +923,21 @@
                                       (e "button" (type "button" className "btn btn-primary btn-xs" onClick onLockClick title "Click to lock submission.") lockicon (e "span" (className "presentation-text" "data-text" " Unlocked")))
                                       (= sub.tag "SubmissionCompleted")
                                       (e "button" (type "button" className "btn btn-success btn-xs" onClick onCompleteClick title "Click to view submitted information.") completeicon (e "span" (className "presentation-text" "data-text" " Completed"))))))
-                            "Status"))))))
+                            (fn (rawData)
+                              (defvar lockicon (e "span" (className "glyphicon glyphicon-lock" "aria-hidden" "true")))
+                              (defvar completeicon (e "span" (className "glyphicon glyphicon-ok" "aria-hidden" "true")))
+                              (defun onUnlockAllClick ()
+                                (defvar ids (-> (__map rawData "id") (.join ",")))
+                                ($.ajax "/api/students/many/unlock" (obj type "POST" data (obj ids ids))))
+                              (defun onLockAllClick ()
+                                (defvar ids (-> (__map rawData "id") (.join ",")))
+                                ($.ajax "/api/students/many/lock" (obj type "POST" data (obj ids ids))))
+                              (e "span" ()
+                                (e "button" (type "button" className "btn btn-primary btn-xs" onClick onUnlockAllClick title "Click to unlock submission for all.")
+                                  lockicon (e "span" (className "presentation-text" "data-text" " Unlock All")))
+                                " "
+                                (e "button" (type "button" className "btn btn-danger btn-xs" onClick onLockAllClick title "Click to lock submission for all.")
+                                  lockicon (e "span" (className "presentation-text" "data-text" " Lock All")))))))))))
 
    (defcomponent Page
      render
