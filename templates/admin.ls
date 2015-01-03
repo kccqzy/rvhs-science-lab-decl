@@ -31,10 +31,11 @@
    (macro ifentity (attr)
           (if this.props.entity (~attr this.props.entity) ""))
 
-   ;; Identity of current user through cookies (ignored by server).
-   (defvar ident (_.object (__map (-> document.cookie (.split "; ")) (fn (c) (-> c (.split "="))))))
-   (macro whenadmin (thing) (if (= ident.priv "PrivAdmin") ~thing null))
-   (macro whennotadmin (thing) (if (= ident.priv "PrivAdmin") null ~thing))
+   ;; Identity of current user through meta elements
+   (defvar identUser (-> ($ "#meta-user") (.attr "value")))
+   (defvar identPriv (-> ($ "#meta-priv") (.attr "value")))
+   (macro whenadmin (thing) (if (= identPriv "PrivAdmin") ~thing null))
+   (macro whennotadmin (thing) (if (= identPriv "PrivAdmin") null ~thing))
 
    ;; An APIConnection is a wrapper around WebSocket.
    (defun APIConnection (pathname)
@@ -904,7 +905,6 @@
    (defcomponent Page
      render
      (fn ()
-       (defvar ident (_.object (__map (-> document.cookie (.split "; ")) (fn (c) (-> c (.split "="))))))
        (defvar pathname window.location.pathname)
        (defvar tabs
          (__map pageSpec
@@ -922,7 +922,7 @@
                (e "img" (src "/static/res/rv.png" style (obj height "1em" position "relative" top "-0.2em" margin "0 0.3em 0 0")))
                "RVHS Science Lab Undertaking — For Teachers"))
            (e "p" ()
-             (+ (+ "You are logged in as " ident.user) ". ")
+             (+ (+ "You are logged in as " identUser) ". ")
              (whenadmin "You are an administrator. ")
              (e "a" (href "/auth/logout") "Click here to logout. "))
            (e "div" (role "tabpanel")

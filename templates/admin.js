@@ -5,9 +5,8 @@ $(function() {
     var React_createClass = React.createClass;
     var React_PropTypes = React.PropTypes;
     var __map = _.map;
-    var ident = _.object(__map((document.cookie).split("; "),function(c) {
-        return (c).split("=");
-    }));
+    var identUser = ($("#meta-user")).attr("value");
+    var identPriv = ($("#meta-priv")).attr("value");
     var APIConnection = function(pathname) {
         var wsUrl = ((((window.location.protocol === "https:") ?
             "wss://" :
@@ -100,7 +99,7 @@ $(function() {
                     value,
                     that.props.entity
                 ]));
-            }),((ident.priv === "PrivAdmin") ?
+            }),((identPriv === "PrivAdmin") ?
                 React_createElement("td",{
                     className: "text-right"
                 },React_createElement("div",{
@@ -250,7 +249,7 @@ $(function() {
                 className: "table-responsive"
             },React_createElement("table",{
                 className: "table"
-            },React_createElement("thead",{},React_createElement("tr",{},headers,((ident.priv === "PrivAdmin") ?
+            },React_createElement("thead",{},React_createElement("tr",{},headers,((identPriv === "PrivAdmin") ?
                 React_createElement("th",{}) :
                 null))),rows));
         }
@@ -1016,7 +1015,7 @@ $(function() {
                 className: "row"
             },React_createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
-            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",((ident.priv === "PrivAdmin") ?
+            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",((identPriv === "PrivAdmin") ?
                 " As an administrator, you can also manage other things from the above tabs." :
                 null))));
         }
@@ -1075,7 +1074,7 @@ $(function() {
                     }
                 },React_createElement("p",{},(((("Are you sure you want to delete all " + hnamepl) + " currently stored in the database? This will also delete all references to these ") + hnamepl) + ", if they exist."))),getModalWrapper());
             };
-            return React_createElement("div",{},((ident.priv === "PrivAdmin") ?
+            return React_createElement("div",{},((identPriv === "PrivAdmin") ?
                 React_createElement("div",{
                     className: "pull-right btn-group",
                     role: "toolbar",
@@ -1757,9 +1756,6 @@ $(function() {
     };
     var Page = React_createClass(_.defaults({
         render: function() {
-            var ident = _.object(__map((document.cookie).split("; "),function(c) {
-                return (c).split("=");
-            }));
             var pathname = window.location.pathname;
             var tabs = __map(pageSpec,function(page,route) {
                 var tab = React_createElement("li",{
@@ -1774,7 +1770,7 @@ $(function() {
                         route)
                 },(page).pageName));
                 return ((page).onlyAdmin ?
-                    ((ident.priv === "PrivAdmin") ?
+                    ((identPriv === "PrivAdmin") ?
                         tab :
                         null) :
                     tab);
@@ -1797,7 +1793,7 @@ $(function() {
                     top: "-0.2em",
                     margin: "0 0.3em 0 0"
                 }
-            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + ident.user) + ". "),((ident.priv === "PrivAdmin") ?
+            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + identUser) + ". "),((identPriv === "PrivAdmin") ?
                 "You are an administrator. " :
                 null),React_createElement("a",{
                 href: "/auth/logout"

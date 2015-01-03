@@ -18,6 +18,7 @@ import Control.Monad.Trans
 import Control.Monad.Reader (ReaderT(..), ask)
 import Control.Monad.State (get, put, evalStateT, execStateT, StateT)
 import Control.Monad.STM (STM, atomically)
+import Control.Arrow (first, second)
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM.TQueue
 import Control.Concurrent.Async hiding (race)
@@ -60,7 +61,6 @@ import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
 import Codec.Text.Detect (detectEncodingName)
 import qualified Codec.Picture.Png as Png
-import Web.Cookie
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
@@ -128,13 +128,8 @@ instance Yesod LabDeclarationApp where
 #ifdef DEVELOPMENT
 
   isAuthorized _ _ = do
-    mbCookies <- runInputGet (iopt textField "sendcookie")
-    case mbCookies of
-     Nothing -> return ()
-     Just cookies -> do
-       let cookies' = filter ((>=2) . length) . map T.words $ T.lines cookies
-       forM_ cookies' $ \(n:v:[]) ->
-         setCookie (def { setCookieName = T.encodeUtf8 n, setCookieValue = T.encodeUtf8 v})
+    setSession "user" "qzy@qzy.io"
+    setSession "priv" (T.pack (show PrivAdmin))
     return Authorized
   approot = ApprootStatic "http://localhost:8081"
 
@@ -201,37 +196,43 @@ instance RenderMessage LabDeclarationApp FormMessage where
 data Privilege = PrivNone
                | PrivTeacher
                | PrivAdmin
-               deriving (Show, Eq, Ord)
+               deriving (Show, Read, Eq, Ord)
 
 requirePrivilege :: Privilege -> Handler AuthResult
 requirePrivilege privReq
   | privReq == PrivNone = return Authorized
-  | otherwise = do
-      mbPriv <- getPrivilege
-      case mbPriv of
-       Nothing -> return AuthenticationRequired
-       Just priv -> do
-         setCookie (def { setCookieName = "priv", setCookieValue = C.pack (show priv) })
-         return . bool (Unauthorized "Insufficient privileges.") Authorized . (>= privReq) $ priv
+  | otherwise =
+      maybe
+        AuthenticationRequired
+        (\(u, p) -> if p >= privReq
+                    then Authorized
+                    else Unauthorized $ T.concat ["Insufficient privileges. Your account ", u, " is not allowed to access the admin console."])
+        <$> getPrivilege
 
-getPrivilege :: Handler (Maybe Privilege)
+getPrivilege :: Handler (Maybe (T.Text, Privilege))
 getPrivilege = do
-  mu <- maybeAuthId
-  case mu of
-   Nothing -> return Nothing
-   Just aid -> do
-     setCookie (def { setCookieName = "user", setCookieValue = T.encodeUtf8 aid })
-     if aid == "qzy@qzy.io"
-       then return $ Just PrivAdmin
-       else do
-        acid <- getAcid <$> ask
-        mbIdentity <- liftIO $ Acid.query acid $ LookupTeacherByEmail (Email aid)
-        case mbIdentity of
-         Nothing -> return $ Just PrivNone
-         Just identity -> do
-           case identity ^. teacherIsAdmin of
-            True -> return $ Just PrivAdmin
-            False -> return $ Just PrivTeacher
+  mbUserPriv <- (liftM2.liftM2) (,) (lookupSession "user") (lookupSession "priv")
+  case mbUserPriv of
+   Just v -> return . Just $ second (read . T.unpack) v
+   Nothing -> do
+     mbAid <- maybeAuthId
+     case mbAid of
+      Nothing -> return Nothing
+      Just aid -> do
+        let returnOk priv = do
+              setSession "user" aid
+              setSession "priv" (T.pack (show priv))
+              return $ Just (aid, priv)
+        if aid == "qzy@qzy.io"
+          then returnOk PrivAdmin
+          else do
+          acid <- getAcid <$> ask
+          mbIdentity <- liftIO $ Acid.query acid $ LookupTeacherByEmail (Email aid)
+          case mbIdentity of
+           Nothing -> returnOk PrivNone
+           Just identity -> do
+             let priv = bool PrivTeacher PrivAdmin (identity ^. teacherIsAdmin)
+             returnOk priv
 
 -- | Generically handles a database query. Sends either a normal JSON
 -- response, or establishes a WebSocket connection for push
@@ -793,6 +794,12 @@ getAuthStatusR = do -- will be removed
 
 adminSite :: Widget
 adminSite = do
+  mbUserPriv <- (liftM2.liftM2) (,) (lookupSession "user") (lookupSession "priv")
+  case mbUserPriv of
+   Nothing -> return ()
+   Just (u, p) -> do
+     toWidgetHead $ [shamlet|<meta #meta-user name=x-labdecl-user value=#{u}>|]
+     toWidgetHead $ [shamlet|<meta #meta-priv name=x-labdecl-priv value=#{p}>|]
   addStylesheet $ StaticR bootstrap_min_css
   addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js
