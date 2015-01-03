@@ -4,6 +4,7 @@ module LabDecl.ErrMsg where
 
 import Control.Lens
 import qualified Data.Text as T
+import qualified Data.Set as Set
 import Text.Shakespeare.Text (stext)
 
 import LabDecl.Types
@@ -47,6 +48,28 @@ errStudentAlreadyExists new old = [stext| Cannot add new student
   number. You can override this check by choosing Force, in which case
   the student will still be added, but will cause errors when looking
   up the student by class and index number. |]
+
+errEntityReferencedByStudent typeName students entityName = [stext|
+  Cannot delete the #{typeName} “#{entityName}” because there is a
+  student named “#{name}” whose #{typeName} is
+  “#{entityName}”. Deleting will cause the student’s #{typeName} to be
+  inconsistent. You must delete this student or delete this subject
+  from this student.  |]
+  where name = (^. studentName) . head . Set.toList $ students
+
+errEntityReferencedByManyStudents typeName students entityName =
+  [stext| Cannot delete the #{typeName} “#{entityName}” because there
+  are #{Set.size students} students (including “#{name}” and
+  #{Set.size students - 1} more) whose #{typeName} is
+  “#{entityName}”. Deleting will cause these students’ #{typeName} to
+  be inconsistent. You must delete those students or delete this
+  subject from those students.  |]
+  where name = (^. studentName) . head . Set.toList $ students
+
+errEntityReferencedByStudents typeName students =
+  (if Set.size students == 1
+   then errEntityReferencedByStudent
+   else errEntityReferencedByManyStudents) typeName students
 
 errEntityNotExist what = [stext| The #{whatName} referenced in the
   request does not exist. If you’re using the GUI, this is an internal

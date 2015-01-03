@@ -15,6 +15,7 @@ import Control.Error
 import Control.Lens
 import Data.List
 import Data.Char
+import qualified Data.Foldable as F
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
@@ -157,14 +158,8 @@ unsafeAddEntityKeepId a = dbField._2 %= IxSet.insert a
 -- | Remove an entity from a table. It is not an error to delete
 -- nonexistent entities. This is a primitive operation that never
 -- fails.
-removeEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
-removeEntity i = dbField'._2 %= deleteIx i
-  where dbField' = dbField :: Lens' Database (IxSetCtr a)
-
--- | Remove all entities from a table. This is a primitive operation
--- that never fails.
-removeAllEntities :: forall a i. (HasPrimaryKey a i) => Proxy a -> IUpdate
-removeAllEntities _ = dbField'._2 .= empty
+unsafeRemoveEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
+unsafeRemoveEntity i = dbField'._2 %= deleteIx i
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
 -- | Convert a set of subjects to a mapping between the subject code
@@ -181,6 +176,9 @@ teachersToMap = Set.foldr (\v -> Map.insert (v ^. teacherWitnessName) v) Map.emp
 class (HasPrimaryKey a i) => HasAddConstraint a i where
   preAddCheck :: Bool -> a -> IUpdate
 
+class (HasPrimaryKey a i) => HasDeleteConstraint a i where
+  preDeleteCheck :: i -> IUpdate
+
 -- | Safely add an entity by performing a check first.
 addEntity :: (HasAddConstraint a i) => Bool -> a -> IUpdate
 addEntity force a = do
@@ -194,9 +192,23 @@ addEntity force a = do
 replaceEntity :: (HasAddConstraint a i) => Bool -> a -> IUpdate
 replaceEntity force a = do
   ensureExist (a ^. idField)
-  removeEntity (a ^. idField)
+  unsafeRemoveEntity (a ^. idField)
   preAddCheck force a
   unsafeAddEntityKeepId a
+
+-- | Safely removes an entity by checking it exists and foreign
+-- references do not exist.
+removeEntity :: (HasDeleteConstraint a i) => i -> IUpdate
+removeEntity i = do
+  preDeleteCheck i
+  unsafeRemoveEntity i
+
+-- | Remove all entities from a table.
+removeAllEntities :: forall a i. (HasDeleteConstraint a i) => Proxy a -> IUpdate
+removeAllEntities _ = do
+  entities <- liftQuery $ listEntities'
+  F.mapM_ (removeEntity . (^. idField)) entities
+  where listEntities' = listEntities :: IQuery (Set a)
 
 -- | Ensure an id exists in the database.
 ensureExist :: forall a i. (HasPrimaryKey a i) => i -> StateT Database (Either TL.Text) a
@@ -206,10 +218,24 @@ ensureExist id = do
   where query :: i -> IQuery (Maybe a)
         query id = unique <$> searchEntitiesEq id
 
+-- | Check foreign key. Makes sure that there are no references to the
+-- referenced.
+checkForeignKey :: forall a i sa si. (HasPrimaryKey a i, HasPrimaryKey sa si) =>
+                   (Set sa -> T.Text -> TL.Text) -> Lens' a T.Text -> i -> IUpdate
+checkForeignKey errMsg nameField referencedId = do
+  referenced <- ensureExist referencedId
+  referencee <- liftQuery $ searchEntitiesEq referencedId
+  unless (Set.null referencee) $ do
+    (lift . Left $ errMsg referencee (referenced ^. nameField))
+
 -- | No uniqueness checks necessary because CCAs are looked up only
 -- through auto-incremented IDs.
 instance HasAddConstraint Cca CcaId where
   preAddCheck _ _ = return ()
+
+-- | Check for references by students.
+instance HasDeleteConstraint Cca CcaId where
+  preDeleteCheck = checkForeignKey (errEntityReferencedByStudents ("CCA" :: T.Text)) ccaName
 
 -- | Subjects are also looked up through subject code, so they must be
 -- unique among each level. Subject *names* are *intentionally* not
@@ -230,6 +256,10 @@ instance HasAddConstraint Subject SubjectId where
             unless (uniquelyDecodable . Set.insert code . Map.keysSet $ subjects) .
               lift . Left $ errSubjectsNotUniquelyDecodable name level
 
+-- | Check for references by students.
+instance HasDeleteConstraint Subject SubjectId where
+  preDeleteCheck = checkForeignKey (errEntityReferencedByStudents ("subject" :: T.Text)) subjectName
+
 -- | Check for uniqueness of email and witnesser name unless forced.
 instance HasAddConstraint Teacher TeacherId where
   preAddCheck force teacher = do
@@ -240,6 +270,10 @@ instance HasAddConstraint Teacher TeacherId where
             existing <- liftQuery $ unique <$> searchEntitiesEq (entity ^. field)
             maybe (return ()) (lift . Left . errMsg entity) existing
 
+-- | Check for references by students.
+instance HasDeleteConstraint Teacher TeacherId where
+  preDeleteCheck = checkForeignKey (errEntityReferencedByStudents ("teacher" :: T.Text)) teacherName
+
 -- | Check for uniqueness of class and index number. This is expected
 -- to be called when a teacher adds a student, not when the student
 -- does submission.
@@ -249,16 +283,15 @@ instance HasAddConstraint Student StudentId where
       existing <- liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
       maybe (return ()) (lift . Left . errStudentAlreadyExists student) existing
 
+-- | No check necessary.
+instance HasDeleteConstraint Student StudentId where
+  preDeleteCheck _ = return ()
+
 -- | Add many students to the database. If adding one student fails,
 -- everything fails, as expected by atomicity.
 addStudents :: Bool -> Vector Student -> IUpdate
 addStudents = V.mapM_ . addStudent
 -- TODO add an extra argument to identify the row of the CSV file.
-
--- | Ensure an id exists in the database and then do something
--- about it.
-ensureIdExistThen :: (HasPrimaryKey a i) => (i -> IUpdate) -> i -> IUpdate
-ensureIdExistThen = liftM2 (>>) ensureExist
 
 addCca     :: Bool -> Cca -> IUpdate
 addSubject :: Bool -> Subject -> IUpdate
@@ -281,10 +314,10 @@ removeCca     :: CcaId     -> IUpdate
 removeSubject :: SubjectId -> IUpdate
 removeTeacher :: TeacherId -> IUpdate
 removeStudent :: StudentId -> IUpdate
-removeCca     = ensureIdExistThen removeEntity
-removeSubject = ensureIdExistThen removeEntity
-removeTeacher = ensureIdExistThen removeEntity
-removeStudent = ensureIdExistThen removeEntity
+removeCca     = removeEntity
+removeSubject = removeEntity
+removeTeacher = removeEntity
+removeStudent = removeEntity
 
 removeCcas     :: Maybe [CcaId]     -> IUpdate
 removeSubjects :: Maybe [SubjectId] -> IUpdate
@@ -337,7 +370,7 @@ publicStudentDoSubmission (sid, nric, submission) = do
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
     guard . not $ (_SubmissionCompleted `isn't` submission)
     guard $ Just Nothing == submission ^? ssFinalDeclarationFilename
-    guard $ all (`Set.member` validCcas) (Set.toList (submission ^. ssCca))
+    guard $ F.all (`Set.member` validCcas) (submission ^. ssCca)
     guard $ student ^. studentNric `nricMatch` nric
     return $ student & studentSubmission .~ submission
   replaceEntity True changedStudent
