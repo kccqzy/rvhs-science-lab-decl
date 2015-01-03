@@ -199,10 +199,10 @@ replaceEntity force a = do
   unsafeAddEntityKeepId a
 
 -- | Ensure an id exists in the database.
-ensureExist :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
+ensureExist :: forall a i. (HasPrimaryKey a i) => i -> StateT Database (Either TL.Text) a
 ensureExist id = do
   existing <- liftQuery $ query id
-  void . lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
+  lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
   where query :: i -> IQuery (Maybe a)
         query id = unique <$> searchEntitiesEq id
 
@@ -272,11 +272,10 @@ addStudent = addEntity
 replaceCca     :: Bool -> Cca     -> IUpdate
 replaceSubject :: Bool -> Subject -> IUpdate
 replaceTeacher :: Bool -> Teacher -> IUpdate
-replaceStudent :: Bool -> Student -> IUpdate
 replaceCca     = replaceEntity
 replaceSubject = replaceEntity
 replaceTeacher = replaceEntity
-replaceStudent = replaceEntity
+-- replaceStudent is special, see below
 
 removeCca     :: CcaId     -> IUpdate
 removeSubject :: SubjectId -> IUpdate
@@ -295,6 +294,14 @@ removeCcas     = maybe (removeAllEntities (Proxy :: Proxy Cca))     (mapM_ remov
 removeSubjects = maybe (removeAllEntities (Proxy :: Proxy Subject)) (mapM_ removeSubject)
 removeTeachers = maybe (removeAllEntities (Proxy :: Proxy Teacher)) (mapM_ removeTeacher)
 removeStudents = maybe (removeAllEntities (Proxy :: Proxy Student)) (mapM_ removeStudent)
+
+replaceStudent :: Bool -> Student -> IUpdate
+replaceStudent force newStudent = do
+  old <- ensureExist (newStudent ^. idField)
+  removeEntity (newStudent ^. idField)
+  let changedStudent = studentSubmission .~ (old ^. studentSubmission) $ newStudent
+  preAddCheck force changedStudent
+  unsafeAddEntityKeepId changedStudent
 
 -- |
 -- = Public and Teacher (Restricted) Queries and Updates
