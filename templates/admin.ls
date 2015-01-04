@@ -303,6 +303,46 @@
        (e Modal (canClose true title this.props.title buttons buttons)
          this.props.children)))
 
+   (defcomponent AjaxFailableActionModal
+     propTypes
+     (obj
+      actionButtonType React_PropTypes.string
+      actionButtonStyle React_PropTypes.string.isRequired
+      actionButtonLabel React_PropTypes.node.isRequired
+      title React_PropTypes.node.isRequired
+      children React_PropTypes.node.isRequired
+      ajaxParam React_PropTypes.func.isRequired)
+
+     getInitialState
+     (fn ()
+       (obj err null))
+
+     render
+     (fn ()
+       (defvar that this)
+       (defun onError (jqxhr)
+         (defvar details (JSON.parse jqxhr.responseText))
+         (that.setState (obj err details.meta.details)))
+       (defun next (hideModal setSpinner)
+         (setSpinner 1)
+         (defvar ajaxParams (_.defaults (that.props.ajaxParam.apply that)
+                                        (obj success hideModal
+                                             error (fn (jqxhr)
+                                                     (setSpinner 0)
+                                                     (console.log "Ajax error.")
+                                                     (console.log jqxhr)
+                                                     (onError jqxhr)))))
+         ($.ajax ajaxParams))
+       (e ActionModal (title this.props.title
+                             actionButtonLabel this.props.actionButtonLabel
+                             actionButtonStyle this.props.actionButtonStyle
+                             actionButtonType this.props.actionButtonType
+                             next next)
+         (if this.state.err
+             (e "div" (className "alert alert-danger" role "alert") this.state.err)
+             null)
+         this.props.children)))
+
    ;; An editor for records.
    (defcomponent RecordEditor
      propTypes
@@ -327,25 +367,12 @@
                           (+ (+ (+ "/api/" mname) "/") this.props.entity.id)
                           (+ "/api/" mname)))
        (defvar method (if this.props.entity "PUT" "POST"))
-       (defun onError (jqxhr)
-         (defvar resp (JSON.parse jqxhr.responseText))
-         (that.setState (obj err resp.meta.details)))
-       (defun next (hideModal setSpinner)
-         (setSpinner 1)
-         (console.log (-> ($ "#editorForm") (.serialize)))
-         ($.ajax endpoint (obj type method
-                               data (-> ($ "#editorForm") (.serialize))
-                               success hideModal
-                               error (fn (jqxhr)
-                                       (setSpinner 0)
-                                       (console.log "http error")
-                                       (console.log jqxhr)
-                                       (onError jqxhr)))))
+       (defun ajaxParam ()
+         (obj url endpoint
+              type method
+              data (-> ($ "#editorForm") (.serialize))))
        (e "form" (id "editorForm" role "form")
-         (e ActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" next next)
-           (if this.state.err
-             (e "div" (className "alert alert-danger" role "alert") this.state.err)
-             null)
+         (e AjaxFailableActionModal (title title actionButtonLabel actionButtonLabel actionButtonStyle "primary" actionButtonType "submit" ajaxParam ajaxParam)
            this.props.children))))
 
    ;; The CCA editor control.
@@ -407,34 +434,18 @@
              (e "input" (type "checkbox" name "force" defaultChecked false)) "Force the operation to continue despite errors (not recommended).")))))
 
    (defcomponent BatchUploadStudents
-     getInitialState
-     (fn () (obj err null))
      render
      (fn ()
        (defvar that this)
-       (defun next (hideModal setSpinner)
-         (setSpinner 1)
+       (defun ajaxParam ()
          (defvar formData (new FormData (-> ($ "#uploaderForm") (.get 0))))
          (console.log formData)
-         (defun onError (jqxhr)
-           (defvar resp (JSON.parse jqxhr.responseText))
-           (that.setState (obj err resp.meta.details)))
-         ($.ajax "/api/students/csv"
-                 (obj
-                  type "POST"
-                  data formData
-                  contentType false
-                  processData false
-                  success hideModal
-                  error (fn (jqxhr)
-                          (setSpinner 0)
-                          (console.log "http error")
-                          (console.log jqxhr)
-                          (onError jqxhr)))))
-       (e ActionModal (actionButtonStyle "primary" actionButtonLabel "Upload" title "Add Students via Uploading CSV File" next next)
-         (if this.state.err
-           (e "div" (className "alert alert-danger" role "alert") this.state.err)
-           null)
+         (obj url "/api/students/csv"
+              type "POST"
+              data formData
+              contentType false
+              processData false))
+       (e AjaxFailableActionModal (actionButtonStyle "primary" actionButtonLabel "Upload" title "Add Students via Uploading CSV File" ajaxParam ajaxParam)
          (e "form" (id "uploaderForm" role "form")
            (e "p" (className "help-block") "This allows you to upload a CSV file of students and add all of them. This is an all-or-nothing operation: even if only one student could not be added, none of the students will be added.")
            (e "div" (className "form-group")
@@ -577,13 +588,12 @@
        (defvar hname dataSpec.humanName)
        (defvar mname dataSpec.machineName)
        (defvar endpoint (+ (+ (+ "/api/" mname) "/") this.props.entity.id))
-       (defun next (hideModal)
-         ($.ajax endpoint (obj type "DELETE" complete hideModal)))
-       (defvar message (+ (+ (+ (+ "Are you sure you want to delete the " hname) " “") this.props.entity.name)
-                          "” from the database?"))
-       (e ActionModal
-           (title (+ "Delete " hname) actionButtonLabel "Delete" actionButtonStyle "danger" next next)
-         (e "p" () message))))
+       (defun ajaxParam ()
+         (obj url endpoint
+              type "DELETE"))
+       (e AjaxFailableActionModal
+           (title (+ "Delete " hname) actionButtonLabel "Delete" actionButtonStyle "danger" ajaxParam ajaxParam)
+         (e "p" () "Are you sure you want to delete the " hname  " “" this.props.entity.name "” from the database?"))))
 
    ;; The Admin console homepage.
    (defcomponent AdminHomeR
@@ -630,9 +640,12 @@
           (getModalWrapper)))
        (defun onRemoveAllButtonClick ()
          (React.render
-          (e ActionModal
-              (title (+ "Deleting All " hnamepl) actionButtonLabel "Yes, Delete All" actionButtonStyle "danger" next (fn (hideModal) ($.ajax (+ "/api/" mname) (obj type "DELETE" complete hideModal))))
-            (e "p" () (+ (+ (+ (+ "Are you sure you want to delete all " hnamepl) " currently stored in the database? This will also delete all references to these ") hnamepl) ", if they exist.")))
+          (e AjaxFailableActionModal
+              (title (+ "Deleting All " hnamepl)
+                     actionButtonLabel "Yes, Delete All"
+                     actionButtonStyle "danger"
+                     ajaxParam (fn () (obj url (+ "/api/" mname) type "DELETE")))
+            (e "p" () "Are you sure you want to delete all " hnamepl " currently stored in the database? "))
           (getModalWrapper)))
        (e "div" ()
          (whenadmin

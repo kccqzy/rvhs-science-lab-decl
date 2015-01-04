@@ -392,6 +392,61 @@ $(function() {
     },_.invert({
         ActionModal: "displayName"
     })));
+    var AjaxFailableActionModal = React_createClass(_.defaults({
+        propTypes: {
+            actionButtonType: React_PropTypes.string,
+            actionButtonStyle: React_PropTypes.string.isRequired,
+            actionButtonLabel: React_PropTypes.node.isRequired,
+            title: React_PropTypes.node.isRequired,
+            children: React_PropTypes.node.isRequired,
+            ajaxParam: React_PropTypes.func.isRequired
+        },
+        getInitialState: function() {
+            return {
+                err: null
+            };
+        },
+        render: function() {
+            var that = this;
+            var onError = function(jqxhr) {
+                var details = JSON.parse(jqxhr.responseText);
+                return that.setState({
+                    err: details.meta.details
+                });
+            };
+            var next = function(hideModal,setSpinner) {
+                setSpinner(1);
+                var ajaxParams = _.defaults(that.props.ajaxParam.apply(that),{
+                    success: hideModal,
+                    error: function(jqxhr) {
+                        setSpinner(0);
+                        console.log("Ajax error.");
+                        console.log(jqxhr);
+                        return onError(jqxhr);
+                    }
+                });
+                return $.ajax(ajaxParams);
+            };
+            return React_createElement(ActionModal,{
+                title: this.props.title,
+                actionButtonLabel: this.props.actionButtonLabel,
+                actionButtonStyle: this.props.actionButtonStyle,
+                actionButtonType: this.props.actionButtonType,
+                next: next
+            },(this.state.err ?
+                React_createElement("div",{
+                    className: "alert alert-danger",
+                    role: "alert"
+                },this.state.err) :
+                null),this.props.children);
+        }
+    },{
+        render: function() {
+            return false;
+        }
+    },_.invert({
+        AjaxFailableActionModal: "displayName"
+    })));
     var RecordEditor = React_createClass(_.defaults({
         propTypes: {
             entityTypeHumanName: React_PropTypes.string.isRequired,
@@ -420,42 +475,23 @@ $(function() {
             var method = (this.props.entity ?
                 "PUT" :
                 "POST");
-            var onError = function(jqxhr) {
-                var resp = JSON.parse(jqxhr.responseText);
-                return that.setState({
-                    err: resp.meta.details
-                });
-            };
-            var next = function(hideModal,setSpinner) {
-                setSpinner(1);
-                console.log(($("#editorForm")).serialize());
-                return $.ajax(endpoint,{
+            var ajaxParam = function() {
+                return {
+                    url: endpoint,
                     type: method,
-                    data: ($("#editorForm")).serialize(),
-                    success: hideModal,
-                    error: function(jqxhr) {
-                        setSpinner(0);
-                        console.log("http error");
-                        console.log(jqxhr);
-                        return onError(jqxhr);
-                    }
-                });
+                    data: ($("#editorForm")).serialize()
+                };
             };
             return React_createElement("form",{
                 id: "editorForm",
                 role: "form"
-            },React_createElement(ActionModal,{
+            },React_createElement(AjaxFailableActionModal,{
                 title: title,
                 actionButtonLabel: actionButtonLabel,
                 actionButtonStyle: "primary",
                 actionButtonType: "submit",
-                next: next
-            },(this.state.err ?
-                React_createElement("div",{
-                    className: "alert alert-danger",
-                    role: "alert"
-                },this.state.err) :
-                null),this.props.children));
+                ajaxParam: ajaxParam
+            },this.props.children));
         }
     },{
         render: function() {
@@ -618,48 +654,25 @@ $(function() {
         SubjectEditor: "displayName"
     })));
     var BatchUploadStudents = React_createClass(_.defaults({
-        getInitialState: function() {
-            return {
-                err: null
-            };
-        },
         render: function() {
             var that = this;
-            var next = function(hideModal,setSpinner) {
-                setSpinner(1);
+            var ajaxParam = function() {
                 var formData = new FormData(($("#uploaderForm")).get(0));
                 console.log(formData);
-                var onError = function(jqxhr) {
-                    var resp = JSON.parse(jqxhr.responseText);
-                    return that.setState({
-                        err: resp.meta.details
-                    });
-                };
-                return $.ajax("/api/students/csv",{
+                return {
+                    url: "/api/students/csv",
                     type: "POST",
                     data: formData,
                     contentType: false,
-                    processData: false,
-                    success: hideModal,
-                    error: function(jqxhr) {
-                        setSpinner(0);
-                        console.log("http error");
-                        console.log(jqxhr);
-                        return onError(jqxhr);
-                    }
-                });
+                    processData: false
+                };
             };
-            return React_createElement(ActionModal,{
+            return React_createElement(AjaxFailableActionModal,{
                 actionButtonStyle: "primary",
                 actionButtonLabel: "Upload",
                 title: "Add Students via Uploading CSV File",
-                next: next
-            },(this.state.err ?
-                React_createElement("div",{
-                    className: "alert alert-danger",
-                    role: "alert"
-                },this.state.err) :
-                null),React_createElement("form",{
+                ajaxParam: ajaxParam
+            },React_createElement("form",{
                 id: "uploaderForm",
                 role: "form"
             },React_createElement("p",{
@@ -995,19 +1008,18 @@ $(function() {
             var hname = dataSpec.humanName;
             var mname = dataSpec.machineName;
             var endpoint = ((("/api/" + mname) + "/") + this.props.entity.id);
-            var next = function(hideModal) {
-                return $.ajax(endpoint,{
-                    type: "DELETE",
-                    complete: hideModal
-                });
+            var ajaxParam = function() {
+                return {
+                    url: endpoint,
+                    type: "DELETE"
+                };
             };
-            var message = (((("Are you sure you want to delete the " + hname) + " “") + this.props.entity.name) + "” from the database?");
-            return React_createElement(ActionModal,{
+            return React_createElement(AjaxFailableActionModal,{
                 title: ("Delete " + hname),
                 actionButtonLabel: "Delete",
                 actionButtonStyle: "danger",
-                next: next
-            },React_createElement("p",{},message));
+                ajaxParam: ajaxParam
+            },React_createElement("p",{},"Are you sure you want to delete the ",hname," “",this.props.entity.name,"” from the database?"));
         }
     },{
         render: function() {
@@ -1070,17 +1082,17 @@ $(function() {
                 }),getModalWrapper());
             };
             var onRemoveAllButtonClick = function() {
-                return React.render(React_createElement(ActionModal,{
+                return React.render(React_createElement(AjaxFailableActionModal,{
                     title: ("Deleting All " + hnamepl),
                     actionButtonLabel: "Yes, Delete All",
                     actionButtonStyle: "danger",
-                    next: function(hideModal) {
-                        return $.ajax(("/api/" + mname),{
-                            type: "DELETE",
-                            complete: hideModal
-                        });
+                    ajaxParam: function() {
+                        return {
+                            url: ("/api/" + mname),
+                            type: "DELETE"
+                        };
                     }
-                },React_createElement("p",{},(((("Are you sure you want to delete all " + hnamepl) + " currently stored in the database? This will also delete all references to these ") + hnamepl) + ", if they exist."))),getModalWrapper());
+                },React_createElement("p",{},"Are you sure you want to delete all ",hnamepl," currently stored in the database? ")),getModalWrapper());
             };
             return React_createElement("div",{},((identPriv === "PrivAdmin") ?
                 React_createElement("div",{
