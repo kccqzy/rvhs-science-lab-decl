@@ -763,7 +763,7 @@
                                  (fn (klass)
                                    (e "option" (value (get 0 klass) key (get 0 klass)) "Year " (get 0 klass))))))
            (radiodetail "name" false "Search By Approx. Name" (e "input" (type "text" className "form-control" disabled true))
-                        (e "input" (type "text" className "form-control" name "name" placeholder "Enter an approximate name, e.g. Xin Yi" value "")))
+                        (e "input" (type "text" className "form-control" name "name" placeholder "Enter an approximate name, e.g. Xin Yi")))
            (radiodetail "subject" false "Search By Subject" (e "select" (className "form-control" disabled true))
                         (e "select" (className "form-control" name "id")
                           (__map auxiliary.subjectInfo.data
@@ -947,10 +947,10 @@
                                 ($.ajax "/api/students/many/lock" (obj type "POST" data (obj ids ids))))
                               (e "span" ()
                                 (e "button" (type "button" className "btn btn-primary btn-xs" onClick onUnlockAllClick title "Click to unlock submission for all.")
-                                  lockicon (e "span" (className "presentation-text" "data-text" " Unlock All")))
+                                  lockicon (e "span" (className "presentation-text" "data-text" " Unlock These")))
                                 " "
                                 (e "button" (type "button" className "btn btn-danger btn-xs" onClick onLockAllClick title "Click to lock submission for all.")
-                                  lockicon (e "span" (className "presentation-text" "data-text" " Lock All")))))))))))
+                                  lockicon (e "span" (className "presentation-text" "data-text" " Lock These")))))))))))
 
    (defcomponent Page
      render

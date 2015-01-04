@@ -1339,8 +1339,7 @@ $(function() {
                     type: "text",
                     className: "form-control",
                     name: "name",
-                    placeholder: "Enter an approximate name, e.g. Xin Yi",
-                    value: ""
+                    placeholder: "Enter an approximate name, e.g. Xin Yi"
                 }) :
                 React_createElement("input",{
                     type: "text",
@@ -1833,7 +1832,7 @@ $(function() {
                                 title: "Click to unlock submission for all."
                             },lockicon,React_createElement("span",{
                                 className: "presentation-text",
-                                "data-text": " Unlock All"
+                                "data-text": " Unlock These"
                             }))," ",React_createElement("button",{
                                 type: "button",
                                 className: "btn btn-danger btn-xs",
@@ -1841,7 +1840,7 @@ $(function() {
                                 title: "Click to lock submission for all."
                             },lockicon,React_createElement("span",{
                                 className: "presentation-text",
-                                "data-text": " Lock All"
+                                "data-text": " Lock These"
                             })));
                         }
                     ]
