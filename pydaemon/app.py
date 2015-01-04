@@ -35,10 +35,15 @@ class MailDaemon(webapp2.RequestHandler):
                 mail_msg.attachments = attachments
         except Exception as e:
             self.response.set_status(400)
-        else:
-            logging.info('About to send email %s', mail_msg)
+            return
+        try:
             mail_msg.send()
-            self.response.set_status(204)
+        except Exception as e:
+            logging.error('Send mail failed: %s', e)
+            mail.send_mail_to_admins(sender='rvhs.science.oracle@gmail.com', subject='Attempt to send email rejected by Google',
+                                     body='An attempt to send email to %s was rejected by Google.\n\nTechnical details:\n%s' % (mail_obj['to'], e))
+        self.response.set_status(204)
+
 
 class StorageDaemon(webapp2.RequestHandler):
 
