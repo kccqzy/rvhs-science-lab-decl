@@ -675,8 +675,9 @@ postStudentSubmitR sid = do
                  \s -> (s ^. subjectIsScience) &&
                        (isNothing (s ^. subjectCode) ||
                         (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi))
+  mbWitness <- maybe (return Nothing) (liftIO . Acid.query acid . LookupTeacherById) (student ^. studentWitnesser)
   asyncQueue <- getAsyncQueue <$> ask
-  liftIO . atomically $ writeTQueue asyncQueue (student, subjects, pngData)
+  liftIO . atomically $ writeTQueue asyncQueue (student, mbWitness, subjects, pngData)
   return rv
 
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),

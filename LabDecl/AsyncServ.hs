@@ -97,12 +97,13 @@ uploadFile = sendGae "storage"
 formatClass :: Class -> T.Text
 formatClass klass = let (Class (l, c)) = klass in T.pack $ show l ++ [c]
 
-generateTeX :: Student -> Set Subject -> CL.ByteString
-generateTeX student scienceSubjects = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/report.tex") id
+generateTeX :: Student -> Maybe Teacher -> Set Subject -> CL.ByteString
+generateTeX student witness scienceSubjects = TL.encodeUtf8 . TLB.toLazyText $ $(textFile "templates/report.tex") id
   where name = escapeLaTeX $ student ^. studentName
         indexNumber = student ^. studentIndexNumber
         className = formatClass (student ^. studentClass)
         subjects = escapeLaTeX . T.intercalate ", " . map (^. subjectName) . Set.toList $ scienceSubjects
+        witnessName = maybe "---" (escapeLaTeX . (^. teacherWitnessName)) witness
 
 escapeLaTeX :: T.Text -> T.Text
 escapeLaTeX = foldr1 (.) . map (uncurry T.replace) $ [("~", "\\textasciitilde "),
@@ -171,12 +172,12 @@ generateMail student pdf = do
   let mailAttachments = [(fileName, ByteString64 pdf)]
   return GAEMail {..}
 
-type AsyncInput = (Student, Set Subject, CL.ByteString)
+type AsyncInput = (Student, Maybe Teacher, Set Subject, CL.ByteString)
 
 asyncMain :: Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> IO ()
 asyncMain acid manager lualatex dir notifyChan queue = forever $ do
-  (student, subjects, signaturePng) <- atomically $ readTQueue queue
-  let tex = generateTeX student subjects
+  (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
+  let tex = generateTeX student witness subjects
   genPDFOp <- async $ generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
   eitherPDF <- waitCatch genPDFOp
   case eitherPDF of
