@@ -122,7 +122,6 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /                         HomepageR      GET
 /static                   StaticR        EmbeddedStatic getStatic
 /auth                     AuthR          Auth getAuth
-/authstatus AuthStatusR GET
 |])
 
 instance Yesod LabDeclarationApp where
@@ -163,7 +162,6 @@ instance Yesod LabDeclarationApp where
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
-  isAuthorized AuthStatusR           _ = requirePrivilege PrivNone
 
   -- | App root
   approot = ApprootStatic "http://gce.qzy.st"
@@ -187,7 +185,7 @@ instance YesodAuth LabDeclarationApp where
   type AuthId LabDeclarationApp = T.Text
   authHttpManager = getHttpManager
   authPlugins = (:[]) . uncurry authGoogleEmail <$> getGoogleCredentials
-  loginDest _ = AuthStatusR
+  loginDest _ = AdminHomeR
   logoutDest _ = AdminLogoutR
   getAuthId = return . Just . credsIdent
   maybeAuthId = lookupSession "_ID"
@@ -799,19 +797,6 @@ postManyStudentsR = do
 
 -- |
 -- = HTML handlers
-
-getAuthStatusR :: Handler Html
-getAuthStatusR = do -- will be removed
-    maid <- maybeAuthId
-    defaultLayout
-        [whamlet|
-            $maybe e <- maid
-                <p>You are logged in as #{e}.
-                    <a href=@{AuthR LogoutR}>Logout
-            $nothing
-                <p>You are not logged in.
-                    <a href=@{AuthR LoginR}>Go to the login page
-        |]
 
 adminSite :: Widget
 adminSite = do
