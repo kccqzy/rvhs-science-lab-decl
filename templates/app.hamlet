@@ -5,10 +5,10 @@
        <form #form>
          <div #page0 .page>
              <h1 .main-title>
-                 <img src=@{StaticR rvcrayon_jpg} style="height: 1em">
+                 <img src=@{StaticR rvcrayon_jpg} style="height: 2em">
                  <br>
                  Science Lab Undertaking Exercise
-             <p .explanation>Welcome!<br>In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.
+             <p .explanation>Welcome!<br>In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.<br>If you have an iPad, it is <strong>highly recommended</strong> that you use an iPad to proceed due to the convenience afforded by the larger screen.
              <div .interactive-content>
                  <button .continue-button type=submit>
          <div #page1 .page>
@@ -35,7 +35,7 @@
                          <tr>
                              <th>NRIC / FIN
                              <td>
-                                 <input name=nric type=text inputmode=verbatim autocomplete=off #submit-nric placeholder="Tap to enter NRIC/FIN">
+                                 <input name=nric type=text inputmode=verbatim autocomplete=off #submit-nric placeholder="Tap to enter">
                      <button .continue-button type=submit>
          <div #page4 .page>
              <h1 .main-title>Personal Information
@@ -51,11 +51,11 @@
                          <tr>
                              <th>Email Address
                              <td>
-                                 <input name=email type=email #submit-email autocomplete=email placeholder="Tap to enter email">
+                                 <input name=email type=email #submit-email autocomplete=email placeholder="Tap to enter">
                          <tr>
-                             <th>Phone Number
+                             <th>Mobile Number
                              <td>
-                                 <input name=phone type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter phone number">
+                                 <input name=phone type=tel #submit-phone autocomplete=tel-local placeholder="Tap to enter">
                          <tr>
                              <th>CCA 1
                              <td #table-cca1>
@@ -68,7 +68,8 @@
                      <button .continue-button type=submit>
         <div #page5 .page>
             <h1 .main-title>Undertaking Declaration
-            <p .explanation>By signing in the box below, I agree that:<br>(a) I have attended the Laboratory Briefing by your science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser<br>(b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
+            <p .explanation>By signing below, I agree that:
+            <p .explanation .smaller>(a) I have attended the Laboratory Briefing by my science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser;<br>(b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
             <div .interactive-content>
                 <div .canvas>
                 <input type=hidden name=sig #submit-signature>

@@ -24,6 +24,7 @@ body
     font-size: 14px
     padding: 10px
     line-height: 1.5em
+    z-index: 100
 
     button#back-button
       margin-left: 10px
@@ -50,16 +51,18 @@ body
         content: "Back"
 
   div#main-content-overflow-wrapper
-    width: 538px
+    width: 75vw
     margin: 0 auto
-    height: 900px
+    height: 88vh
     overflow: hidden
 
     div#main-content
-      padding: 80px 0 0
+      padding: 44px 0 0
       position: relative
 
       div.page
+        height: 80vh
+        overflow-y: scroll
         display: none
         position: absolute
         width: 100%
@@ -83,46 +86,46 @@ body
         h1.main-title
           text-align: center
           font-weight: 200
-          font-size: 50px
-          padding-bottom: 20px
+          font-size: 8vw
+          padding-bottom: 3vw
 
         p.explanation
           text-align: center
-          font-size: 20px
-          padding-bottom: 20px
+          font-size: 18px
+          padding-bottom: 3vw
+          hyphens: auto
+          -webkit-hyphend: auto
+          hyphenate-limit-lines: 2
+          -webkit-hyphenate-limit-lines: 2
+          hyphenate-limit-chars: 6 3 3
+          -webkit-hyphenate-limit-after: 3
+          -webkit-hyphenate-limit-before: 3
+
+          &.smaller
+            font-size: 0.867em
 
         div.interactive-content
-          height: 600px
-          overflow-y: scroll
-
-          div.boring-text
-            font-size: 60%
-            max-height: 500px
-            overflow: scroll
-
-            ol
-              padding-left: 2em
-              li
-                padding-bottom: 1em
-                padding-left: 2em
 
           canvas
-            width: 500px
-            height: 310px
+            width: 75vw
+            height: 46.5vw
             margin: 1em auto
             background-color: #e6f1fe
 
           button.continue-button
             display: block
-            margin: 40px auto
+            margin: 4vh auto
 
             &::after
               content: "Continue"
 
+          select
+            width: 45vw
+
           input[type="text"], input[type="email"], input[type="tel"]
             -webkit-appearance: none
+            width: 45vw
             border: none
-            width: 20em
             font-family: 'Helvetica Neue'
             font-size: 16px
             text-align: right
@@ -131,7 +134,7 @@ body
               color: #fe1818
 
           table
-            width: 100%
+            width: 75vw
             -webkit-border-horizontal-spacing: 0
             padding: 0 1em
 
@@ -145,11 +148,9 @@ body
             td
               text-align: right
 
-          ul li
-            list-style-type: none
-
           ul
             li
+              list-style-type: none
               font-weight: 700
               padding: 1em 0
               margin: 0 1em
@@ -171,6 +172,3 @@ body
               &:last-child
                 margin: 0
                 padding: 1em
-
-.uncopyable::after
-  content: attr(data-text)

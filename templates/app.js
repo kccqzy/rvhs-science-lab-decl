@@ -197,9 +197,8 @@ $(function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
                 $("#page5 .interactive-content .canvas").empty();
             }, function () {
-                $(document).on("scrollstart", false);
                 var scaleFactor = window.devicePixelRatio || 1;
-                $("#page5 .interactive-content .canvas").append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
+                $("#page5 .interactive-content .canvas").on("scrollstart", false).append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
                 var canvas = $("#page5 .interactive-content canvas").get(0);
                 var ctx = canvas.getContext("2d");
                 ctx.lineCap = "round";
@@ -231,27 +230,28 @@ $(function () {
                     return interpStroke;
                 };
 
-                $("#page5").on("webkitTransitionEnd", function() {
+                var setupSignatureEvent = function() {
                     var offsetX = +$(canvas).offset().left,
                         offsetY = +$(canvas).offset().top;
+                    var cssScaleFactor = 500 / +$(canvas).width();
 
-                    $(canvas).on("touchmove", function (e) {
+                    $(canvas).off("touchmove").on("touchmove", function (e) {
                         var pageX = +e.originalEvent.touches[0].pageX,
                             pageY = +e.originalEvent.touches[0].pageY;
-                        var ctxX = (pageX - offsetX) * scaleFactor,
-                            ctxY = (pageY - offsetY) * scaleFactor;
+                        var ctxX = (pageX - offsetX) * scaleFactor * cssScaleFactor,
+                            ctxY = (pageY - offsetY) * scaleFactor * cssScaleFactor;
                         var last = currentStroke.slice(-1)[0] || [-1, -1];
                         last[0] !== ctxX && last[1] !== ctxY && currentStroke.push([ctxX, ctxY]);
                         return false;
                     });
 
-                    $(canvas).on("touchend", function () {
+                    $(canvas).off("touchend").on("touchend", function () {
                         // TODO handle cases when currentStroke.length === 1
                         currentStroke.length && drawZigzag(currentStroke.length > 2 ? makeBSpline(currentStroke) : currentStroke);
                         currentStroke = [];
                     });
-                });
-
+                };
+                $("#page5").on("scrollstop", setupSignatureEvent).on("webkitTransitionEnd", setupSignatureEvent);
                 $("#form").off("submit").on("submit", function () {
                     if (hasDrawn) {
                         $("#submit-signature").val(canvas.toDataURL("image/png"));
