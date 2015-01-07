@@ -21,18 +21,26 @@ $(function() {
                     conn = new WebSocket(wsUrl);
                     conn.onmessage = callback;
                     conn.onerror = function() {
-                        console.log("WS connection errored.");
+                        console.log("WS connection errored. Retrying.");
                         return connect();
                     };
                     conn.onclose = function(e) {
                         console.log(e);
-                        return console.log("WS connection closed.");
+                        console.log("WS connection closed without request from client. Retrying.");
+                        return connect();
                     };
                 })() :
                 setTimeout(connect,(Date.now() - timeConnected)));
         };
-        ($(window)).on("beforeunload",function() {
+        var close = function() {
+            conn.onmessage = _.noop;
+            conn.onerror = _.noop;
+            conn.onclose = _.noop;
+            callback = null;
             return conn.close();
+        };
+        ($(window)).on("beforeunload",function() {
+            return close();
         });
         return {
             registerCallback: function(func) {
@@ -48,12 +56,7 @@ $(function() {
             pathname: function() {
                 return pathname;
             },
-            close: function() {
-                conn.onmessage = _.noop;
-                conn.onerror = _.noop;
-                conn.onclose = _.noop;
-                return conn.close();
-            }
+            close: close
         };
     };
     var EntityRow = React_createClass(_.defaults({
