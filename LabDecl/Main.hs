@@ -32,34 +32,32 @@ main = do
   tmpdir <- getEnv "LATEX_RUN_FOLDER"
   withTempDirectory tmpdir "labdecld" $ \dir -> do
 
-  -- get all the credentials and configurations we need
-  googleClientId <- T.pack <$> getEnv "GOOGLE_CLIENT_ID"
-  googleClientSecret <- T.pack <$> getEnv "GOOGLE_CLIENT_SECRET"
-  lualatex <- getEnv "LUALATEX"
+    -- get all the credentials and configurations we need
+    googleClientId <- T.pack <$> getEnv "GOOGLE_CLIENT_ID"
+    googleClientSecret <- T.pack <$> getEnv "GOOGLE_CLIENT_SECRET"
+    lualatex <- getEnv "LUALATEX"
 
-  -- warp configuration from environment variables
-  host <- liftM fromString <$> lookupEnv "HOST"
-  port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
-  let setSettings = foldr (.) (Warp.setServerName "Warp") $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
+    -- warp configuration from environment variables
+    host <- liftM fromString <$> lookupEnv "HOST"
+    port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
+    let setSettings = foldr (.) (Warp.setServerName "Warp") $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
 
-  -- HTTP manager
-  httpManager <- HTTP.newManager HTTP.tlsManagerSettings
+    -- HTTP manager
+    httpManager <- HTTP.newManager HTTP.tlsManagerSettings
 
-  -- queues and channels
-  notifyChan <- atomically newBroadcastTChan
-  asyncQueue <- atomically newTQueue
+    -- queues and channels
+    notifyChan <- atomically newBroadcastTChan
+    asyncQueue <- atomically newTQueue
 
-  rendererTempDir <- createTempDirectory dir "renderer"
+    rendererTempDir <- createTempDirectory dir "renderer"
 
-  -- acid state
-  bracket acidBegin acidFinally $ \acid -> do
-    forkIO $ asyncMain acid httpManager lualatex rendererTempDir notifyChan asyncQueue
-    toWaiApp (LabDeclarationApp { getStatic = eStatic,
+    -- acid state
+    bracket (Acid.openLocalState def) Acid.createCheckpointAndClose $ \acid -> do
+      forkIO $ asyncMain acid httpManager lualatex rendererTempDir notifyChan asyncQueue
+      toWaiApp (LabDeclarationApp { getStatic = eStatic,
                                   getAcid = acid,
                                   getNotifyChan = notifyChan,
                                   getHttpManager = httpManager,
                                   getAsyncQueue = asyncQueue,
                                   getGoogleCredentials = (googleClientId, googleClientSecret)
                                 }) >>= Warp.runSettings (setSettings Warp.defaultSettings)
-  where acidBegin = Acid.openLocalState def
-        acidFinally = Acid.createCheckpointAndClose
