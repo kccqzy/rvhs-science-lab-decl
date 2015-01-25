@@ -164,7 +164,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
 
   -- | App root
-  approot = ApprootStatic "https://gce.qzy.st"
+  approot = ApprootStatic "http://gce.qzy.st"
 
 #endif
 
