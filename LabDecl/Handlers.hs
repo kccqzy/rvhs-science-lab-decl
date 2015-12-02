@@ -66,7 +66,7 @@ import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
 import Yesod.EmbeddedStatic
 import Yesod.Auth
-import Yesod.Auth.GoogleEmail2
+import Yesod.Auth.GoogleEmail2 hiding (Email)
 
 import LabDecl.Utilities
 import LabDecl.Types
@@ -749,7 +749,7 @@ postManyStudentsR = do
   fileinfo <- runInputPost (ireq fileField "csv")
   force <- runInputPost (ireq checkBoxField "force")
   bs <- fileSource fileinfo $$ sinkLbs
-  result <- runEitherT $ do
+  result <- runExceptT $ do
     maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
     csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
     csvData <- hoistEither $ parseCSV csvText

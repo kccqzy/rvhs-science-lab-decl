@@ -41,7 +41,6 @@ import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory, withSystemTempDirectory, createTempDirectory)
 import qualified System.Process as Process
 import System.Exit (ExitCode(..))
-import System.Locale (defaultTimeLocale)
 
 import qualified RNCryptor
 

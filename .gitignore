@@ -4,3 +4,4 @@ state/
 *.dyn_o
 *.dyn_hi
 .module-cache/
+.stack-work/

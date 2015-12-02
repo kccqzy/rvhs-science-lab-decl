@@ -5,7 +5,7 @@ module RNCryptor (Credentials(..), encrypt, decrypt) where
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Monad
 import Control.Monad.Trans (liftIO)
-import Control.Error (hoistEither, note, hush, runEitherT, EitherT)
+import Control.Error (hoistEither, note, hush, ExceptT, runExceptT)
 import qualified Data.ByteString as B
 import qualified Data.Attoparsec.ByteString as PB
 import Data.Word (Word8)
@@ -66,7 +66,7 @@ unpadMessage msg = do
   return unpadded
 
 encrypt :: Credentials -> B.ByteString -> IO (Either String B.ByteString)
-encrypt credentials plaintext = runEitherT $ do
+encrypt credentials plaintext = runExceptT $ do
   (aesKey, hmacKey, credType) <- case credentials of
    Password password -> do
      hoistEither . note "The password cannot be empty." . guard . not . B.null $ password
