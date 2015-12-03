@@ -38,9 +38,10 @@ main = do
     lualatex <- getEnv "LUALATEX"
 
     -- warp configuration from environment variables
-    host <- liftM fromString <$> lookupEnv "HOST"
-    port <- (>>= either (const Nothing) Just . PC.parseOnly PC.decimal . C.pack) <$> lookupEnv "PORT"
-    let setSettings = foldr (.) (Warp.setServerName "Warp") $ catMaybes [Warp.setPort <$> port, Warp.setHost <$> host]
+    host <- fromString <$> getEnv "LISTEN_HOST"
+    portNumOrParseFail <- (PC.parseOnly PC.decimal . C.pack) <$> getEnv "LISTEN_PORT"
+    let port = either (const (error "haha")) id portNumOrParseFail
+    let setSettings = foldr (.) (Warp.setServerName "Warp") $ [Warp.setPort port, Warp.setHost host]
 
     -- HTTP manager
     httpManager <- HTTP.newManager HTTP.tlsManagerSettings
