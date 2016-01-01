@@ -2,10 +2,9 @@
 
 module RNCryptor (Credentials(..), encrypt, decrypt) where
 
-import Control.Applicative ((<$>), (<*>), pure)
 import Control.Monad
 import Control.Monad.Trans (liftIO)
-import Control.Error (hoistEither, note, hush, ExceptT, runExceptT)
+import Control.Error (hoistEither, note, hush, runExceptT)
 import qualified Data.ByteString as B
 import qualified Data.Attoparsec.ByteString as PB
 import Data.Word (Word8)

@@ -1,26 +1,25 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module LabDecl.StudentCSV (
-  parseCSV, CsvStudent(..),
+  parseCSV, CsvStudent(..), CsvText(..),
   klass, indexNo, nric, name, chinese, subjCombi, witness) where
 
 import Control.Monad
 import Control.Monad.State
-import Control.Arrow (first, second)
+import Control.Arrow
 import Control.Error
 import Control.Lens
 import Data.List
-import Data.Ord
 import Data.Char
 import Data.Function
+import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.CSV.Conduit as CSV
 import Data.Default
 import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
@@ -29,26 +28,30 @@ import qualified Data.IntMap as IntMap
 import LabDecl.Utilities
 import LabDecl.ErrMsg
 
+newtype CsvText = CsvText {
+  unCsvText :: T.Text
+  } deriving (Show, IsString)
+
 data CsvStudent = CsvStudent {
-  _klass     :: T.Text,
-  _indexNo   :: T.Text,
-  _nric      :: T.Text,
-  _name      :: T.Text,
-  _chinese   :: T.Text,
-  _subjCombi :: T.Text,
-  _witness   :: T.Text
+  _klass     :: CsvText,
+  _indexNo   :: CsvText,
+  _nric      :: CsvText,
+  _name      :: CsvText,
+  _chinese   :: CsvText,
+  _subjCombi :: CsvText,
+  _witness   :: CsvText
   } deriving (Show)
 $(makeLenses ''CsvStudent)
 
-instance Default T.Text where
-  def = T.empty
+instance Default CsvText where
+  def = CsvText T.empty
 
 instance Default CsvStudent where
   def = CsvStudent def def def def def def def
 
 type ColumnNumber = Int
 type RowNumber = Int
-type CsvStudentField = ALens' CsvStudent T.Text
+type CsvStudentField = ALens' CsvStudent CsvText
 type HeaderAssoc = (ColumnNumber, CsvStudentField)
 type Vector2D a = Vector (Vector a)
 
@@ -81,7 +84,7 @@ makeCsvStudent :: [HeaderAssoc] -> (RowNumber, Vector T.Text) -> Either TL.Text 
 makeCsvStudent assocs (i, row) = (`runStateT` def) $ do
   forM_ assocs $ \(j, field) -> do
     cell <- lift $ note (errCSVCellNotFound (i+1) (formatColumnNumber j)) (row V.!? j)
-    field #= T.strip cell
+    field #= CsvText (T.strip cell)
   return i
 
 parseCSV :: T.Text -> Either TL.Text (Vector (RowNumber, CsvStudent))

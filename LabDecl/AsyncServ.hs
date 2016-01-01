@@ -122,7 +122,7 @@ generatePDF :: FilePath -> FilePath -> String -> [(FilePath, CL.ByteString)] -> 
 generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir -> do
     Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
     let reportDir = dir ++ "/report/"
-    mapM_ (uncurry CL.writeFile . first (reportDir++)) $ files
+    mapM_ (uncurry CL.writeFile . first (reportDir++)) files
     runTeX lualatex "report" reportDir
     runTeX lualatex "report" reportDir
     C.readFile $ reportDir ++ jobname ++ ".pdf"
@@ -156,7 +156,7 @@ generateFileUpload student pdf = do
   fileName <- generateFileName student
   let fileContent = ByteString64 pdf
   let fileContentType = "application/pdf"
-  return $ GAEFile{..}
+  return GAEFile{..}
 
 generateMail :: Student -> C.ByteString -> IO GAEMail
 generateMail student pdf = do

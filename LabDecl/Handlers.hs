@@ -680,26 +680,28 @@ postManyStudentsR = do
     V.forM csvData $ \(rowNumber', rawStudent@CsvStudent{..}) -> do
       let rowNumber = succ rowNumber'
       -- attempt to convert rawStudent to a Student
-      let name = T.toTitle _name
-      klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 $ _klass
-      indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 $ _indexNo
-      nric <- hoistEither . parseNric' rowNumber . T.encodeUtf8 $ _nric
-      witness <- hoistEither $ parseWitnessName rowNumber allTeachers _witness
-      subjectIds <- case _subjCombi `elem` emptyFieldDesig of
+      let name = T.toTitle . unCsvText $ _name
+      klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 . unCsvText $ _klass
+      indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 . unCsvText $ _indexNo
+      nric <- hoistEither . parseNric' rowNumber . T.encodeUtf8 . unCsvText $ _nric
+      witness <- hoistEither . parseWitnessName rowNumber allTeachers . unCsvText $ _witness
+      let chinese = unCsvText _chinese
+      let subjCombi = unCsvText _subjCombi
+      subjectIds <- case (unCsvText _subjCombi) `elem` emptyFieldDesig of
         True -> return Set.empty
         False -> do
-          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) _subjCombi
+          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) $ subjCombi
           case possibilities of
            ParseSuccess s -> return $ Set.mapMonotonic (^. idField) s
            ParseAmbiguous ss -> do
              let (i1:i2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) ss
-             hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber _subjCombi i1 i2
+             hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber subjCombi i1 i2
            ParseIncomplete (rem, ps) -> do
              let psf = T.intercalate ", " . map (^. subjectName) . Set.toList $ ps
-             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber _subjCombi rem psf
-           ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber _subjCombi
-           ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber _subjCombi
-      return $ Student (StudentId 0) name _chinese witness klass indexNo subjectIds nric SubmissionNotOpen
+             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber subjCombi rem psf
+           ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber subjCombi
+           ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber subjCombi
+      return $ Student (StudentId 0) name chinese witness klass indexNo subjectIds nric SubmissionNotOpen
   case result of
    Left e -> invalidArgs [TL.toStrict e]
    Right vs -> acidUpdateHandler $ AddStudents force vs

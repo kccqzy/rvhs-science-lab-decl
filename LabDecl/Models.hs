@@ -1,38 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module LabDecl.Models where
 
-import Control.Applicative ((<$>), (*>))
 import Control.Monad
-import Control.Monad.Trans (lift)
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Error
 import Control.Lens
-import Data.List
-import Data.Char
 import qualified Data.Foldable as F
-import qualified Data.ByteString.Char8 as C
-import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy.Encoding as TL
-import qualified Data.Attoparsec.ByteString.Char8 as PC
-import qualified Data.Attoparsec.Text as PT
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.IxSet as IxSet
-import Data.IxSet.Ix (Ix)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Typeable (Typeable, typeOf)
 import qualified Data.Acid as Acid
@@ -192,7 +179,7 @@ addEntity force a = do
 -- one action fails.
 replaceEntity :: (HasAddConstraint a i) => Bool -> a -> IUpdate
 replaceEntity force a = do
-  ensureExist (a ^. idField)
+  _ <- ensureExist (a ^. idField)
   unsafeRemoveEntity (a ^. idField)
   preAddCheck force a
   unsafeAddEntityKeepId a
@@ -207,17 +194,17 @@ removeEntity i = do
 -- | Remove all entities from a table.
 removeAllEntities :: forall a i. (HasDeleteConstraint a i) => Proxy a -> IUpdate
 removeAllEntities _ = do
-  entities <- liftQuery $ listEntities'
+  entities <- liftQuery listEntities'
   F.mapM_ (removeEntity . (^. idField)) entities
   where listEntities' = listEntities :: IQuery (Set a)
 
 -- | Ensure an id exists in the database.
 ensureExist :: forall a i. (HasPrimaryKey a i) => i -> StateT Database (Either TL.Text) a
-ensureExist id = do
-  existing <- liftQuery $ query id
+ensureExist entityId = do
+  existing <- liftQuery query
   lift $ note (errEntityNotExist . typeOf $ (undefined :: a)) existing -- ^ this is ugly
-  where query :: i -> IQuery (Maybe a)
-        query id = unique <$> searchEntitiesEq id
+  where query :: IQuery (Maybe a)
+        query = unique <$> searchEntitiesEq entityId
 
 -- | Check foreign key. Makes sure that there are no references to the
 -- referenced.
@@ -226,8 +213,8 @@ checkForeignKey :: forall a i sa si. (HasPrimaryKey a i, HasPrimaryKey sa si) =>
 checkForeignKey errMsg nameField referencedId = do
   referenced <- ensureExist referencedId
   referencee <- liftQuery $ searchEntitiesEq referencedId
-  unless (Set.null referencee) $ do
-    (lift . Left $ errMsg referencee (referenced ^. nameField))
+  unless (Set.null referencee) $
+    lift . Left $ errMsg referencee (referenced ^. nameField)
 
 -- | No uniqueness checks necessary because CCAs are looked up only
 -- through auto-incremented IDs.
@@ -244,7 +231,7 @@ instance HasDeleteConstraint Cca CcaId where
 -- will check all subjects in the level are uniquely decodable, unless
 -- the subject is force added.
 instance HasAddConstraint Subject SubjectId where
-  preAddCheck force subj = do
+  preAddCheck force subj =
     case subj ^. subjectCode of
      Nothing -> return () -- no need to check anything
      Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
@@ -263,7 +250,7 @@ instance HasDeleteConstraint Subject SubjectId where
 
 -- | Check for uniqueness of email and witnesser name unless forced.
 instance HasAddConstraint Teacher TeacherId where
-  preAddCheck force teacher = do
+  preAddCheck force teacher =
     unless force $ do
       tryLookup teacherEmail teacher errTeacherEmailAlreadyExists
       tryLookup teacherWitnessName teacher errTeacherWitnessNameAlreadyExists
@@ -279,7 +266,7 @@ instance HasDeleteConstraint Teacher TeacherId where
 -- to be called when a teacher adds a student, not when the student
 -- does submission.
 instance HasAddConstraint Student StudentId where
-  preAddCheck force student = do
+  preAddCheck force student =
     unless force $ do
       existing <- liftQuery $ liftM2 lookupStudentByClassIndexNumber (^. studentClass) (^. studentIndexNumber) student
       maybe (return ()) (lift . Left . errStudentAlreadyExists student) existing
@@ -396,55 +383,3 @@ teacherChangeSubmissionStatus newStatus sid = do
 
 teacherChangeManySubmissionStatus :: StudentSubmission -> [StudentId] -> IUpdate
 teacherChangeManySubmissionStatus newStatus = mapM_ (teacherChangeSubmissionStatus newStatus)
-
--- ============================================================
-
--- | The exported update/query event names. These events will be made
--- acidic, and they do not contain type variables.
-eventNames = [
-    'listNothing,
-    'listCcas,
-    'listSubjects,
-    'listTeachers,
-    'listStudents,
-    'lookupCcaById,
-    'lookupSubjectById,
-    'lookupTeacherByEmail,
-    'lookupTeacherByWitnessName,
-    'lookupTeacherById,
-    'lookupSubjectByCodeLevel,
-    'lookupStudentById,
-    'lookupStudentByClassIndexNumber,
-    'listSubjectsByLevel,
-    'listStudentsFromClass,
-    'listStudentsFromCca,
-    'listStudentsWithSubject,
-    'listStudentsWithWitnesser,
-    'listStudentsByStatus,
-    'listStudentsByLevel,
-    'searchStudentsByName,
-    'addCca,
-    'addSubject,
-    'addTeacher,
-    'addStudent,
-    'addStudents,
-    'replaceCca,
-    'replaceSubject,
-    'replaceTeacher,
-    'replaceStudent,
-    'removeCca,
-    'removeSubject,
-    'removeTeacher,
-    'removeStudent,
-    'removeCcas,
-    'removeSubjects,
-    'removeTeachers,
-    'removeStudents,
-    'publicListClasses,
-    'publicListStudentsFromClass,
-    'publicLookupStudentByClassIndexNumber,
-    'publicStudentDoSubmission,
-    'publicStudentSubmissionPdfRendered,
-    'teacherChangeSubmissionStatus,
-    'teacherChangeManySubmissionStatus
-    ]

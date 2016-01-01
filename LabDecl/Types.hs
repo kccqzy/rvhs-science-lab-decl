@@ -9,19 +9,13 @@
 module LabDecl.Types where
 
 import Control.Monad
-import Control.Lens (Lens', makePrisms, makeLenses, (^.), (^?))
+import Control.Lens (Lens', makePrisms, makeLenses, (^.))
 import Control.Error
-import Data.List
-import Data.Char
 import Data.Function
 import qualified Data.ByteString.Char8 as C
-import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
-import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy.Encoding as TL
 import Data.IxSet as IxSet
 import Data.IxSet.Ix (Ix)
 import Data.Set (Set)
@@ -35,8 +29,7 @@ import GHC.Generics (Generic)
 import Data.Time.Calendar
 import Data.Aeson
 import Data.Aeson.TH
-import Data.SafeCopy (SafeCopy, base, deriveSafeCopy)
-import qualified Data.Acid as Acid
+import Data.SafeCopy (base, deriveSafeCopy)
 import Text.Shakespeare.Text (ToText)
 import Web.PathPieces
 import qualified Network.HTTP.Types.Status as HTTP
