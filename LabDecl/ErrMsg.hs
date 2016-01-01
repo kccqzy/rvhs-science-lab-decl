@@ -1,4 +1,3 @@
-{-*- mode: text; -*-}
 {-# LANGUAGE QuasiQuotes #-}
 module LabDecl.ErrMsg where
 
@@ -121,12 +120,12 @@ errCSVDuplicateColumnHeader cells = [stext| Cannot understand the
 
 errCSVClassNoParse row bs = [stext| Cannot understand “#{bs}” as a
   class in row #{row} of uploaded CSV file because it has incorrect
-  format. The correct format is a number from 1 to 6, followed an
+  format. The correct format is a number from 1 to 6, followed by an
   uppercase letter except for O. |]
 
 errCSVNricNoParse row nric = [stext| Cannot understand “#{nric}” as
   NRIC in row #{row} of the uploaded CSV file because it has incorrect
-  format. The correct format of NRIC is: optionally “XXXX” followed by
+  format. The correct format of NRIC is: optionally some X’s followed by
   four decimal digits followed by an uppercase letter which must be
   one of “JZIHGFEDCBAXWUTRQPNMLK”. |]
 

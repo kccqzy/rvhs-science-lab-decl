@@ -4,11 +4,9 @@
 {-# LANGUAGE RecordWildCards #-}
 module LabDecl.AsyncServ where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
-import Control.Arrow (first, second)
-import Control.Exception (SomeException)
+import Control.Arrow (first)
 import Control.Lens
 import Control.Concurrent.STM
 import Control.Concurrent.Async
@@ -17,30 +15,24 @@ import Data.Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
-import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.Builder as TLB
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Aeson as JSON
 import qualified Data.Acid as Acid
-import qualified Data.Acid.Advanced as Acid
 import Data.Time
 import Data.Aeson.TH
-import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
 import Text.Shakespeare.Text (textFile)
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
 import System.Log.Logger (Priority(..), logM) -- TODO use System.Log.FastLogger instead
-import System.Posix.Files (setFileMode, ownerExecuteMode)
 import System.IO (openFile, hClose, IOMode(..))
-import System.IO.Temp (withTempDirectory, withSystemTempDirectory, createTempDirectory)
+import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
-import System.Exit (ExitCode(..))
 
 import qualified RNCryptor
 
@@ -123,8 +115,8 @@ generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir
     Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
     let reportDir = dir ++ "/report/"
     mapM_ (uncurry CL.writeFile . first (reportDir++)) files
-    runTeX lualatex "report" reportDir
-    runTeX lualatex "report" reportDir
+    void $ runTeX lualatex "report" reportDir
+    void $ runTeX lualatex "report" reportDir
     C.readFile $ reportDir ++ jobname ++ ".pdf"
   where runTeX tex jobname cwd = do
           devNullR <- openFile "/dev/null" ReadMode
@@ -193,5 +185,5 @@ asyncMain acid manager lualatex dir notifyChan queue = forever $ do
      case eitherSendMail of
       Left e -> logM "sendMail" ERROR $ "Send mail failed (details = " ++ show e ++ ") when rendering for student " ++ show student
       _ -> return ()
-     Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) filename
+     void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) filename
      liftIO . atomically $ writeTChan notifyChan ()

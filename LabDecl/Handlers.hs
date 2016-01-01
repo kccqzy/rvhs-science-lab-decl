@@ -11,35 +11,25 @@
 {-# LANGUAGE RecordWildCards #-}
 module LabDecl.Handlers where
 
-import Control.Applicative
 import Control.Monad
-import Control.Monad.Loops
 import Control.Monad.Trans
-import Control.Monad.Reader (ReaderT(..), ask)
-import Control.Monad.State (get, put, evalStateT, execStateT, StateT)
-import Control.Monad.STM (STM, atomically)
-import Control.Arrow (first, second)
+import Control.Monad.Reader (ask)
+import Control.Monad.State (get, put, evalStateT)
+import Control.Monad.STM (atomically)
+import Control.Arrow (second)
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM.TQueue
 import Control.Concurrent
 import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
-import Data.List
-import Data.Function
-import Data.Default
-import qualified Data.Char as Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import qualified Data.ByteString.Base64 as C64
 import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Attoparsec.ByteString.Char8 as PC
-import qualified Data.Attoparsec.Text as PT
-import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -53,16 +43,12 @@ import qualified Data.Acid.Advanced as Acid
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
 import Data.Time.Calendar (Day(..))
-import Data.Time.Clock (utctDay, getCurrentTime, secondsToDiffTime)
+import Data.Time.Clock (utctDay, getCurrentTime)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
-import qualified Network.WebSockets as WS
-import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
-import Codec.Text.Detect (detectEncodingName)
 import Yesod.Core
 import Yesod.Form hiding (emailField)
-import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData)
 import Yesod.EmbeddedStatic
 import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
@@ -252,15 +238,18 @@ acidQueryHandler event = do
         return (httpStatus, jsonResponse)
 
   notifyChan <- getNotifyChan <$> ask
-  readChan <- liftIO . atomically . dupTChan $ notifyChan
+  theChan <- liftIO . atomically . dupTChan $ notifyChan
 
-  -- Here we start a new thread that listens to `readChan`, performs the
+  -- Here we start a new thread that listens to `theChan`, performs the
   -- request, compares the request, and possibly sends the request to a new
   -- TQueue.
   resultTQueue <- liftIO . atomically $ newTQueue
-  liftIO . atomically $ writeTChan readChan () -- This is for the first response.
+  liftIO . atomically $ writeTChan theChan () -- This is for the first response.
   async . (`evalStateT` JSON.Null) . forever $ do
-        liftIO . atomically $ readTChan readChan
+    -- Cannot use withAsync here because apparently the current thread may be
+    -- terminated. TODO: Investigate whether using async here will cause a
+    -- resource leak.
+        liftIO . atomically $ readTChan theChan
         prevResponse <- get
         (_, response) <- lift genResponse
         when (response /= prevResponse) $ do
@@ -386,7 +375,7 @@ studentSubmitForm sid = unMFormInput $ do
   hasError <- mireq checkBoxField "haserror"
   today <- mireq todayField "today"
   ua <- mireq textField "ua"
-  return $ (sid, nric, SubmissionCompleted phone email cca hasError Nothing today ua)
+  return (sid, nric, SubmissionCompleted phone email cca hasError Nothing today ua)
 
 studentSubmitPngForm :: FormInput Handler CL.ByteString
 studentSubmitPngForm = ireq pngField "sig"
@@ -399,7 +388,7 @@ studentForm sid = unMFormInput $ do
                   d <- mireq classField "class"
                   e <- mireq intField "indexno"
                   f <- miopt (subjCombiField d) "subj"
-                  let f' = maybe Set.empty id f
+                  let f' = fromMaybe Set.empty f
                   g <- mireq nricField "nric"
                   return $ Student sid a b c d e f' g SubmissionNotOpen
 
@@ -594,7 +583,7 @@ searchByField :: Field Handler QueryEvent
 searchByField = checkMMap fw bw textField
   where bw :: QueryEvent -> T.Text
         bw (QueryEvent tag _) = tag
-        fw crit = do
+        fw crit =
           case crit of
            "none" -> checkMMapOk . QueryEvent crit $ ListNothing
            "all" -> checkMMapOk . QueryEvent crit $ ListStudents
@@ -662,7 +651,7 @@ postManyStudentsR = do
     csvData <- hoistEither $ parseCSV csvText
     allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
     allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
-    V.forM csvData $ \(rowNumber', rawStudent@CsvStudent{..}) -> do
+    V.forM csvData $ \(rowNumber', CsvStudent{..}) -> do
       let rowNumber = succ rowNumber'
       -- attempt to convert rawStudent to a Student
       let name = T.toTitle . unCsvText $ _name
@@ -672,18 +661,16 @@ postManyStudentsR = do
       witness <- hoistEither . parseWitnessName rowNumber allTeachers . unCsvText $ _witness
       let chinese = unCsvText _chinese
       let subjCombi = unCsvText _subjCombi
-      subjectIds <- case (unCsvText _subjCombi) `elem` emptyFieldDesig of
-        True -> return Set.empty
-        False -> do
-          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) $ subjCombi
+      subjectIds <- if unCsvText _subjCombi `elem` emptyFieldDesig then return Set.empty else do
+          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) subjCombi
           case possibilities of
            ParseSuccess s -> return $ Set.mapMonotonic (^. idField) s
            ParseAmbiguous ss -> do
              let (i1:i2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) ss
              hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber subjCombi i1 i2
-           ParseIncomplete (rem, ps) -> do
+           ParseIncomplete (r, ps) -> do
              let psf = T.intercalate ", " . map (^. subjectName) . Set.toList $ ps
-             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber subjCombi rem psf
+             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber subjCombi r psf
            ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber subjCombi
            ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber subjCombi
       return $ Student (StudentId 0) name chinese witness klass indexNo subjectIds nric SubmissionNotOpen
@@ -698,9 +685,7 @@ postManyStudentsR = do
         parseWitnessName row teacherMap s =
           case Map.lookup s teacherMap of
            Just t -> return . Just $ t ^. idField
-           Nothing -> case s `elem` emptyFieldDesig of
-             True -> return Nothing
-             False -> Left $ errCSVWitnessNoParse row s
+           Nothing -> if s `elem` emptyFieldDesig then return Nothing else Left $ errCSVWitnessNoParse row s
         emptyFieldDesig = [ "", "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ]
 
 
