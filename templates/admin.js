@@ -73,10 +73,64 @@ $(function() {
     // are a ton of interoperability errors with actual browsers; (b) proxy
     // servers can wreak havoc with WebSockets running over unsecured HTTP.
     let APIConnectionSSE = (pathname) => {
-        throw 'Unimplemented!';
+        let url = '//' + window.location.host + pathname;
+        let conn = null;
+        let callback = null;
+
+        let connect = () => {
+            // Fortunately, reestablishing connection is automatic.
+            conn = new window.EventSource(url);
+            conn.onmessage = callback;
+        };
+
+        let close = () => {
+            callback = null;
+            conn.close();
+        };
+
+        return {
+            registerCallback: (func) => {
+                if (!conn) connect();
+                let wrapFunc = (e) => func(JSON.parse(e.data));
+                conn.onmessage = wrapFunc;
+                callback = wrapFunc;
+            },
+            pathname: () => pathname,
+            close
+        };
     };
 
-    let APIConnection = APIConnectionWS;
+    // An API Connection using the most rudimentary of all: polling.
+    let APIConnectionPoll = (pathname) => {
+        let url = '//' + window.location.host + pathname;
+        let callback = null;
+        let timeout = null;
+
+        let close = () => {
+            if (timeout) window.clearTimeout(timeout);
+            timeout = null;
+        };
+
+        let wrapFunc = () => {
+            // Perform normal AJAX request and call func
+            $.ajax({url, success: (data) => {
+                // jQuery has called JSON.parse already.
+                if (callback) callback(data);
+                timeout = window.setTimeout(wrapFunc, 3000);
+            }});
+        };
+        wrapFunc();
+
+        return {
+            registerCallback: (func) => {
+                callback = func;
+            },
+            pathname: () => pathname,
+            close
+        };
+    };
+
+    let APIConnection = window.EventSource ? APIConnectionSSE : window.WebSocket ? APIConnectionWS : APIConnectionPoll;
 
     // I have not refactored the code below yet! They do not use ES6, and they
     // use JS-natve mutable data structures!
@@ -1097,7 +1151,7 @@ $(function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var mname = dataSpec.machineName;
             return {
-                conn: APIConnectionWS((this.props.wsUrl || ("/api/" + mname)))
+                conn: APIConnection((this.props.wsUrl || ("/api/" + mname)))
             };
         },
         componentWillReceiveProps: function(newProps) {
@@ -1106,7 +1160,7 @@ $(function() {
                 (function() {
                     that.state.conn.close();
                     return that.setState({
-                        conn: APIConnectionWS(newProps.wsUrl)
+                        conn: APIConnection(newProps.wsUrl)
                     });
                 })() :
                 undefined);
@@ -1214,10 +1268,10 @@ $(function() {
     var AdminStudentsR = React_createClass(_.defaults({
         getInitialState: function() {
             var that = this;
-            var ccaConn = APIConnectionWS("/api/ccas");
-            var teacherConn = APIConnectionWS("/api/teachers");
-            var subjectConn = APIConnectionWS("/api/subjects");
-            var classConn = APIConnectionWS("/api/classes");
+            var ccaConn = APIConnection("/api/ccas");
+            var teacherConn = APIConnection("/api/teachers");
+            var subjectConn = APIConnection("/api/subjects");
+            var classConn = APIConnection("/api/classes");
             ccaConn.registerCallback(function(d) {
                 return that.setState({
                     ccaInfo: d
@@ -1942,11 +1996,11 @@ $(function() {
         },
         componentDidMount: function() {
             var pathname = window.location.pathname;
-            return ((typeof(window.WebSocket) === "undefined") ?
+            return ((typeof(window.EventSource) === "undefined") ?
                 ReactDOM.render(React_createElement(Modal,{
-                    canClose: false,
+                    canClose: true,
                     title: "Browser Unsupported"
-                },React_createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),getModalWrapper()) :
+                },React_createElement("p",{},"Your browser is unsupported. Although you may still be able to use this site, it is ", React_createElement("b",{},"highly recommended")," that you use a different browser, such as Google Chrome 9 or higher, Mozilla Firefox 6 or higher, or Apple Safari 5 or higher. Internet Explorer is known to behave inconsistently and therefore should not be used.")),getModalWrapper()) :
                 ReactDOM.render(React_createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
         }
     },{

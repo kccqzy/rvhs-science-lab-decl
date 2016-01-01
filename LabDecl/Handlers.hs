@@ -21,8 +21,8 @@ import Control.Monad.STM (STM, atomically)
 import Control.Arrow (first, second)
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM.TQueue
-import Control.Concurrent.Async hiding (race)
 import Control.Concurrent
+import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
 import Data.List
@@ -62,7 +62,7 @@ import Network.Wai.Parse (lbsBackEnd)
 import Codec.Text.Detect (detectEncodingName)
 import Yesod.Core
 import Yesod.Form hiding (emailField)
-import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
+import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData)
 import Yesod.EmbeddedStatic
 import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
@@ -76,6 +76,7 @@ import LabDecl.ErrMsg
 import LabDecl.AsyncServ
 import LabDecl.FieldParsers
 import LabDecl.SubjectCodes
+import LabDecl.PushNotifications
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
@@ -236,14 +237,12 @@ getPrivilege = do
              returnOk priv
 
 -- | Generically handles a database query. Sends either a normal JSON
--- response, or establishes a WebSocket connection for push
--- notifications. Implementation note: there are lifts everywhere: the
--- mtl approach of monad transformers broke because there are two
--- Readers in the stack now.
+-- response, or establishes an SSE event stream or WebSocket connection for push
+-- notifications.
 acidQueryHandler :: (ToHTTPStatus (Acid.MethodResult ev),
                      Acid.QueryEvent ev,
                      ToJSON (Acid.MethodResult ev),
-                     Acid.MethodState ev ~ Database) => ev -> Handler Value
+                     Acid.MethodState ev ~ Database) => ev -> Handler TypedContent
 acidQueryHandler event = do
   acid <- getAcid <$> ask
   let genResponse = do
@@ -252,43 +251,29 @@ acidQueryHandler event = do
         let jsonResponse = object [ "meta" .= object [ "code" .= HTTP.statusCode httpStatus ], "data" .= result ]
         return (httpStatus, jsonResponse)
 
-  -- WebSockets push
-  webSockets $ do
-    notifyChan <- getNotifyChan <$> lift ask
-    readChan <- liftIO . atomically . dupTChan $ notifyChan
+  notifyChan <- getNotifyChan <$> ask
+  readChan <- liftIO . atomically . dupTChan $ notifyChan
 
-    -- use StateT to handle cases when the database is updated but the data the client is interested in did not change
-    (`evalStateT` JSON.Null) $ do
-      let sendResponse = do
-            (_, response) <- lift2 genResponse
-            prevResponse <- get
-            when (response /= prevResponse) $ do
-              lift $ sendTextData $ JSON.encode response
-              put response
-      sendResponse
-      forever $ do
-        r <- race
-             (lift receiveNoData) -- wait for client data or close request (exception will be thrown)
-             (liftIO $ race
-              (atomically (readTChanAll_ readChan)) -- wait for update notification
-              (threadDelay 10000000)) -- wait for 10s
-        case r of
-         Left _ -> return () -- ignore client data
-         Right r' -> case r' of
-           Left _ -> sendResponse
-           Right _ -> lift sendPing
+  -- Here we start a new thread that listens to `readChan`, performs the
+  -- request, compares the request, and possibly sends the request to a new
+  -- TQueue.
+  resultTQueue <- liftIO . atomically $ newTQueue
+  liftIO . atomically $ writeTChan readChan () -- This is for the first response.
+  async . (`evalStateT` JSON.Null) . forever $ do
+        liftIO . atomically $ readTChan readChan
+        prevResponse <- get
+        (_, response) <- lift genResponse
+        when (response /= prevResponse) $ do
+          liftIO . atomically . writeTQueue resultTQueue . JSON.encode $ response
+          put response
 
-  -- non WebSocket alternative
-  (httpStatus, jsonResponse) <- genResponse
-  if HTTP.statusIsSuccessful httpStatus
-    then return jsonResponse
-    else sendResponseStatus httpStatus jsonResponse
+  let pushConnTimeouts = TimeoutSpec { retryTimeoutMilliseconds = 3000, keepAliveTimeoutMicroseconds = 10000000}
+  beginSSE pushConnTimeouts resultTQueue . beginWS pushConnTimeouts resultTQueue $ do
+    (httpStatus, jsonResponse) <- genResponse
+    if HTTP.statusIsSuccessful httpStatus
+      then return (toTypedContent jsonResponse)
+      else sendResponseStatus httpStatus (toTypedContent jsonResponse)
 
-  where sendPing :: (MonadIO m) => WebSocketsT m ()
-        sendPing = ReaderT $ liftIO . flip WS.sendPing CL.empty
-        receiveNoData = void $ (receiveData :: (MonadIO m) => WebSocketsT m T.Text)
-        readTChanAll_ = liftM2 (>>) readTChan tryReadTChanAll_
-        tryReadTChanAll_ chan = whileJust_ (tryReadTChan chan) return
 
 -- | Generically handles a database update. When an update is
 -- successful, send a notification to all listening query handlers.
@@ -506,7 +491,7 @@ acidFormUpdateHandler eventCon form = do
   acidUpdateHandler $ eventCon force entity
 
 -- | Enumerate all CCAs with all information. Public.
-getCcasR :: Handler Value
+getCcasR :: Handler TypedContent
 getCcasR = acidQueryHandler ListCcas
 
 -- | Add new CCA. Requires admin.
@@ -514,7 +499,7 @@ postCcasR :: Handler Value
 postCcasR = acidFormUpdateHandler AddCca $ ccaForm (CcaId 0)
 
 -- | Get information about a single Cca. Public.
-getCcaR :: CcaId -> Handler Value
+getCcaR :: CcaId -> Handler TypedContent
 getCcaR = acidQueryHandler . LookupCcaById
 
 -- | Edit CCA. Requires admin.
@@ -528,13 +513,13 @@ deleteCcaR = acidUpdateHandler . RemoveCca
 deleteCcasR :: Handler Value
 deleteCcasR = acidFormUpdateHandler (const RemoveCcas) (iopt rawIdsField "ids")
 
-getSubjectsR :: Handler Value
+getSubjectsR :: Handler TypedContent
 getSubjectsR = acidQueryHandler ListSubjects
 
 postSubjectsR :: Handler Value
 postSubjectsR = acidFormUpdateHandler AddSubject $ subjectForm (SubjectId 0)
 
-getSubjectR :: SubjectId -> Handler Value
+getSubjectR :: SubjectId -> Handler TypedContent
 getSubjectR = acidQueryHandler . LookupSubjectById
 
 putSubjectR :: SubjectId -> Handler Value
@@ -555,13 +540,13 @@ getTestDecodeR = do
   return $ object [ "meta" .= object ["code" .=  (200 :: Int) ], "data" .= parsed ]
   where levelField = radioFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
 
-getTeachersR :: Handler Value
+getTeachersR :: Handler TypedContent
 getTeachersR = acidQueryHandler ListTeachers
 
 postTeachersR :: Handler Value
 postTeachersR = acidFormUpdateHandler AddTeacher $ teacherForm (TeacherId 0)
 
-getTeacherR :: TeacherId -> Handler Value
+getTeacherR :: TeacherId -> Handler TypedContent
 getTeacherR = acidQueryHandler . LookupTeacherById
 
 putTeacherR :: TeacherId -> Handler Value
@@ -573,13 +558,13 @@ deleteTeacherR = acidUpdateHandler . RemoveTeacher
 deleteTeachersR :: Handler Value
 deleteTeachersR = acidFormUpdateHandler (const RemoveTeachers) (iopt rawIdsField "ids")
 
-getClassesR :: Handler Value
+getClassesR :: Handler TypedContent
 getClassesR = acidQueryHandler PublicListClasses
 
-getClassR :: Class -> Handler Value
+getClassR :: Class -> Handler TypedContent
 getClassR = acidQueryHandler . PublicListStudentsFromClass
 
-getPublicStudentR :: Class -> Int -> Handler Value
+getPublicStudentR :: Class -> Int -> Handler TypedContent
 getPublicStudentR klass index = do
   nric <- runInputGet (ireq nricField "nric")
   acidQueryHandler $ PublicLookupStudentByClassIndexNumber klass index nric
@@ -633,7 +618,7 @@ searchByField = checkMMap fw bw textField
              checkMMapOk . QueryEvent crit $ SearchStudentsByName name
            _ -> return $ Left ("no such criteria" :: T.Text)
 
-getStudentsR :: Handler Value
+getStudentsR :: Handler TypedContent
 getStudentsR = do
   QueryEvent _ ev <- runInputGet (ireq searchByField "searchby")
   acidQueryHandler ev
@@ -641,7 +626,7 @@ getStudentsR = do
 postStudentsR :: Handler Value
 postStudentsR = acidFormUpdateHandler AddStudent $ studentForm (StudentId 0)
 
-getStudentR :: StudentId -> Handler Value
+getStudentR :: StudentId -> Handler TypedContent
 getStudentR = acidQueryHandler . LookupStudentById
 
 putStudentR :: StudentId -> Handler Value
