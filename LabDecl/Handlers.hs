@@ -75,6 +75,7 @@ import LabDecl.Models
 import LabDecl.ErrMsg
 import LabDecl.AsyncServ
 import LabDecl.FieldParsers
+import LabDecl.SubjectCodes
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
@@ -315,38 +316,6 @@ acidUpdateHandler event = do
 -- | Just return the result in the context of checkMMap.
 checkMMapOk :: a -> Handler (Either T.Text a)
 checkMMapOk = return . return
-
-data HumanFriendlyParseResult = ParseSuccess (Set Subject)
-                              | ParseAmbiguous [Set Subject]
-                              | ParseIncomplete (T.Text, (Set Subject))
-                              | ParseNothing T.Text
-                              | ParseInternalError
-                              deriving (Show, Eq)
-
-parseSubjectCodeFriendly :: Map T.Text Subject -> T.Text -> HumanFriendlyParseResult
-parseSubjectCodeFriendly allSubjects str =
-  case execStateT (subjectCodesParser allSubjects) (str, Set.empty) of
-   [] -> ParseInternalError -- unreachable
-   [(st, su)] | st == str && Set.null su -> ParseNothing st -- single element
-   (_:[]) -> ParseInternalError -- unreachable
-   possibilities -> -- more than one element: last one is where nothing is parsed
-     case filter (T.null . fst) possibilities of
-      [] -> ParseIncomplete . head $ sortBy (compare `on` (T.length . fst)) possibilities
-      [(_, subjects)] -> ParseSuccess subjects
-      completedPossibilities -> ParseAmbiguous $ map snd completedPossibilities
-
--- | Parses a subject code string into a set of subjects.
-parseSubjectCode :: Map T.Text Subject -> T.Text -> [Set Subject]
-parseSubjectCode allSubjects = map snd . filter (T.null . fst) . execStateT (subjectCodesParser allSubjects) . (,Set.empty)
-
-subjectCodesParser :: Map T.Text Subject -> StateT (T.Text, Set Subject) [] ()
-subjectCodesParser = void . many . subjectCodeParser
-  where subjectCodeParser candidates = do
-          (str, parsed) <- get
-          (code, subject) <- lift $ Map.toList candidates
-          case T.stripPrefix code str of
-           Nothing -> mzero
-           Just remaining -> put (T.dropWhile (PT.inClass " \t,;.&/\\+") remaining, Set.insert subject parsed)
 
 -- | A stronger version of FormInput that allows coupled
 -- fields. Monads assume later computations depend on results of
@@ -782,30 +751,25 @@ getAdminLogoutR = defaultLayout $ do
   addScript $ StaticR bootstrap_js
   toWidget $(hamletFileAuto "templates/didlogout.hamlet")
 
-getAdminHomeR :: Handler Html
-getAdminHomeR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console"
+generateAdminPages :: Html -> Handler Html
+generateAdminPages pageTitle = defaultLayout $ do
+  setTitle pageTitle
   adminSite
+
+getAdminHomeR :: Handler Html
+getAdminHomeR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console"
 
 getAdminCcasR :: Handler Html
-getAdminCcasR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage CCAs"
-  adminSite
+getAdminCcasR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage CCAs"
 
 getAdminTeachersR :: Handler Html
-getAdminTeachersR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Teachers"
-  adminSite
+getAdminTeachersR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage Teachers"
 
 getAdminSubjectsR :: Handler Html
-getAdminSubjectsR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Subjects"
-  adminSite
+getAdminSubjectsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage Subjects"
 
 getAdminStudentsR :: Handler Html
-getAdminStudentsR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
-  adminSite
+getAdminStudentsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
 
 -- | The user-facing frontend.
 getHomepageR :: Handler Html

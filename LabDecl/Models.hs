@@ -40,6 +40,7 @@ import qualified Data.Acid as Acid
 import LabDecl.Types
 import LabDecl.Utilities
 import LabDecl.ErrMsg
+import LabDecl.SubjectCodes
 
 -- |
 -- = Queries
