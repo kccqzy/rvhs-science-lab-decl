@@ -1,7 +1,7 @@
 # For more information, see: https://github.com/commercialhaskell/stack/blob/release/doc/yaml_configuration.md
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: nightly-2015-12-02
+resolver: lts-3.17
 
 # Local packages, usually specified by relative directory name
 packages:
@@ -12,6 +12,7 @@ extra-deps:
 - pbkdf-1.1.1.1
 - ixset-1.0.6
 - syb-with-class-0.6.1.6
+- charsetdetect-ae-1.1.0.1
 
 # Extra package databases containing global packages
 extra-package-dbs: []
@@ -28,5 +29,5 @@ extra-package-dbs: []
 # arch: x86_64
 
 # Extra directories used by stack for building
-extra-include-dirs: [/Users/chamekim/Applications/homebrew/Cellar/icu4c/55.1/include]
-extra-lib-dirs: [/Users/chamekim/Applications/homebrew/Cellar/icu4c/55.1/lib]
+extra-include-dirs: [/usr/local/opt/icu4c/include]
+extra-lib-dirs: [/usr/local/opt/icu4c/lib]

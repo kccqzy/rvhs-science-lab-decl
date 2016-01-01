@@ -814,7 +814,7 @@ adminSite = do
   addScript $ StaticR bootstrap_js
 #ifdef DEVELOPMENT
   addScript $ StaticR react_dev_js
-  toWidget $(juliusFileAuto "templates/admin.js")
+  toWidget $(juliusFileAuto "templates/admin.es5.js")
 #else
   addScript $ StaticR react_js
   addScript $ StaticR admin_min_js

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module LabDecl.Main where
 
@@ -28,6 +29,9 @@ import LabDecl.Handlers
 import LabDecl.AsyncServ
 
 main = do
+#ifdef DEVELOPMENT
+  putStrLn "WARNING: This is a development build."
+#endif
   -- no, we do not use /tmp, you must pass the temp dir explicitly
   tmpdir <- getEnv "LATEX_RUN_FOLDER"
   withTempDirectory tmpdir "labdecld" $ \dir -> do
