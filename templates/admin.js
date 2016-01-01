@@ -29,12 +29,12 @@ $(function() {
                 conn = new window.WebSocket(wsUrl);
                 conn.onmessage = callback;
                 conn.onerror = () => {
-                    console.log("WS connection errored. Retrying.");
+                    console.log("APIConnectionWS: conn.onerror");
                     connect();
                 };
                 conn.onclose = (e) => {
+                    console.log("APIConnectionWS: conn.onclose");
                     console.log(e);
-                    console.log("WS connection closed without request from client. Retrying.");
                     connect();
                 };
             } else {
@@ -49,10 +49,6 @@ $(function() {
             callback = null;
             conn.close();
         };
-
-        $(window).on("beforeunload",function() {
-            close();
-        });
 
         return {
             registerCallback: (func) => {
@@ -81,6 +77,8 @@ $(function() {
             // Fortunately, reestablishing connection is automatic.
             conn = new window.EventSource(url);
             conn.onmessage = callback;
+            conn.onerror = () => {console.log("APIConnectionSSE: conn.onerror");};
+            conn.onclose = () => {console.log("APIConnectionSSE: conn.onclose");};
         };
 
         let close = () => {
@@ -487,6 +485,7 @@ $(function() {
     },_.invert({
         ActionModal: "displayName"
     })));
+
     var AjaxFailableActionModal = React_createClass(_.defaults({
         propTypes: {
             actionButtonType: React_PropTypes.string,
@@ -542,6 +541,7 @@ $(function() {
     },_.invert({
         AjaxFailableActionModal: "displayName"
     })));
+
     var RecordEditor = React_createClass(_.defaults({
         propTypes: {
             entityTypeHumanName: React_PropTypes.string.isRequired,
@@ -595,6 +595,7 @@ $(function() {
     },_.invert({
         RecordEditor: "displayName"
     })));
+
     var CcaEditor = React_createClass(_.defaults({
         propTypes: {
             entity: React_PropTypes.object
@@ -637,6 +638,7 @@ $(function() {
     },_.invert({
         CcaEditor: "displayName"
     })));
+
     var SubjectEditor = React_createClass(_.defaults({
         propTypes: {
             entity: React_PropTypes.object
@@ -748,6 +750,7 @@ $(function() {
     },_.invert({
         SubjectEditor: "displayName"
     })));
+
     var BatchUploadStudents = React_createClass(_.defaults({
         render: function() {
             var that = this;
@@ -791,6 +794,7 @@ $(function() {
     },_.invert({
         BatchUploadStudents: "displayName"
     })));
+
     var TestDecoder = React_createClass(_.defaults({
         getInitialState: function() {
             return {
@@ -880,6 +884,7 @@ $(function() {
     },_.invert({
         TestDecoder: "displayName"
     })));
+
     var TeacherEditor = React_createClass(_.defaults({
         propTypes: {
             entity: React_PropTypes.object
@@ -954,6 +959,7 @@ $(function() {
     },_.invert({
         TeacherEditor: "displayName"
     })));
+
     var StudentEditor = React_createClass(_.defaults({
         propTypes: {
             auxiliary: React_PropTypes.object.isRequired,
@@ -1013,7 +1019,7 @@ $(function() {
                 type: "text",
                 className: "form-control",
                 name: "name",
-                inputmode: "latin-name",
+                inputMode: "latin-name",
                 defaultValue: (this.props.entity ?
                     (this.props.entity).name :
                     "")
@@ -1025,7 +1031,7 @@ $(function() {
                 type: "text",
                 className: "form-control",
                 name: "chinesename",
-                inputmode: "kana",
+                inputMode: "kana",
                 defaultValue: (this.props.entity ?
                     (this.props.entity).chinese_name :
                     "")
@@ -1037,7 +1043,7 @@ $(function() {
                 type: "text",
                 className: "form-control",
                 name: "nric",
-                inputmode: "verbatim",
+                inputMode: "verbatim",
                 defaultValue: (this.props.entity ?
                     (this.props.entity).nric :
                     "")
@@ -1094,6 +1100,7 @@ $(function() {
     },_.invert({
         StudentEditor: "displayName"
     })));
+
     var DeleteConfirmation = React_createClass(_.defaults({
         propTypes: {
             entity: React_PropTypes.object.isRequired
@@ -1123,6 +1130,7 @@ $(function() {
     },_.invert({
         DeleteConfirmation: "displayName"
     })));
+
     var AdminHomeR = React_createClass(_.defaults({
         render: function() {
             return React_createElement("div",{
@@ -1140,6 +1148,7 @@ $(function() {
     },_.invert({
         AdminHomeR: "displayName"
     })));
+
     var EntityPage = React_createClass(_.defaults({
         propTypes: {
             customButtons: React_PropTypes.node,
@@ -1222,6 +1231,7 @@ $(function() {
     },_.invert({
         EntityPage: "displayName"
     })));
+
     var AdminCcasR = React_createClass(_.defaults({
         render: function() {
             return React_createElement(EntityPage,{});
@@ -1233,6 +1243,7 @@ $(function() {
     },_.invert({
         AdminCcasR: "displayName"
     })));
+
     var AdminSubjectsR = React_createClass(_.defaults({
         render: function() {
             var onTestDecodeButtonClick = function() {
@@ -1254,6 +1265,7 @@ $(function() {
     },_.invert({
         AdminSubjectsR: "displayName"
     })));
+
     var AdminTeachersR = React_createClass(_.defaults({
         render: function() {
             return React_createElement(EntityPage,{});
@@ -1265,6 +1277,7 @@ $(function() {
     },_.invert({
         AdminTeachersR: "displayName"
     })));
+
     var AdminStudentsR = React_createClass(_.defaults({
         getInitialState: function() {
             var that = this;
@@ -1527,7 +1540,7 @@ $(function() {
                 type: "checkbox",
                 defaultChecked: true,
                 onChange: onCheckClick
-            }," Hide Students Without Witness"))))),React_createElement("div",{
+            })," Hide Students Without Witness")))),React_createElement("div",{
                 className: "form-group"
             },React_createElement("div",{
                 className: offsetClassName
@@ -1551,11 +1564,13 @@ $(function() {
     },_.invert({
         AdminStudentsR: "displayName"
     })));
+
     var lookupForeign = function(dataset,id) {
         return (_.find(dataset.data,function(v) {
             return (id === v.id);
         }) || "??");
     };
+
     var SubmissionCompleteModal = React_createClass(_.defaults({
         propTypes: {
             sub: React_PropTypes.object.isRequired,
@@ -1606,6 +1621,7 @@ $(function() {
     },_.invert({
         SubmissionCompleteModal: "displayName"
     })));
+
     var pageSpec = {
         "/admin": {
             pageName: "Home",
@@ -1943,6 +1959,7 @@ $(function() {
             }
         }
     };
+
     var Page = React_createClass(_.defaults({
         render: function() {
             var pathname = window.location.pathname;
@@ -2010,6 +2027,7 @@ $(function() {
     },_.invert({
         Page: "displayName"
     })));
+
     return ReactDOM.render(React_createElement(Page,{}),document.getElementById('body'));
 });
 })(window, document, React, ReactDOM, $, _);
