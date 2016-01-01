@@ -736,11 +736,16 @@ adminSite = do
   addScript $ StaticR jquery_js
   addScript $ StaticR underscore_js
   addScript $ StaticR bootstrap_js
+  -- addScript $ StaticR immutable_js
+  toWidget $ [shamlet|<div #body>|]
 #ifdef DEVELOPMENT
-  addScript $ StaticR react_dev_js
-  toWidget $(juliusFileAuto "templates/admin.es5.js")
-#else
   addScript $ StaticR react_js
+  addScript $ StaticR reactdom_js
+  -- toWidget $(juliusFileAuto "templates/admin.es5.js")
+  toWidget $(juliusFileAuto "static/admin.min.js")
+#else
+  addScript $ StaticR react_min_js
+  addScript $ StaticR reactdom_min_js
   addScript $ StaticR admin_min_js
 #endif
 

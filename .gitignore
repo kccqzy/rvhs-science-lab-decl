@@ -5,3 +5,4 @@ state/
 *.dyn_hi
 .module-cache/
 .stack-work/
+.tern-port

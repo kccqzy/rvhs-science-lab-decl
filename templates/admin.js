@@ -1,64 +1,88 @@
 // -*- js2-basic-offset: 4; -*-
 "use strict";
+((window, document, React, ReactDOM, $, _) => {
 $(function() {
-    var React_createElement = React.createElement;
-    var React_createClass = React.createClass;
-    var React_PropTypes = React.PropTypes;
-    var __map = _.map;
-    var identUser = ($("#meta-user")).attr("value");
-    var identPriv = ($("#meta-priv")).attr("value");
-    var APIConnection = function(pathname) {
-        var wsUrl = ((((window.location.protocol === "https:") ?
-            "wss://" :
-            "ws://") + window.location.host) + pathname);
-        var conn = null;
-        var callback = null;
-        var timeConnected = null;
-        var connect = function() {
-            return (((Date.now() - timeConnected) > 2000) ?
-                (function() {
-                    timeConnected = Date.now();
-                    conn = new WebSocket(wsUrl);
-                    conn.onmessage = callback;
-                    conn.onerror = function() {
-                        console.log("WS connection errored. Retrying.");
-                        return connect();
-                    };
-                    conn.onclose = function(e) {
-                        console.log(e);
-                        console.log("WS connection closed without request from client. Retrying.");
-                        return connect();
-                    };
-                })() :
-                setTimeout(connect,(Date.now() - timeConnected)));
-        };
-        var close = function() {
-            conn.onmessage = _.noop;
-            conn.onerror = _.noop;
-            conn.onclose = _.noop;
-            callback = null;
-            return conn.close();
-        };
-        ($(window)).on("beforeunload",function() {
-            return close();
-        });
-        return {
-            registerCallback: function(func) {
-                ((!conn) ?
-                    connect() :
-                    _.noop());
-                var wrapFunc = function(e) {
-                    return func(JSON.parse(e.data));
+    // Here are a few aliases to save typing and help with minification.
+    let React_createElement = React.createElement;
+    let React_createClass = React.createClass;
+    let React_PropTypes = React.PropTypes;
+    let __map = _.map;
+
+    // Identity of current user through meta elements
+    let identUser = $("#meta-user").attr("value");
+    let identPriv = $("#meta-priv").attr("value");
+
+    // An API Connection using WebSocket. Using SSE is now preferred, and so
+    // this is for Internet Explorer only. The APIConnectionWS and
+    // APIConnectionSSE are identical in interface. Both are old-style classes
+    // in which constructor is a simple function that returns an object of
+    // functions.
+    let APIConnectionWS = (pathname) => {
+        let wsUrl = (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + pathname;
+        let conn = null;
+        let callback = null;
+        let timeConnected = null;
+
+        let connect = () => {
+            if (Date.now() - timeConnected > 2000) {
+                timeConnected = Date.now();
+                conn = new window.WebSocket(wsUrl);
+                conn.onmessage = callback;
+                conn.onerror = () => {
+                    console.log("WS connection errored. Retrying.");
+                    connect();
                 };
+                conn.onclose = (e) => {
+                    console.log(e);
+                    console.log("WS connection closed without request from client. Retrying.");
+                    connect();
+                };
+            } else {
+                window.setTimeout(connect,(Date.now() - timeConnected));
+            }
+        };
+
+        let close = () => {
+            conn.onmessage = () => {};
+            conn.onerror = () => {};
+            conn.onclose = () => {};
+            callback = null;
+            conn.close();
+        };
+
+        $(window).on("beforeunload",function() {
+            close();
+        });
+
+        return {
+            registerCallback: (func) => {
+                if (!conn) connect();
+                let wrapFunc = (e) => func(JSON.parse(e.data));
                 conn.onmessage = wrapFunc;
                 callback = wrapFunc;
             },
-            pathname: function() {
-                return pathname;
-            },
-            close: close
+            pathname: () => pathname,
+            close
         };
     };
+
+    // An API Connection using server-sent events. Using SSE is now preferred,
+    // and so the above WS version is deprecated, but needed for IE support.
+    // Both have the same interface though. The reasons why we do not use WS is
+    // because (a) the haskell websocket library is not really mature, and there
+    // are a ton of interoperability errors with actual browsers; (b) proxy
+    // servers can wreak havoc with WebSockets running over unsecured HTTP.
+    let APIConnectionSSE = (pathname) => {
+        throw 'Unimplemented!';
+    };
+
+    let APIConnection = APIConnectionWS;
+
+    // I have not refactored the code below yet! They do not use ES6, and they
+    // use JS-natve mutable data structures!
+
+    // An EntityRow is a row of data in the table. Each row also has
+    // two action buttons.
     var EntityRow = React_createClass(_.defaults({
         propTypes: {
             firstRowSpan: React_PropTypes.number.isRequired,
@@ -82,13 +106,13 @@ $(function() {
                 })() :
                 null);
             var onEditButtonClick = function() {
-                return React.render(React_createElement(that.props.entityEditor,{
+                return ReactDOM.render(React_createElement(that.props.entityEditor,{
                     auxiliary: that.props.auxiliary,
                     entity: that.props.entity
                 }),getModalWrapper());
             };
             var onDeleteButtonClick = function() {
-                return React.render(React_createElement(DeleteConfirmation,{
+                return ReactDOM.render(React_createElement(DeleteConfirmation,{
                     auxiliary: that.props.auxiliary,
                     entity: that.props.entity
                 }),getModalWrapper());
@@ -134,6 +158,9 @@ $(function() {
     },_.invert({
         EntityRow: "displayName"
     })));
+
+    // An EntityCategory is a group of data shared under a category,
+    // presented as a tbody with a single cell spanning all of them.
     var EntityCategory = React_createClass(_.defaults({
         propTypes: {
             entities: React_PropTypes.array.isRequired,
@@ -161,6 +188,9 @@ $(function() {
     },_.invert({
         EntityCategory: "displayName"
     })));
+
+    // An EntityTable is the entire table for holding the data. It
+    // receives events from the two action buttons on each row.
     var EntityTable = React_createClass(_.defaults({
         propTypes: {
             conn: React_PropTypes.object.isRequired,
@@ -270,6 +300,9 @@ $(function() {
     },_.invert({
         EntityTable: "displayName"
     })));
+
+    // The Modal dialog that takes control of input and needs to be
+    // dealt with before the rest of the page is functional.
     var Modal = React_createClass(_.defaults({
         propTypes: {
             canClose: React_PropTypes.bool.isRequired,
@@ -325,12 +358,17 @@ $(function() {
     },_.invert({
         Modal: "displayName"
     })));
+
     var getModalWrapper = function() {
         return ($("#modal-wrapper")).get(0);
     };
+
     var dismissModal = function() {
         return ($("#modal")).modal("hide");
     };
+
+    // An action modal, with custom content, a Cancel button and an
+    // action button.
     var ActionModal = React_createClass(_.defaults({
         propTypes: {
             actionButtonType: React_PropTypes.string,
@@ -1059,7 +1097,7 @@ $(function() {
             var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
             var mname = dataSpec.machineName;
             return {
-                conn: APIConnection((this.props.wsUrl || ("/api/" + mname)))
+                conn: APIConnectionWS((this.props.wsUrl || ("/api/" + mname)))
             };
         },
         componentWillReceiveProps: function(newProps) {
@@ -1068,7 +1106,7 @@ $(function() {
                 (function() {
                     that.state.conn.close();
                     return that.setState({
-                        conn: APIConnection(newProps.wsUrl)
+                        conn: APIConnectionWS(newProps.wsUrl)
                     });
                 })() :
                 undefined);
@@ -1080,12 +1118,12 @@ $(function() {
             var mname = dataSpec.machineName;
             var editor = dataSpec.editor;
             var onAddButtonClick = function() {
-                return React.render(React_createElement(editor,{
+                return ReactDOM.render(React_createElement(editor,{
                     auxiliary: that.props.auxiliary
                 }),getModalWrapper());
             };
             var onRemoveAllButtonClick = function() {
-                return React.render(React_createElement(AjaxFailableActionModal,{
+                return ReactDOM.render(React_createElement(AjaxFailableActionModal,{
                     title: ("Deleting All " + hnamepl),
                     actionButtonLabel: "Yes, Delete All",
                     actionButtonStyle: "danger",
@@ -1144,7 +1182,7 @@ $(function() {
     var AdminSubjectsR = React_createClass(_.defaults({
         render: function() {
             var onTestDecodeButtonClick = function() {
-                return React.render(React_createElement(TestDecoder,{}),getModalWrapper());
+                return ReactDOM.render(React_createElement(TestDecoder,{}),getModalWrapper());
             };
             var customButtons = React_createElement("button",{
                 onClick: onTestDecodeButtonClick,
@@ -1176,10 +1214,10 @@ $(function() {
     var AdminStudentsR = React_createClass(_.defaults({
         getInitialState: function() {
             var that = this;
-            var ccaConn = APIConnection("/api/ccas");
-            var teacherConn = APIConnection("/api/teachers");
-            var subjectConn = APIConnection("/api/subjects");
-            var classConn = APIConnection("/api/classes");
+            var ccaConn = APIConnectionWS("/api/ccas");
+            var teacherConn = APIConnectionWS("/api/teachers");
+            var subjectConn = APIConnectionWS("/api/subjects");
+            var classConn = APIConnectionWS("/api/classes");
             ccaConn.registerCallback(function(d) {
                 return that.setState({
                     ccaInfo: d
@@ -1223,7 +1261,7 @@ $(function() {
         },
         render: function() {
             var onBatchUploadButtonClick = function() {
-                return React.render(React_createElement(BatchUploadStudents,{}),getModalWrapper());
+                return ReactDOM.render(React_createElement(BatchUploadStudents,{}),getModalWrapper());
             };
             var customButtons = React_createElement("button",{
                 onClick: onBatchUploadButtonClick,
@@ -1758,7 +1796,7 @@ $(function() {
                                 });
                             };
                             var onCompleteClick = function() {
-                                return React.render(React_createElement(SubmissionCompleteModal,{
+                                return ReactDOM.render(React_createElement(SubmissionCompleteModal,{
                                     ccaInfo: that.ccaInfo,
                                     sub: sub,
                                     onLockClick: onLockClick,
@@ -1905,11 +1943,11 @@ $(function() {
         componentDidMount: function() {
             var pathname = window.location.pathname;
             return ((typeof(window.WebSocket) === "undefined") ?
-                React.render(React_createElement(Modal,{
+                ReactDOM.render(React_createElement(Modal,{
                     canClose: false,
                     title: "Browser Unsupported"
                 },React_createElement("p",{},"Your browser is too old to use this website. This website requires at least Internet Explorer version 10, Apple Safari version 7, Google Chrome version 16, or Mozilla Firefox version 11. Regardless of which broswer you are using, it is always recommended that you use the latest version available.")),getModalWrapper()) :
-                React.render(React_createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
+                ReactDOM.render(React_createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
         }
     },{
         render: function() {
@@ -1918,8 +1956,9 @@ $(function() {
     },_.invert({
         Page: "displayName"
     })));
-    return React.render(React_createElement(Page,{}),document.body);
+    return ReactDOM.render(React_createElement(Page,{}),document.getElementById('body'));
 });
+})(window, document, React, ReactDOM, $, _);
 
 
 // Local Variables:
