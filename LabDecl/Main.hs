@@ -45,7 +45,7 @@ main = do
     host <- fromString <$> getEnv "LISTEN_HOST"
     portNumOrParseFail <- (PC.parseOnly PC.decimal . C.pack) <$> getEnv "LISTEN_PORT"
     let port = either (const (error "haha")) id portNumOrParseFail
-    let setSettings = foldr (.) (Warp.setServerName "Warp") $ [Warp.setPort port, Warp.setHost host]
+    let setSettings = foldr (.) (Warp.setServerName "Warp") [Warp.setPort port, Warp.setHost host]
 
     -- HTTP manager
     httpManager <- HTTP.newManager HTTP.tlsManagerSettings
@@ -59,10 +59,10 @@ main = do
     -- acid state
     bracket (Acid.openLocalState def) Acid.createCheckpointAndClose $ \acid -> do
       forkIO $ asyncMain acid httpManager lualatex rendererTempDir notifyChan asyncQueue
-      toWaiApp (LabDeclarationApp { getStatic = eStatic,
-                                  getAcid = acid,
-                                  getNotifyChan = notifyChan,
-                                  getHttpManager = httpManager,
-                                  getAsyncQueue = asyncQueue,
-                                  getGoogleCredentials = (googleClientId, googleClientSecret)
-                                }) >>= Warp.runSettings (setSettings Warp.defaultSettings)
+      toWaiApp LabDeclarationApp { getStatic = eStatic,
+                                   getAcid = acid,
+                                   getNotifyChan = notifyChan,
+                                   getHttpManager = httpManager,
+                                   getAsyncQueue = asyncQueue,
+                                   getGoogleCredentials = (googleClientId, googleClientSecret)
+                                } >>= Warp.runSettings (setSettings Warp.defaultSettings)

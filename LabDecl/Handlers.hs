@@ -60,7 +60,6 @@ import qualified Network.WebSockets as WS
 import qualified Network.Wai as Wai
 import Network.Wai.Parse (lbsBackEnd)
 import Codec.Text.Detect (detectEncodingName)
-import qualified Codec.Picture.Png as Png
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 import Yesod.WebSockets (webSockets, WebSocketsT, sendTextData, receiveData, race)
@@ -75,6 +74,7 @@ import LabDecl.StudentCSV
 import LabDecl.Models
 import LabDecl.ErrMsg
 import LabDecl.AsyncServ
+import LabDecl.FieldParsers
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
@@ -413,29 +413,12 @@ emailField :: Field Handler Email
 emailField = checkMMap fw bw (checkBool validateEmail ("email wrong format" :: T.Text) textField)
   where fw = checkMMapOk . Email
         bw (Email e) = e
-        validateEmail = validateEmailBS . T.encodeUtf8
-        validateEmailBS :: C.ByteString -> Bool
-        validateEmailBS = (isRight .) . PC.parseOnly $ do
-          username
-          PC.char '@'
-          domainPart `PC.sepBy1` PC.char '.'
-          PC.endOfInput
-          where username = PC.takeWhile1 $ PC.inClass "a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-"
-                domainPart = do
-                  r <- PC.takeWhile1 (PC.inClass "a-zA-Z0-9") `PC.sepBy1` PC.char '-'
-                  guard $ C.length (C.intercalate "-" r) <= 63
 
 sgPhoneField :: Field Handler Phone
 sgPhoneField = checkMMap fw bw (checkBool validatePhone ("phone wrong format" :: T.Text) textField)
   where fw = checkMMapOk . Phone
         bw (Phone p) = p
-        validatePhone = validatePhoneBS . T.encodeUtf8
-        validatePhoneBS = (isRight .) . PC.parseOnly $ do
-          PC.string "+65 "
-          PC.count 4 PC.digit
-          PC.char ' '
-          PC.count 4 PC.digit
-          PC.endOfInput
+
 
 studentSubmitForm :: StudentId -> FormInput Handler (StudentId, Nric, StudentSubmission)
 studentSubmitForm sid = unMFormInput $ do
@@ -472,12 +455,7 @@ classField = checkMMap fw bw textField
         fw = return . parseClass . T.encodeUtf8 . T.toUpper . T.strip
 
 parseClass :: C.ByteString -> Either T.Text Class
-parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ do
-  l <- Char.digitToInt <$> PC.digit
-  guard $ 1 <= l && l <= 6
-  c <- PC.satisfy $ PC.inClass "A-NP-Z"
-  PC.endOfInput
-  return $ Class (l, c)
+parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ classParser
 
 instance PathPiece Class where
   toPathPiece (Class (l, c)) = T.pack $ show l ++ [c]
@@ -489,21 +467,7 @@ nricField = checkMMap fw bw textField
         fw = return . parseNric . T.encodeUtf8
 
 parseNric :: C.ByteString -> Either T.Text Nric
-parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ do
-  many (PC.char 'X')
-  prefix <- PC.option Nothing (Just <$> PC.satisfy (PC.inClass "SFTG"))
-  digits <- PC.many1 PC.digit
-  guard $ length digits >= 4 && length digits <= 7
-  suffix <- case (prefix, digits) of
-    (Just c, [d1,d2,d3,d4,d5,d6,d7]) -> do
-      let prefixNum = if c `C.elem` "SF" then 0 else 4
-      let check = (`rem` 11) . (+ prefixNum) . sum . zipWith (*) [2,7,6,5,4,3,2] . map Char.digitToInt $ digits
-      PC.char $ "JZIHGFEDCBAXWUTRQPNMLK" !! (prefixNum `div` 4 * 11 + check)
-    _ -> PC.satisfy $ PC.inClass "JZIHGFEDCBAXWUTRQPNMLK"
-  PC.endOfInput
-  return . Nric . T.pack $ case prefix of
-   Nothing -> digits ++ [suffix]
-   Just p  -> p : digits ++ [suffix]
+parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ nricParser
 
 todayField :: Field Handler Day
 todayField = checkMMap fw bw checkBoxField
@@ -517,13 +481,6 @@ pngField = checkMMap fw bw textField
   where bw = T.decodeUtf8 . CL.toStrict . CL.append "data:image/png;base64," . CL64.encode
         fw = return . parsePngData . T.encodeUtf8
 
-parsePngData :: C.ByteString -> Either T.Text CL.ByteString
-parsePngData bs = note "invalid image data" . hush $ do
-  data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
-  d <- C64.decode data64
-  Png.decodePng d
-  return $ CL.fromStrict d
-
 -- This does not check existence of ids. Only used for directly
 -- manipulating the referenced entities, not for creating foreign
 -- references.
@@ -531,10 +488,6 @@ rawIdsField :: (HasPrimaryKey a i) => Field Handler [i]
 rawIdsField = checkMMap fw bw textField
   where bw = undefined -- XXX
         fw = return . parseIntList . T.encodeUtf8
-
-parseIntList :: (HasPrimaryKey a i) => C.ByteString -> Either T.Text [i]
-parseIntList = ((note "wrong id list" . hush) . ) . PC.parseOnly $
-               map idConstructor <$> PC.sepBy1 PC.decimal (PC.char ',') <* PC.endOfInput
 
 ccaIdField :: Field Handler CcaId
 ccaIdField = checkMMap fw bw intField
