@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -63,8 +62,8 @@ $(liftM concat . mapM (deriveJSON defaultOptions {
 
 type AsyncPipeline a b = a -> IO b
 
-sendGae :: JSON.ToJSON a => String -> HTTP.Manager -> a -> IO ()
-sendGae endpoint manager payload = do
+sendGae :: JSON.ToJSON a => String -> Bool -> HTTP.Manager -> a -> IO ()
+sendGae endpoint isDevelopment manager payload = do
   let url = hostname ++ endpoint
   let encoded = CL.toStrict $ JSON.encode payload
   Right encrypted <- RNCryptor.encrypt credentials encoded
@@ -72,17 +71,13 @@ sendGae endpoint manager payload = do
   let request = HTTP.urlEncodedBody [("payload", C64.encode encrypted)] origRequest
   void $ HTTP.httpNoBody request manager
   where credentials = RNCryptor.Password "TXyT-oqOs-Jwq0-knne-Vui8-1ABd-R1b5-56jL-zhph-LcwL-PzfZ-HIkv-4sLt-AHMK-3LO3-mXEj"
-#ifdef DEVELOPMENT
-        hostname = "http://localhost:8080/"
-#else
-        hostname = "https://rvhs-sci-lab-undertaking.appspot.com/"
-#endif
+        hostname = if isDevelopment then "http://localhost:8080/" else "https://rvhs-sci-lab-undertaking.appspot.com/"
 
 -- | Sends an email using the Python daemon.
-sendMail :: HTTP.Manager -> GAEMail -> IO ()
+sendMail :: Bool -> HTTP.Manager -> GAEMail -> IO ()
 sendMail = sendGae "mail"
 
-uploadFile :: HTTP.Manager -> GAEFile -> IO ()
+uploadFile :: Bool -> HTTP.Manager -> GAEFile -> IO ()
 uploadFile = sendGae "storage"
 
 formatClass :: Class -> T.Text
@@ -165,8 +160,8 @@ generateMail student pdf = do
 
 type AsyncInput = (Student, Maybe Teacher, Set Subject, CL.ByteString)
 
-asyncMain :: Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> IO ()
-asyncMain acid manager lualatex dir notifyChan queue = forever $ do
+asyncMain :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> IO ()
+asyncMain isDevelopment acid manager lualatex dir notifyChan queue = forever $ do
   (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
   let tex = generateTeX student witness subjects
   genPDFOp <- async $ generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
@@ -175,8 +170,8 @@ asyncMain acid manager lualatex dir notifyChan queue = forever $ do
    Left e -> logM "generatePDF" ERROR $ "LaTeX render failed (details = " ++ show e ++ ") when rendering for student " ++ show student
    Right pdf -> do
      filename <- generateFileName student
-     fileUploadOp <- liftIO . async $ generateFileUpload student pdf >>= uploadFile manager
-     sendMailOp <- liftIO . async $ generateMail student pdf >>= sendMail manager
+     fileUploadOp <- liftIO . async $ generateFileUpload student pdf >>= uploadFile isDevelopment manager
+     sendMailOp <- liftIO . async $ generateMail student pdf >>= sendMail isDevelopment manager
      eitherFileUpload <- waitCatch fileUploadOp
      eitherSendMail <- waitCatch sendMailOp
      case eitherFileUpload of

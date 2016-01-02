@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -52,6 +51,9 @@ import Yesod.Form hiding (emailField)
 import Yesod.EmbeddedStatic
 import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
+import Text.Cassius (cassiusFile, cassiusFileReload)
+import Text.Hamlet (hamletFile, hamletFileReload)
+import Text.Julius (juliusFile, juliusFileReload)
 
 import LabDecl.Utilities
 import LabDecl.Types
@@ -72,7 +74,8 @@ data LabDeclarationApp = LabDeclarationApp {
   getHttpManager :: HTTP.Manager,
   getAsyncQueue :: TQueue AsyncInput,
   getGoogleCredentials :: (T.Text, T.Text),
-  getApproot :: T.Text
+  getApproot :: T.Text,
+  isDevelopment :: Bool
   }
 
 $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
@@ -115,14 +118,10 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 
 instance Yesod LabDeclarationApp where
 
+  -- | The app root.
   approot = ApprootMaster getApproot
 
-#ifdef DEVELOPMENT
-  isAuthorized _ _ = do
-    setSession "user" "qzy@qzy.io"
-    setSession "priv" (T.pack (show PrivAdmin))
-    return Authorized
-#else
+  -- | The privilege table.
   isAuthorized CcasR                 w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized (CcaR _)              w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized SubjectsR             w = requirePrivilege (if w then PrivAdmin else PrivNone)
@@ -148,7 +147,6 @@ instance Yesod LabDeclarationApp where
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
-#endif
 
   -- | Static files.
   addStaticContent = embedStaticContent getStatic StaticR Right
@@ -183,13 +181,18 @@ data Privilege = PrivNone
 requirePrivilege :: Privilege -> Handler AuthResult
 requirePrivilege privReq
   | privReq == PrivNone = return Authorized
-  | otherwise =
-      maybe
-        AuthenticationRequired
-        (\(u, p) -> if p >= privReq
-                    then Authorized
-                    else Unauthorized $ T.concat ["Insufficient privileges. Your account ", u, " is not allowed to access the admin console."])
-        <$> getPrivilege
+  | otherwise = do
+      dev <- isDevelopment <$> ask
+      if dev
+        then do
+        setSession "user" "qzy@qzy.io"
+        setSession "priv" (T.pack (show PrivAdmin))
+        return Authorized
+        else maybe AuthenticationRequired
+             (\(u, p) -> if p >= privReq
+                         then Authorized
+                         else Unauthorized $ T.concat ["Insufficient privileges. Your account ", u, " is not allowed to access this."])
+             <$> getPrivilege
 
 getPrivilege :: Handler (Maybe (T.Text, Privilege))
 getPrivilege = do
@@ -686,8 +689,8 @@ postManyStudentsR = do
 -- |
 -- = HTML handlers
 
-adminSite :: Widget
-adminSite = do
+adminSite :: Bool -> Widget
+adminSite dev = do
   mbUserPriv <- (liftM2.liftM2) (,) (lookupSession "user") (lookupSession "priv")
   case mbUserPriv of
    Nothing -> return ()
@@ -702,30 +705,36 @@ adminSite = do
   addScript $ StaticR bootstrap_js
   -- addScript $ StaticR immutable_js
   toWidget $ [shamlet|<div #body>|]
-#ifdef DEVELOPMENT
-  addScript $ StaticR react_js
-  addScript $ StaticR reactdom_js
-  -- toWidget $(juliusFileAuto "templates/admin.es5.js")
-  toWidget $(juliusFileAuto "static/admin.min.js")
-#else
-  addScript $ StaticR react_min_js
-  addScript $ StaticR reactdom_min_js
-  addScript $ StaticR admin_min_js
-#endif
+  if dev
+    then do
+    addScript $ StaticR react_js
+    addScript $ StaticR reactdom_js
+    -- toWidget $(juliusFileReload "templates/admin.es5.js")
+    toWidget $(juliusFileReload "static/admin.min.js")
+    else do
+    addScript $ StaticR react_min_js
+    addScript $ StaticR reactdom_min_js
+    addScript $ StaticR admin_min_js
 
 getAdminLogoutR :: Handler Html
-getAdminLogoutR = defaultLayout $ do
-  setTitle "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful"
-  addStylesheet $ StaticR bootstrap_min_css
-  addStylesheet $ StaticR bootstrapt_min_css
-  addScript $ StaticR jquery_js
-  addScript $ StaticR bootstrap_js
-  toWidget $(hamletFileAuto "templates/didlogout.hamlet")
+getAdminLogoutR = do
+  dev <- isDevelopment <$> ask
+  defaultLayout $ do
+    setTitle "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful"
+    addStylesheet $ StaticR bootstrap_min_css
+    addStylesheet $ StaticR bootstrapt_min_css
+    addScript $ StaticR jquery_js
+    addScript $ StaticR bootstrap_js
+    if dev
+      then toWidget $(hamletFileReload "templates/didlogout.hamlet")
+      else toWidget $(hamletFile "templates/didlogout.hamlet")
 
 generateAdminPages :: Html -> Handler Html
-generateAdminPages pageTitle = defaultLayout $ do
-  setTitle pageTitle
-  adminSite
+generateAdminPages pageTitle = do
+  dev <- isDevelopment <$> ask
+  defaultLayout $ do
+    setTitle pageTitle
+    adminSite dev
 
 getAdminHomeR :: Handler Html
 getAdminHomeR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console"
@@ -744,16 +753,21 @@ getAdminStudentsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Co
 
 -- | The user-facing frontend.
 getHomepageR :: Handler Html
-getHomepageR = defaultLayout $ do
-  setTitle "River Valley High School Science Lab Declaration"
-  toWidgetHead $(hamletFileAuto "templates/app.head.hamlet")
-  addScript $ StaticR jquery_js
-  addScript $ StaticR jquery_mobile_custom_js
-  addScript $ StaticR underscore_js
-#ifdef DEVELOPMENT
-  toWidget $(juliusFileAuto "templates/app.js")
-#else
-  addScript $ StaticR app_min_js
-#endif
-  toWidget $(hamletFileAuto "templates/app.hamlet")
-  toWidget $(cassiusFileAuto "templates/app.cassius")
+getHomepageR = do
+  dev <- isDevelopment <$> ask
+  defaultLayout $ do
+    setTitle "River Valley High School Science Lab Declaration"
+    addScript $ StaticR jquery_js
+    addScript $ StaticR jquery_mobile_custom_js
+    addScript $ StaticR underscore_js
+    if dev
+      then do
+           toWidgetHead $(hamletFileReload "templates/app.head.hamlet")
+           toWidget $(juliusFileReload "templates/app.js")
+           toWidget $(hamletFileReload "templates/app.hamlet")
+           toWidget $(cassiusFileReload "templates/app.cassius")
+      else do
+           toWidgetHead $(hamletFile "templates/app.head.hamlet")
+           addScript $ StaticR app_min_js
+           toWidget $(hamletFile "templates/app.hamlet")
+           toWidget $(cassiusFile "templates/app.cassius")

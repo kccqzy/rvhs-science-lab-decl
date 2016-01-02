@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module LabDecl.Main where
 
@@ -29,9 +28,13 @@ import LabDecl.Handlers
 import LabDecl.AsyncServ
 
 main = do
-#ifdef DEVELOPMENT
-  putStrLn "WARNING: This is a development build."
-#endif
+  developmentEnvVar <- lookupEnv "DEVELOPMENT"
+  let isDevelopment = case developmentEnvVar of
+        Nothing -> False
+        Just "0" -> False
+        Just "1" -> True
+        Just _ -> error "The environment variable DEVELOPMENT should be unset, or set to 0 or 1."
+  when isDevelopment $ putStrLn "WARNING: Currently running in DEVELOPMENT mode."
   -- no, we do not use /tmp, you must pass the temp dir explicitly
   tmpdir <- getEnv "LATEX_RUN_FOLDER"
   withTempDirectory tmpdir "labdecld" $ \dir -> do
@@ -61,12 +64,13 @@ main = do
 
     -- acid state
     bracket (Acid.openLocalState def) Acid.createCheckpointAndClose $ \acid -> do
-      forkIO $ asyncMain acid httpManager lualatex rendererTempDir notifyChan asyncQueue
+      forkIO $ asyncMain isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue
       toWaiApp LabDeclarationApp { getStatic = eStatic,
                                    getAcid = acid,
                                    getNotifyChan = notifyChan,
                                    getHttpManager = httpManager,
                                    getAsyncQueue = asyncQueue,
                                    getGoogleCredentials = (googleClientId, googleClientSecret),
-                                   getApproot = approot
+                                   getApproot = approot,
+                                   isDevelopment = isDevelopment
                                 } >>= Warp.runSettings (setSettings Warp.defaultSettings)

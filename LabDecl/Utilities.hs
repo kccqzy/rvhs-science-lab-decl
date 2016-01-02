@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 module LabDecl.Utilities where
 
 import Control.Monad
@@ -13,9 +12,6 @@ import Data.Set (Set)
 import qualified Data.Text.ICU.Convert as ICU
 import qualified Data.Set as Set
 import Language.Haskell.TH
-import Text.Cassius (cassiusFile, cassiusFileReload)
-import Text.Hamlet (hamletFile, hamletFileReload)
-import Text.Julius (juliusFile, juliusFileReload)
 
 unique :: Set a -> Maybe a
 unique s = case Set.toList s of
@@ -61,13 +57,3 @@ textIndex withShort = filter (not . T.null) . nub . concatMap (if withShort then
 
 jsonLabel :: String -> String
 jsonLabel = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
-
-#ifdef DEVELOPMENT
-juliusFileAuto = juliusFileReload
-hamletFileAuto = hamletFileReload
-cassiusFileAuto = cassiusFileReload
-#else
-juliusFileAuto = juliusFile
-hamletFileAuto = hamletFile
-cassiusFileAuto = cassiusFile
-#endif
