@@ -71,7 +71,8 @@ data LabDeclarationApp = LabDeclarationApp {
   getNotifyChan :: TChan (),
   getHttpManager :: HTTP.Manager,
   getAsyncQueue :: TQueue AsyncInput,
-  getGoogleCredentials :: (T.Text, T.Text)
+  getGoogleCredentials :: (T.Text, T.Text),
+  getApproot :: T.Text
   }
 
 $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
@@ -114,17 +115,14 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 
 instance Yesod LabDeclarationApp where
 
-#ifdef DEVELOPMENT
+  approot = ApprootMaster getApproot
 
+#ifdef DEVELOPMENT
   isAuthorized _ _ = do
     setSession "user" "qzy@qzy.io"
     setSession "priv" (T.pack (show PrivAdmin))
     return Authorized
-  approot = ApprootStatic "http://localhost:8081"
-
 #else
-
-  -- | Authorisation table
   isAuthorized CcasR                 w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized (CcaR _)              w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized SubjectsR             w = requirePrivilege (if w then PrivAdmin else PrivNone)
@@ -150,10 +148,6 @@ instance Yesod LabDeclarationApp where
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
-
-  -- | App root
-  approot = ApprootStatic "http://gce.qzy.st"
-
 #endif
 
   -- | Static files.

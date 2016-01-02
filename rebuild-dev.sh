@@ -1,15 +1,4 @@
 #!/bin/bash
-OPTIND=1
-FULL_BUILD=0
-while getopts "wsa" opt; do
-    case "$opt" in
-    f)  FULL_BUILD=1
-        ;;
-    esac
-done
-shift $((OPTIND-1))
-[ "$1" = "--" ] && shift
-
 set -e
 set -x
 export LATEX_RUN_FOLDER=../scratch/LATEX_RUN_FOLDER
@@ -18,6 +7,6 @@ export GOOGLE_CLIENT_SECRET=NULL
 export LUALATEX=$(which lualatex)
 export LISTEN_HOST=127.0.0.1
 export LISTEN_PORT=8081
-[ "$FULL_BUILD" = "1" ] && stack clean
+export APPROOT="http://127.0.0.1:8081"
 stack build --ghc-options -DDEVELOPMENT
 stack exec labdecl

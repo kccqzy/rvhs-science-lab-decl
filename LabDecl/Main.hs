@@ -47,6 +47,9 @@ main = do
     let port = either (const (error "haha")) id portNumOrParseFail
     let setSettings = foldr (.) (Warp.setServerName "Warp") [Warp.setPort port, Warp.setHost host]
 
+    -- Yesod approot setting
+    approot <- fromString <$> getEnv "APPROOT"
+
     -- HTTP manager
     httpManager <- HTTP.newManager HTTP.tlsManagerSettings
 
@@ -64,5 +67,6 @@ main = do
                                    getNotifyChan = notifyChan,
                                    getHttpManager = httpManager,
                                    getAsyncQueue = asyncQueue,
-                                   getGoogleCredentials = (googleClientId, googleClientSecret)
+                                   getGoogleCredentials = (googleClientId, googleClientSecret),
+                                   getApproot = approot
                                 } >>= Warp.runSettings (setSettings Warp.defaultSettings)

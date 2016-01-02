@@ -1,6 +1,10 @@
+.git/
+.*.swp
+*.sh
 client_session_key.aes
 state/
 .module-cache/
 .stack-work/
 .tern-port
+pydaemon/
 SECRETS
