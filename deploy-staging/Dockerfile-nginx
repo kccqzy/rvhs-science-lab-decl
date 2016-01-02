@@ -1,0 +1,5 @@
+FROM nginx
+MAINTAINER QZY <qzy@qzy.io>
+RUN apt-get update && apt-get install -y wget ca-certificates && apt-get clean && rm -r /var/lib/apt/lists/*
+COPY dhparams.pem /etc/ssl/private/
+COPY nginx.conf /etc/nginx

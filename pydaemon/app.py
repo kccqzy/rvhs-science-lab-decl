@@ -1,7 +1,7 @@
-import webapp2
 import logging
 import json
 import base64
+import webapp2
 from RNCryptor import RNCryptor
 
 from google.appengine.api import mail
@@ -12,7 +12,7 @@ bucket_name = 'rvhs-labdecl-blobs'
 
 class Homepage(webapp2.RequestHandler):
     def get(self):
-        return webapp2.redirect('http://gce.qzy.st/', code=301)
+        self.response.set_status(422)
 
 def decrypt(req):
             decoded = base64.b64decode(req)

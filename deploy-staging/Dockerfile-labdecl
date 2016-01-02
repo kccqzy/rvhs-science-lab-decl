@@ -1,0 +1,13 @@
+FROM ubuntu:14.04
+MAINTAINER QZY <qzy@qzy.io>
+RUN apt-get update && apt-get install -y ca-certificates libgmp10 libicu52 xzdec && apt-get clean && rm -rf /var/lib/apt/lists/*
+ADD https://dl.dropboxusercontent.com/u/845567/texlive-2014-portable.tar.xz /
+RUN xzdec /texlive-2014-portable.tar.xz | tar x
+RUN rm /texlive-2014-portable.tar.xz
+ADD buildresult.tar.xz /
+RUN mkdir /tmp/latex-run
+ENV LATEX_RUN_FOLDER=/tmp/latex-run GOOGLE_CLIENT_ID=950258003533-ogulko7oiqag755tgglr77akncrutqua.apps.googleusercontent.com GOOGLE_CLIENT_SECRET=p0nv-ZRvAf6Pxi2NpdIu6v2G LUALATEX=/texlive-2014-portable/bin/x86_64-linux/lualatex LISTEN_PORT=8081 LISTEN_HOST="*4"
+WORKDIR /database
+EXPOSE 8081
+CMD /buildresult/labdecl
+STOPSIGNAL SIGINT
