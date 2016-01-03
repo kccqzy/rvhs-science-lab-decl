@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -18,13 +19,11 @@ import Control.Monad.STM (atomically)
 import Control.Arrow (second)
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM.TQueue
-import Control.Concurrent
 import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
@@ -35,15 +34,11 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
 import qualified Data.Aeson as JSON
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
-import Data.Time.Calendar (Day(..))
-import Data.Time.Clock (utctDay, getCurrentTime)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
 import Network.Wai.Parse (lbsBackEnd)
@@ -54,16 +49,18 @@ import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
 import Text.Cassius (cassiusFile, cassiusFileReload)
 import Text.Hamlet (hamletFile, hamletFileReload)
-import Text.Julius (juliusFile, juliusFileReload)
+import Text.Julius (juliusFileReload)
 
 import LabDecl.Utilities
 import LabDecl.Types
 import LabDecl.AcidicModels
-import LabDecl.StudentCSV
+import LabDecl.FuzzyCsv
+import LabDecl.EntityCsv
 import LabDecl.Models
 import LabDecl.ErrMsg
 import LabDecl.AsyncServ
 import LabDecl.FieldParsers
+import LabDecl.FormFields
 import LabDecl.SubjectCodes
 import LabDecl.PushNotifications
 
@@ -87,6 +84,7 @@ $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
 -- replace* and remove* respectively. GET requests of /api/items allow
 -- searching through query args. Most of them just does simple
 -- marshalling and then invoke the events in LabDecl.AcidicModels.
+-- The exclamation mark means overlap checking is disabled.
 $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/ccas                 CcasR          GET POST DELETE
 /api/ccas/#CcaId          CcaR           GET PUT DELETE
@@ -136,6 +134,8 @@ instance Yesod LabDeclarationApp where
   isAuthorized StudentsR             w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
   isAuthorized ManyStudentsR         _ = requirePrivilege PrivAdmin
   isAuthorized (StudentR _)          w = requirePrivilege (if w then PrivAdmin else PrivTeacher)
+  isAuthorized LockManySubmissionsR  _ = requirePrivilege PrivTeacher
+  isAuthorized UnlockManySubmissionsR  _ = requirePrivilege PrivTeacher
   isAuthorized (StudentSubmitR _)    _ = requirePrivilege PrivNone
   isAuthorized (LockSubmissionR _)   _ = requirePrivilege PrivTeacher
   isAuthorized (UnlockSubmissionR _) _ = requirePrivilege PrivTeacher
@@ -285,10 +285,6 @@ acidUpdateHandler event = do
   where jsonNull :: Maybe ()
         jsonNull = Nothing
 
--- | Just return the result in the context of checkMMap.
-checkMMapOk :: a -> Handler (Either T.Text a)
-checkMMapOk = return . return
-
 -- | A stronger version of FormInput that allows coupled
 -- fields. Monads assume later computations depend on results of
 -- earlier ones, so only one error message can be provided.
@@ -336,11 +332,6 @@ subjectForm sid = Subject
                   <*> ireq checkBoxField "science"
                   <*> ireq levelField "level"
 
-levelField :: Field Handler IntSet
-levelField = checkMMap fw bw $ checkboxesFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
-  where fw = checkMMapOk . IntSet.fromList
-        bw = IntSet.toList
-
 teacherForm :: TeacherId -> FormInput Handler Teacher
 teacherForm tid = Teacher
                   <$> pure tid
@@ -349,16 +340,6 @@ teacherForm tid = Teacher
                   <*> ireq textField "name"
                   <*> ireq textField "witness"
                   <*> ireq emailField "email"
-
-emailField :: Field Handler Email
-emailField = checkMMap fw bw (checkBool validateEmail ("email wrong format" :: T.Text) textField)
-  where fw = checkMMapOk . Email
-        bw (Email e) = e
-
-sgPhoneField :: Field Handler Phone
-sgPhoneField = checkMMap fw bw (checkBool validatePhone ("phone wrong format" :: T.Text) textField)
-  where fw = checkMMapOk . Phone
-        bw (Phone p) = p
 
 
 studentSubmitForm :: StudentId -> FormInput Handler (StudentId, Nric, StudentSubmission)
@@ -390,67 +371,15 @@ studentForm sid = unMFormInput $ do
                   g <- mireq nricField "nric"
                   return $ Student sid a b c d e f' g SubmissionNotOpen
 
-classField :: Field Handler Class
-classField = checkMMap fw bw textField
-  where bw = toPathPiece
-        fw = return . parseClass . T.encodeUtf8 . T.toUpper . T.strip
-
-parseClass :: C.ByteString -> Either T.Text Class
-parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ classParser
-
 instance PathPiece Class where
   toPathPiece (Class (l, c)) = T.pack $ show l ++ [c]
   fromPathPiece = hush . parseClass . T.encodeUtf8
 
-nricField :: Field Handler Nric
-nricField = checkMMap fw bw textField
-  where bw (Nric s) = s
-        fw = return . parseNric . T.encodeUtf8
-
-parseNric :: C.ByteString -> Either T.Text Nric
-parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ nricParser
-
-todayField :: Field Handler Day
-todayField = checkMMap fw bw checkBoxField
-  where bw _ = False
-        fw _ = do
-          today <- liftIO $ utctDay <$> getCurrentTime
-          checkMMapOk today
-
-pngField :: Field Handler CL.ByteString
-pngField = checkMMap fw bw textField
-  where bw = T.decodeUtf8 . CL.toStrict . CL.append "data:image/png;base64," . CL64.encode
-        fw = return . parsePngData . T.encodeUtf8
-
--- This does not check existence of ids. Only used for directly
--- manipulating the referenced entities, not for creating foreign
--- references.
-rawIdsField :: (HasPrimaryKey a i) => Field Handler [i]
-rawIdsField = checkMMap fw bw textField
-  where bw = undefined -- XXX
-        fw = return . parseIntList . T.encodeUtf8
-
 ccaIdField :: Field Handler CcaId
-ccaIdField = checkMMap fw bw intField
-  where bw (CcaId i) = i
-        fw i = do
-          acid <- getAcid <$> ask
-          let rv = CcaId i
-          e <- liftIO $ Acid.query acid $ LookupCcaById (CcaId i)
-          case e of
-           Nothing -> return . Left $ ("no such cca" :: T.Text)
-           Just _ -> return . Right $ rv
+ccaIdField = existingIdField getAcid "no such cca"
 
 teacherIdField :: Field Handler TeacherId
-teacherIdField = checkMMap fw bw intField
-  where bw (TeacherId i) = i
-        fw i = do
-          acid <- getAcid <$> ask
-          let rv = TeacherId i
-          e <- liftIO $ Acid.query acid $ LookupTeacherById (TeacherId i)
-          case e of
-           Nothing -> return . Left $ ("no such teacher" :: T.Text)
-           Just _ -> return . Right $ rv
+teacherIdField = existingIdField getAcid "no such teacher"
 
 subjCombiField :: Class -> Field Handler (Set SubjectId)
 subjCombiField klass = checkMMap fw bw (checkboxesField optlist)
@@ -519,13 +448,13 @@ deleteSubjectsR :: Handler Value
 deleteSubjectsR = acidFormUpdateHandler (const RemoveSubjects) (iopt rawIdsField "ids")
 
 getTestDecodeR :: Handler Value
-getTestDecodeR = do
-  (level, str) <- runInputGet $ (,) <$> ireq levelField "level" <*> ireq textField "str"
+getTestDecodeR = do -- TODO use parseSubjectCodeFriendly
+  (level, str) <- runInputGet $ (,) <$> ireq oneLevelField "level" <*> ireq textField "str"
   acid <- getAcid <$> ask
   allSubjects <- liftIO $ Acid.query acid $ ListSubjectsByLevel level
   let parsed = Set.toList <$> parseSubjectCode (subjectsToMap allSubjects) str
   return $ object [ "meta" .= object ["code" .=  (200 :: Int) ], "data" .= parsed ]
-  where levelField = radioFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
+  where oneLevelField = radioFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
 
 getTeachersR :: Handler TypedContent
 getTeachersR = acidQueryHandler ListTeachers
@@ -637,58 +566,76 @@ postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmis
 postUnlockManySubmissionsR :: Handler Value
 postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionOpen)) (ireq rawIdsField "ids")
 
-processUploadedCsv :: (MonadIO m) => Acid.AcidState Database -> CL.ByteString -> m (Either TL.Text (Vector Student))
-processUploadedCsv acid bs = runExceptT $ do
-    maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
-    csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
-    csvData <- hoistEither $ parseCSV csvText
+isCsvFieldEmpty :: T.Text -> Bool
+isCsvFieldEmpty = T.null . T.concat . T.split (`elem` ['-','\8210','\8211','\8212','\65112'])
+
+-- | Parses a subject code string into a set of subjects in a human friendly
+-- manner, but return error messages instead of an ADT. TODO: The dependence on
+-- CSV-specific error messages and rowNumber should be eliminated, and this
+-- function moved to SubjectCodes.hs.
+explainParseSubjectCode :: (Monad m) => RowNumber -> Map T.Text Subject -> T.Text -> ExceptT TL.Text m (Set SubjectId)
+explainParseSubjectCode rowNumber allSubjectsInLevel code = do
+    let possibilities = parseSubjectCodeFriendly allSubjectsInLevel code
+    case possibilities of
+      ParseSuccess subjectSet -> return $ Set.mapMonotonic (^. idField) subjectSet
+      ParseAmbiguous subjectSets -> do
+        let (set1:set2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) subjectSets
+        hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber code set1 set2
+      ParseIncomplete (remaining, parsedSet) -> do
+        let parsedSetFormatted = T.intercalate ", " . map (^. subjectName) . Set.toList $ parsedSet
+        hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber code remaining parsedSetFormatted
+      ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber code
+      ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber code
+
+processStudentCsv :: MonadIO m => Acid.AcidState Database -> Vector (RowNumber, CsvStudent) -> ExceptT TL.Text m (Vector Student)
+processStudentCsv acid csvData = do
+    -- We first get all subjects and teacher because we need them during
+    -- validation.
     allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
     allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
     V.forM csvData $ \(rowNumber', CsvStudent{..}) -> do
-      let rowNumber = succ rowNumber'
-      -- attempt to convert rawStudent to a Student
-      let name = T.toTitle . unCsvText $ _name
-      klass@(Class (level, _)) <- hoistEither . parseClass' rowNumber . T.encodeUtf8 . unCsvText $ _klass
-      indexNo <- hoistEither . parseIndex rowNumber . T.encodeUtf8 . unCsvText $ _indexNo
-      nric <- hoistEither . parseNric' rowNumber . T.encodeUtf8 . unCsvText $ _nric
-      witness <- hoistEither . parseWitnessName rowNumber allTeachers . unCsvText $ _witness
-      let chinese = unCsvText _chinese
-      let subjCombi = unCsvText _subjCombi
-      subjectIds <- if unCsvText _subjCombi `elem` emptyFieldDesig then return Set.empty else do
-          let possibilities = parseSubjectCodeFriendly (allSubjects !! (level-1)) subjCombi
-          case possibilities of
-           ParseSuccess s -> return $ Set.mapMonotonic (^. idField) s
-           ParseAmbiguous ss -> do
-             let (i1:i2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) ss
-             hoistEither . Left $ errCSVSubjectCodeAmbiguous rowNumber subjCombi i1 i2
-           ParseIncomplete (r, ps) -> do
-             let psf = T.intercalate ", " . map (^. subjectName) . Set.toList $ ps
-             hoistEither . Left $ errCSVSubjectCodeIncomplete rowNumber subjCombi r psf
-           ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber subjCombi
-           ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber subjCombi
+      let rowNumber = succ rowNumber' -- The rowNumber is 1-indexed while rowNumber' is 0-indexed.
+      let name = T.toTitle $ _csvStudentName
+      klass@(Class (level, _)) <- hoistEither . parseClassInCsv rowNumber . T.encodeUtf8 $ _csvStudentKlass
+      indexNo <- hoistEither . parseIndexInCsv rowNumber . T.encodeUtf8 $ _csvStudentIndexNo
+      nric <- hoistEither . parseNricInCsv rowNumber . T.encodeUtf8 $ _csvStudentNric
+      witness <- hoistEither . parseWitnessNameInCsv rowNumber allTeachers $ _csvStudentWitness
+      let chinese = _csvStudentChinese
+      subjectIds <- if isCsvFieldEmpty _csvStudentSubjCombi
+                    then return Set.empty
+                    else explainParseSubjectCode rowNumber (allSubjects !! (level-1)) _csvStudentSubjCombi
       return $ Student (StudentId 0) name chinese witness klass indexNo subjectIds nric SubmissionNotOpen
-  where parseClass' row bs = note (errCSVClassNoParse row (T.decodeUtf8 bs)) $ hush $ parseClass bs
-        parseNric' row bs = note (errCSVNricNoParse row (T.decodeUtf8 bs)) $ hush $ parseNric bs
-        parseIndex :: Int -> C.ByteString -> Either TL.Text Int
-        parseIndex row bs = note (errCSVIndexNumNoParse row (T.decodeUtf8 bs)) $ hush $ PC.parseOnly (PC.decimal <* PC.endOfInput) bs
-        parseWitnessName :: Int -> Map T.Text Teacher -> T.Text -> Either TL.Text (Maybe TeacherId)
-        parseWitnessName row teacherMap s =
+  where parseClassInCsv row bs = note (errCSVClassNoParse row (T.decodeUtf8 bs)) . hush $ parseClass bs
+        parseNricInCsv row bs = note (errCSVNricNoParse row (T.decodeUtf8 bs)) . hush $ parseNric bs
+        parseIndexInCsv row bs = note (errCSVIndexNumNoParse row (T.decodeUtf8 bs)) . hush $ PC.parseOnly (PC.decimal <* PC.endOfInput) bs
+        parseWitnessNameInCsv row teacherMap s =
           case Map.lookup s teacherMap of
            Just t -> return . Just $ t ^. idField
-           Nothing -> if s `elem` emptyFieldDesig then return Nothing else Left $ errCSVWitnessNoParse row s
-        emptyFieldDesig = [ "", "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ]
+           Nothing -> if isCsvFieldEmpty s then return Nothing else Left $ errCSVWitnessNoParse row s
 
-postManyStudentsR :: Handler Value
-postManyStudentsR = do
+postManyHandler :: (Acid.UpdateEvent ev,
+                    Acid.MethodResult ev ~ Either TL.Text (),
+                    Acid.MethodState ev ~ Database) =>
+                   (T.Text -> Either TL.Text (Vector (RowNumber, a)))
+                   -> (forall m. (MonadIO m) => Acid.AcidState Database -> Vector (RowNumber, a) -> ExceptT TL.Text m (Vector t))
+                   -> (Bool -> Vector t -> ev)
+                   -> Handler Value
+postManyHandler csvParser csvProcessor ev = do
   acid <- getAcid <$> ask
   fileinfo <- runInputPost (ireq fileField "csv")
   force <- runInputPost (ireq checkBoxField "force")
   bs <- fileSource fileinfo $$ sinkLbs
-  result <- processUploadedCsv acid bs
+  result <- runExceptT $ do
+    maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
+    csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
+    csvData <- hoistEither $ csvParser csvText
+    csvProcessor acid csvData
   case result of
    Left e -> invalidArgs [TL.toStrict e]
-   Right vs -> acidUpdateHandler $ AddStudents force vs
+   Right vs -> acidUpdateHandler $ ev force vs
 
+postManyStudentsR :: Handler Value
+postManyStudentsR = postManyHandler parseStudentCsv processStudentCsv AddStudents
 
 -- |
 -- = HTML handlers

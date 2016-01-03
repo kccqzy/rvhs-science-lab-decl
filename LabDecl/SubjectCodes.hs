@@ -18,7 +18,6 @@ import qualified Data.Set as Set
 
 import LabDecl.Types
 
-
 data HumanFriendlyParseResult = ParseSuccess (Set Subject)
                               | ParseAmbiguous [Set Subject]
                               | ParseIncomplete (T.Text, Set Subject)

@@ -192,26 +192,31 @@ instance Default Database where
 class (Indexable a, Ord a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
   idField :: Lens' a i
   idConstructor :: Int -> i
+  idDestructor :: i -> Int
   dbField :: Lens' Database (IxSetCtr a)
 
 instance HasPrimaryKey Cca CcaId where
   idField = ccaId
   idConstructor = CcaId
+  idDestructor (CcaId i) = i
   dbField = ccaDb
 
 instance HasPrimaryKey Subject SubjectId where
   idField = subjectId
   idConstructor = SubjectId
+  idDestructor (SubjectId i) = i
   dbField = subjectDb
 
 instance HasPrimaryKey Teacher TeacherId where
   idField = teacherId
   idConstructor = TeacherId
+  idDestructor (TeacherId i) = i
   dbField = teacherDb
 
 instance HasPrimaryKey Student StudentId where
   idField = studentId
   idConstructor = StudentId
+  idDestructor (StudentId i) = i
   dbField = studentDb
 
 -- | SafeCopy instances for use with Acid.

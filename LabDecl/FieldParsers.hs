@@ -52,6 +52,9 @@ classParser = do
   PC.endOfInput
   return $ Class (l, c)
 
+parseClass :: C.ByteString -> Either T.Text Class
+parseClass = ((note "wrong class format" . hush) .) . PC.parseOnly $ classParser
+
 nricParser :: PC.Parser Nric
 nricParser = do
   void $ many (PC.char 'X')
@@ -68,6 +71,9 @@ nricParser = do
   return . Nric . T.pack $ case prefix of
    Nothing -> digits ++ [suffix]
    Just p  -> p : digits ++ [suffix]
+
+parseNric :: C.ByteString -> Either T.Text Nric
+parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ nricParser
 
 parsePngData :: C.ByteString -> Either T.Text CL.ByteString
 parsePngData bs = note "invalid image data" . hush $ do

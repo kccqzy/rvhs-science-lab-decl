@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TupleSections #-}
 module LabDecl.FuzzyCsv (
-  formatColumnNumber, parseCsv, CsvText(..), CsvError(..),
+  formatColumnNumber, parseCsv, CsvError(..),
   ColumnNumber, RowNumber, HeaderAliases) where
 
 import Control.Monad
@@ -12,7 +11,6 @@ import Data.List
 import Control.Lens
 import Data.Char
 import Data.Function
-import Data.String
 import qualified Data.Text as T
 import qualified Data.CSV.Conduit as CSV
 import Data.Monoid
@@ -28,12 +26,7 @@ data CsvError = ErrDecodeFailed
               | ErrCellNotFound RowNumber ColumnNumber
               deriving (Show)
 
-newtype CsvText = CsvText {
-  unCsvText :: T.Text
-  } deriving (Show, IsString)
-
-instance Default CsvText where
-  def = CsvText T.empty
+type CsvText = T.Text
 
 data Accessor a = Accessor {
   getTag :: Int,
@@ -116,7 +109,7 @@ interpretCsvRow :: (Default a) => [(Int, Accessor a)] -> (RowNumber, Vector T.Te
 interpretCsvRow assocs (i, row) = (`runStateT` def) $ do
   forM_ assocs $ \(j, field) -> do
     cell <- lift $ note (ErrCellNotFound i j) (row V.!? j)
-    getALens' field #= CsvText (T.strip cell)
+    getALens' field #= T.strip cell
   return i
 
 parseCsv :: (Default a) => HeaderAliases a -> T.Text -> Either CsvError (Vector (RowNumber, a))

@@ -2,7 +2,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module LabDecl.TeXRenderAssets (reportTarGz) where
 
-import Control.Applicative ((<$>))
 import qualified Language.Haskell.TH as TH
 import qualified Data.ByteString.Lazy.Char8 as CL
 
