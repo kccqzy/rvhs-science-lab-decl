@@ -1992,7 +1992,7 @@ $(function() {
             },React_createElement("div",{
                 className: "page-header"
             },React_createElement("h1",{},React_createElement("img",{
-                src: "/static/res/rv.png",
+                src: "/static/res/rv.svg",
                 style: {
                     height: "1em",
                     position: "relative",
