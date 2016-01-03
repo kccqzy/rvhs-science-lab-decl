@@ -4,6 +4,119 @@ $(function () {
     var submitClassName, submitIndexNumber, submitNric;
     var studentData;
 
+    function CanvasSketch(canvas) {
+        var scaleFactor = window.devicePixelRatio || 1;
+        var ctx = canvas.getContext("2d");
+        ctx.lineCap = "round";
+        ctx.lineWidth = 3 * scaleFactor;
+        var currentStroke = [];
+        var currentStrokeHasDrawn = false;
+        var hasDrawn = false;
+        var inStroke = false;
+        var requestAnimationFrame = window.requestAnimationFrame;
+
+        var immediateStroke = function (strokeWillEnd) {
+            var ipps = 8;
+            hasDrawn = true;
+
+            if (!inStroke) { // if this is the first part of a stroke; setup the canvas, etc
+                currentStroke.push(currentStroke[0]);
+                ctx.moveTo.apply(ctx, currentStroke[0]);
+                ctx.beginPath();
+                inStroke = true;
+            }
+            if (strokeWillEnd) { // if this is the last part of a stroke; duplicate last event for interpolation
+                currentStroke.concat(currentStroke.slice(-1));
+            }
+            if (currentStroke.length < 4) { // not enough strokes; could be due to a duplicate event or a single point stroke
+                if (!strokeWillEnd) { // don't draw it if it is not the end
+                    return;
+                } else if (!currentStrokeHasDrawn) { // not drawn anything for current stroke yet; draw a circle
+                    ctx.arc(currentStroke[0][0], currentStroke[0][1], ctx.lineWidth, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            } else { // enough strokes; do interpolation
+                for (var i = 0; i < currentStroke.length - 4 + 1; ++i) {
+                    var seg = currentStroke.slice(i, i + 4);
+                    ctx.lineTo.apply(ctx, seg[1]);
+                    for (var j = 1; j < ipps; ++j) {
+                        var t = j / ipps;
+                        ctx.lineTo.apply(ctx, $.map([0, 1], function (k) { return 0.5 * (2 * seg[1][k] + (-seg[0][k] + seg[2][k]) * t + (2 * seg[0][k] - 5 * seg[1][k] + 4 * seg[2][k] - seg[3][k]) * t * t + (-seg[0][k] + 3 * seg[1][k] - 3 * seg[2][k] + seg[3][k]) * t * t * t); }));
+                    }
+                    ctx.lineTo.apply(ctx, seg[2]);
+                }
+            }
+
+            ctx.stroke();
+            ctx.beginPath();
+            currentStrokeHasDrawn = true;
+
+            if (strokeWillEnd) {
+                ctx.closePath();
+                currentStroke = [];
+                inStroke = false;
+                currentStrokeHasDrawn = false;
+            } else {
+                currentStroke = currentStroke.slice(-3);
+            }
+        };
+
+        return {
+            clear: function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                currentStroke = []; // prevent an unfinished stroke from appearing at next draw
+                inStroke = false;
+                currentStrokeHasDrawn = false;
+                hasDrawn = false;
+            },
+            hasDrawn: function() {
+                return hasDrawn;
+            },
+            destroyEventListeners: function () {
+                $(canvas).off("touchstart");
+                $(canvas).off("touchmove");
+                $(canvas).off("touchend");
+            },
+            setupEventListeners: function () {
+                var offsetX = +$(canvas).offset().left,
+                    offsetY = +$(canvas).offset().top;
+                var cssScaleFactor = $(canvas).attr("width") / +$(canvas).width();
+
+                var pushCurrentStroke = function (e) {
+                    var pageX = +e.originalEvent.touches[0].pageX,
+                        pageY = +e.originalEvent.touches[0].pageY;
+                    var ctxX = (pageX - offsetX) * cssScaleFactor,
+                        ctxY = (pageY - offsetY) * cssScaleFactor;
+                    currentStroke.push([ctxX, ctxY]);
+                };
+
+                $(canvas).off("touchstart").on("touchstart", function (e) {
+                    requestAnimationFrame(function () {
+                        pushCurrentStroke(e);
+                        immediateStroke(false);
+                    });
+                    return false;
+                });
+
+                $(canvas).off("touchmove").on("touchmove", function (e) {
+                    requestAnimationFrame(function () {
+                        pushCurrentStroke(e);
+                        immediateStroke(false);
+                    });
+                    return false;
+                });
+
+                $(canvas).off("touchend").on("touchend", function (e) {
+                    requestAnimationFrame(function () {
+                        immediateStroke(true);
+                    });
+                    return false;
+                });
+            }
+        };
+    }
+
+
     var PageController = function () {
         var preAnimateHandlers = [], postAnimateHandlers = [], currentPage;
 
@@ -198,66 +311,20 @@ $(function () {
                 if (!submitClassName || !submitIndexNumber) throw 'No class name or index number';
                 $("#page5 .interactive-content .canvas").empty();
             }, function () {
-                var scaleFactor = window.devicePixelRatio || 1;
+                // Put a <canvas> element and then initialise a CanvasSketch object to handle the drawing.
+                let scaleFactor = window.devicePixelRatio || 1;
                 $("#page5 .interactive-content .canvas").on("scrollstart", false).append($("<canvas/>").attr("width", 500 * scaleFactor).attr("height", 310 * scaleFactor));
-                var canvas = $("#page5 .interactive-content canvas").get(0);
-                var ctx = canvas.getContext("2d");
-                ctx.lineCap = "round";
-                ctx.lineWidth = 2 * scaleFactor;
-                var currentStroke = [];
-                var hasDrawn = false;
+                let canvas = $("#page5 .interactive-content canvas").get(0);
+                let sketchManager = CanvasSketch(canvas);
 
-                var drawZigzag = function(stroke) {
-                    ctx.moveTo.apply(ctx, stroke[0]);
-                    $.each(stroke.slice(1), function (_, a) {ctx.lineTo.apply(ctx, a);});
-                    ctx.stroke();
-                    hasDrawn = true;
-                };
+                $("#page5").on("scrollstop", sketchManager.setupEventListeners).on("webkitTransitionEnd", sketchManager.setupEventListeners);
 
-                var makeBSpline = function (currentStroke, ipps) {
-                    ipps = ipps || 20;
-                    var interpStroke = [];
-                    currentStroke.unshift(currentStroke[0]);
-                    currentStroke.concat(currentStroke.slice(-1));
-                    for (var i = 0; i < currentStroke.length - 4 + 1; ++i) {
-                        var seg = currentStroke.slice(i, i + 4);
-                        interpStroke.push(seg[1]);
-                        for (var j = 1; j < ipps; ++j) {
-                            var t = j / ipps;
-                            interpStroke.push($.map([0, 1], function (k) { return 0.5 * (2 * seg[1][k] + (-seg[0][k] + seg[2][k]) * t + (2 * seg[0][k] - 5 * seg[1][k] + 4 * seg[2][k] - seg[3][k]) * t * t + (-seg[0][k] + 3 * seg[1][k] - 3 * seg[2][k] + seg[3][k]) * t * t * t); }));
-                        }
-                        interpStroke.push(seg[2]);
-                    }
-                    return interpStroke;
-                };
-
-                var setupSignatureEvent = function() {
-                    var offsetX = +$(canvas).offset().left,
-                        offsetY = +$(canvas).offset().top;
-                    var cssScaleFactor = 500 / +$(canvas).width();
-
-                    $(canvas).off("touchmove").on("touchmove", function (e) {
-                        var pageX = +e.originalEvent.touches[0].pageX,
-                            pageY = +e.originalEvent.touches[0].pageY;
-                        var ctxX = (pageX - offsetX) * scaleFactor * cssScaleFactor,
-                            ctxY = (pageY - offsetY) * scaleFactor * cssScaleFactor;
-                        var last = currentStroke.slice(-1)[0] || [-1, -1];
-                        last[0] !== ctxX && last[1] !== ctxY && currentStroke.push([ctxX, ctxY]);
-                        return false;
-                    });
-
-                    $(canvas).off("touchend").on("touchend", function () {
-                        // TODO handle cases when currentStroke.length === 1
-                        currentStroke.length && drawZigzag(currentStroke.length > 2 ? makeBSpline(currentStroke) : currentStroke);
-                        currentStroke = [];
-                    });
-                };
-                $("#page5").on("scrollstop", setupSignatureEvent).on("webkitTransitionEnd", setupSignatureEvent);
                 $("#form").off("submit").on("submit", function () {
-                    if (hasDrawn) {
+                    if (sketchManager.hasDrawn()) {
                         $("#submit-signature").val(canvas.toDataURL("image/png"));
                         $("#submit-ua").val(navigator.userAgent);
                         $.post("/api/students/" + studentData.id + "/submit", $(this).serialize(), function () {
+                            sketchManager.destroyEventListeners();
                             pageController.forward();
                         });
                     } else {
