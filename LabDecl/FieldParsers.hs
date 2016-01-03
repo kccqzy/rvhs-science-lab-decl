@@ -57,7 +57,7 @@ nricParser = do
   void $ many (PC.char 'X')
   prefix <- PC.option Nothing (Just <$> PC.satisfy (PC.inClass "SFTG"))
   digits <- PC.many1 PC.digit
-  guard $ length digits >= 4 && length digits <= 7
+  guard $ length digits >= 3 && length digits <= 7
   suffix <- case (prefix, digits) of
     (Just c, [_,_,_,_,_,_,_]) -> do
       let prefixNum = if c `C.elem` "SF" then 0 else 4

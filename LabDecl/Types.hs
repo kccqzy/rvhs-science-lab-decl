@@ -67,8 +67,8 @@ newtype StudentId = StudentId Int     deriving (Show, Eq, Ord, Data, Typeable, G
 
 infix 4 `nricMatch`
 nricMatch :: Nric -> Nric -> Bool
-nricMatch = (==) `on` lastFive
-  where lastFive (Nric a) = T.drop (T.length a - 5) a
+nricMatch = (==) `on` lastFour
+  where lastFour (Nric a) = T.drop (T.length a - 4) a
 
 -- | Generate an index from the field literal.
 ixLitField :: (Typeable i, Ord i) => Lens' a i -> Ix a

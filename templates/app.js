@@ -1,4 +1,5 @@
 "use strict";
+((window, document, $) => {
 $(function () {
     var submitClassName, submitIndexNumber, submitNric;
     var studentData;
@@ -102,7 +103,7 @@ $(function () {
                 $("#table-class").text(submitClassName);
                 $("#table-index").text(submitIndexNumber);
                 var canocNric = function (s) {
-                    var match = s.trim().toUpperCase().match(/^(?:[STFG][0-9]{0,3})?[0-9]{4}[JZIHGFEDCBAXWUTRQPNMLK]$/);
+                    var match = s.trim().toUpperCase().match(/^(?:[STFG][0-9]{0,4})?[0-9]{3}[JZIHGFEDCBAXWUTRQPNMLK]$/);
                     return match && match[0];
                 };
                 $("#submit-nric").off("change").on("change", function () {
@@ -272,8 +273,10 @@ $(function () {
         })
         .run();
 });
+})(window, document, $);
+
 
 
 // Local variables:
-// eval: (add-hook 'after-save-hook (lambda () (shell-command "/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar ../../scratch/closure-compiler/compiler.jar --compilation_level SIMPLE_OPTIMIZATIONS --language_in ECMASCRIPT5_STRICT --js app.js > ../static/app.min.js")) nil t)
+// eval: (add-hook 'after-save-hook (lambda () (shell-command "es6c -w app.js > app.es5.js") (shell-command "es6c app.js > ../static/app.min.js")) nil t)
 // End:

@@ -763,7 +763,7 @@ getHomepageR = do
     if dev
       then do
            toWidgetHead $(hamletFileReload "templates/app.head.hamlet")
-           toWidget $(juliusFileReload "templates/app.js")
+           toWidget $(juliusFileReload "templates/app.es5.js")
            toWidget $(hamletFileReload "templates/app.hamlet")
            toWidget $(cassiusFileReload "templates/app.cassius")
       else do

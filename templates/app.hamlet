@@ -23,7 +23,7 @@
                  <ul>
          <div #page3 .page>
              <h1 .main-title>Authentication
-             <p .explanation>In order to verify your identity, enter the <strong>LAST FIVE</strong> characters of your NRIC / FIN, e.g. for S987<u>6543A</u>, enter only 6543A.
+             <p .explanation>In order to verify your identity, enter the <strong>LAST FOUR</strong> characters of your NRIC / FIN, e.g. for S9876<u>543A</u>, enter only 543A.
              <div .interactive-content>
                      <table>
                          <tr>
