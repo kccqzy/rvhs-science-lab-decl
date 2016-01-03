@@ -9,6 +9,14 @@ import Text.Shakespeare.Text (stext)
 import LabDecl.Types
 
 
+errSubjectCodeContainsSeparatorCharacter code thisSubjectName =
+  [stext| Cannot add new subject “#{thisSubjectName}” to the database
+  because its subject code #{code} contains a character used for
+  separating subjects. Since the use of separator between subjects is
+  optional, you can override this check by choosing Force, in which
+  case the subject will still be added, but may cause certain subject
+  code combinations not to be unambiguously decoded. |]
+
 errSubjectAlreadyExists code thisSubjectName existingSubject = [stext|
   Cannot add new subject “#{thisSubjectName}” to the database because
   there is an existing subject with the same subject code (“#{code}”)
@@ -118,42 +126,63 @@ errCSVDuplicateColumnHeader cells = [stext| Cannot understand the
   with the same meaning. Please check the cells #{cells} of the
   uploaded CSV file. |]
 
-errCSVClassNoParse row bs = [stext| Cannot understand “#{bs}” as a
-  class in row #{row} of uploaded CSV file because it has incorrect
-  format. The correct format is a number from 1 to 6, followed by an
-  uppercase letter except for O. |]
+errCSVStudentClassNoParse row bs = [stext| Cannot understand “#{bs}”
+  as a class in row #{row} of uploaded CSV file because it has
+  incorrect format. The correct format is a number from 1 to 6,
+  followed by an uppercase letter except for O. |]
 
-errCSVNricNoParse row nric = [stext| Cannot understand “#{nric}” as
-  NRIC in row #{row} of the uploaded CSV file because it has incorrect
-  format. The correct format of NRIC is: optionally some X’s followed by
-  four decimal digits followed by an uppercase letter which must be
-  one of “JZIHGFEDCBAXWUTRQPNMLK”. |]
+errCSVStudentNricNoParse row nric = [stext| Cannot understand
+  “#{nric}” as NRIC in row #{row} of the uploaded CSV file because it
+  has incorrect format. The correct format of NRIC is: optionally some
+  X’s followed by four decimal digits followed by an uppercase letter
+  which must be one of “JZIHGFEDCBAXWUTRQPNMLK”. |]
 
-errCSVSubjectCodeAmbiguous row subjcode interp1 interp2 = [stext|
-  Cannot unambiguously understand the subject codes “#{subjcode}” in
-  row #{row} of uploaded CSV file because there are multiple
-  interpretations: it could mean either #{interp1} or #{interp2}. |]
+errCSVStudentSubjectCodeAmbiguous row subjcode interp1 interp2 =
+  [stext| Cannot unambiguously understand the subject codes
+  “#{subjcode}” in row #{row} of uploaded CSV file because there are
+  multiple interpretations: it could mean either #{interp1} or
+  #{interp2}. |]
 
-errCSVSubjectCodeIncomplete row subjcode rem ps = [stext| Cannot
-  completely understand the subject codes “#{subjcode}” in row
+errCSVStudentSubjectCodeIncomplete row subjcode rem ps = [stext|
+  Cannot completely understand the subject codes “#{subjcode}” in row
   #{row} of uploaded CSV file. A portion of the subject codes are
   understood: #{ps} but the remaining part “#{rem}” could not be
   understood. |]
 
-errCSVSubjectCodeNothing row subjcode = [stext| Cannot understand the
-  subject codes “#{subjcode}” in row #{row} of uploaded CSV
-  file. Please check the valid subjects and the spelling of subject
-  code. |]
+errCSVStudentSubjectCodeNothing row subjcode = [stext| Cannot
+  understand the subject codes “#{subjcode}” in row #{row} of uploaded
+  CSV file. Please check the valid subjects and the spelling of
+  subject code. |]
 
-errCSVSubjectCodeInternalError row subjcode = [stext| Cannot
-  understand the subject codes “#{subjcode}” in row #{row} of
-  uploaded CSV file due to an internal error. This should not
-  happen. |]
+errCSVStudentSubjectCodeInternalError row subjcode = [stext| Cannot
+  understand the subject codes “#{subjcode}” in row #{row} of uploaded
+  CSV file due to an internal error. This should not happen. |]
 
-errCSVIndexNumNoParse row bs = [stext| Cannot understand “#{bs}” as an
-  integer for index number in row #{row} of uploaded CSV file. |]
+errCSVStudentIndexNumNoParse row bs = [stext| Cannot understand
+  “#{bs}” as an integer for index number in row #{row} of uploaded CSV
+  file. |]
 
-errCSVWitnessNoParse row s = [stext| Cannot understand “#{s}” as a
-  witness name in row #{row} of uploaded CSV file. Please check the
-  spelling carefully. Use a hyphen if you intend to mean no witness.
-  |]
+errCSVStudentWitnessNoParse row s = [stext| Cannot understand “#{s}”
+  as a witness name in row #{row} of uploaded CSV file. Please check
+  the spelling carefully. Use a hyphen if you intend to mean no
+  witness. |]
+
+errCSVTeacherEmailNoParse row s = [stext| Cannot understand “#{s}” as
+  an email address in row #{row} of uploaded CSV file. |]
+
+errCSVTeacherAdminNoParse row s = [stext| Cannot understand “#{s}” as
+  an indication of whether the teacher is an administrator or not in
+  row #{row} of uploaded CSV file. |]
+
+errCSVSubjectIsScienceNoParse row s = [stext| Cannot understand “#{s}”
+  as an indication of whether the subject is a science subject or not
+  in row #{row} of uploaded CSV file. |]
+
+errCSVSubjectLevelNoParse row s = [stext| Cannot understand “#{s}” as
+  a list of levels in row #{row} of the uploaded CSV file. Please use
+  a comma separated list of whole numbers. |]
+
+errCSVGenericObjectNoProperty object property row = [stext| The
+  #{T.pack object} specified in row #{row} of the uploaded CSV file
+  has no #{T.pack property}. |]
+-- T.pack specified to resolve ambiguous types.

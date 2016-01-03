@@ -4,7 +4,9 @@
 $(function() {
     // Here are a few aliases to save typing and help with minification.
     let React_createElement = React.createElement;
+    let E = React_createElement;
     let React_createClass = React.createClass;
+    let React_Component = React.Component;
     let React_PropTypes = React.PropTypes;
     let __map = _.map;
 
@@ -751,31 +753,32 @@ $(function() {
         SubjectEditor: "displayName"
     })));
 
-    var BatchUploadStudents = React_createClass(_.defaults({
-        render: function() {
-            var that = this;
-            var ajaxParam = function() {
-                var formData = new FormData(($("#uploaderForm")).get(0));
-                console.log(formData);
-                return {
-                    url: "/api/students/csv",
-                    type: "POST",
-                    data: formData,
-                    contentType: false,
-                    processData: false
-                };
-            };
+    class BatchUpload extends React_Component {
+        constructor(props) {
+            super(props);
+            this.displayName = 'BatchUpload';
+        }
+        render() {
+            let dataSpec = pageSpec[window.location.pathname].dataSpec;
+            let ajaxParam = () => ({
+                url: '/api/' + dataSpec.machineName + '/csv',
+                type: 'POST',
+                data: new window.FormData(this.refs.uploaderForm),
+                contentType: false,
+                processData: false
+            });
             return React_createElement(AjaxFailableActionModal,{
                 actionButtonStyle: "primary",
                 actionButtonLabel: "Upload",
-                title: "Add Students via Uploading CSV File",
+                title: "Add " + dataSpec.humanNamePlural + " via Uploading CSV File",
                 ajaxParam: ajaxParam
             },React_createElement("form",{
                 id: "uploaderForm",
+                ref: "uploaderForm",
                 role: "form"
             },React_createElement("p",{
                 className: "help-block"
-            },"This allows you to upload a CSV file of students and add all of them. This is an all-or-nothing operation: even if only one student could not be added, none of the students will be added."),React_createElement("div",{
+            },"This allows you to upload a CSV file of " + dataSpec.humanNamePluralInSentence + " and add all of them. This is an all-or-nothing operation: even if only one " + dataSpec.humanNameInSentence + " could not be added, none of the " + dataSpec.humanNamePluralInSentence + " will be added."),React_createElement("div",{
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "csv"
@@ -787,13 +790,7 @@ $(function() {
                 required: true
             }))));
         }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        BatchUploadStudents: "displayName"
-    })));
+    }
 
     var TestDecoder = React_createClass(_.defaults({
         getInitialState: function() {
@@ -1180,6 +1177,9 @@ $(function() {
             var hnamepl = dataSpec.humanNamePlural;
             var mname = dataSpec.machineName;
             var editor = dataSpec.editor;
+            let onBatchUploadButtonClick = function() {
+                return ReactDOM.render(React_createElement(BatchUpload, {}),getModalWrapper());
+            };
             var onAddButtonClick = function() {
                 return ReactDOM.render(React_createElement(editor,{
                     auxiliary: that.props.auxiliary
@@ -1205,7 +1205,11 @@ $(function() {
                     "aria-label": "Action Buttons"
                 },(this.props.customButtons ?
                     this.props.customButtons :
-                    null),React_createElement("button",{
+                   null),React_createElement("button",{
+                       type: "button",
+                       className: "btn btn-default",
+                       onClick: onBatchUploadButtonClick
+                   },"Add New (CSV File)"),React_createElement("button",{
                     type: "button",
                     className: "btn btn-default",
                     onClick: onAddButtonClick
@@ -1327,14 +1331,6 @@ $(function() {
             return this.state.subjectConn.close();
         },
         render: function() {
-            var onBatchUploadButtonClick = function() {
-                return ReactDOM.render(React_createElement(BatchUploadStudents,{}),getModalWrapper());
-            };
-            var customButtons = React_createElement("button",{
-                onClick: onBatchUploadButtonClick,
-                type: "button",
-                className: "btn btn-default"
-            },"Add New (Upload CSV File)");
             var that = this;
             var onRadioChange = function(e) {
                 return (e.target.checked ?
@@ -1553,7 +1549,6 @@ $(function() {
             },React_createElement(EntityPage,{
                 wsUrl: ("/api/students?" + this.state.queryString),
                 auxiliary: auxiliary,
-                customButtons: customButtons,
                 customFilter: customFilter
             })));
         }
@@ -1636,6 +1631,8 @@ $(function() {
             dataSpec: {
                 humanName: "CCA",
                 humanNamePlural: "CCAs",
+                humanNameInSentence: "CCA",
+                humanNamePluralInSentence: "CCAs",
                 machineName: "ccas",
                 editor: CcaEditor,
                 categoryColumn: [
@@ -1659,6 +1656,8 @@ $(function() {
             dataSpec: {
                 humanName: "Subject",
                 humanNamePlural: "Subjects",
+                humanNameInSentence: "subject",
+                humanNamePluralInSentence: "subjects",
                 machineName: "subjects",
                 editor: SubjectEditor,
                 categoryColumn: [
@@ -1704,6 +1703,8 @@ $(function() {
             dataSpec: {
                 humanName: "Teacher",
                 humanNamePlural: "Teachers",
+                humanNameInSentence: "teacher",
+                humanNamePluralInSentence: "teachers",
                 machineName: "teachers",
                 editor: TeacherEditor,
                 categoryColumn: null,
@@ -1747,6 +1748,8 @@ $(function() {
             dataSpec: {
                 humanName: "Student",
                 humanNamePlural: "Students",
+                humanNameInSentence: "student",
+                humanNamePluralInSentence: "students",
                 machineName: "students",
                 editor: StudentEditor,
                 categoryColumn: [

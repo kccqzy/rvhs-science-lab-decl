@@ -234,9 +234,11 @@ instance HasAddConstraint Subject SubjectId where
   preAddCheck force subj =
     case subj ^. subjectCode of
      Nothing -> return () -- no need to check anything
-     Just code -> unless force . forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
-       subjects <- liftQuery $ listSubjectsByLevel level
-       check level code (subj ^. subjectName) (subjectsToMap subjects)
+     Just code -> unless force $ do
+       when (isJust $ T.find isAllowedSubjectCodeSeparator code) . lift . Left $ errSubjectCodeContainsSeparatorCharacter code (subj ^. subjectName)
+       forM_ (subj ^. subjectLevel . to IntSet.toList) $ \level -> do
+         subjects <- liftQuery $ listSubjectsByLevel level
+         check level code (subj ^. subjectName) (subjectsToMap subjects)
     where check level code name subjects = do
             -- first check for uniqueness of subject code
             maybe (return ()) (lift . Left . errSubjectAlreadyExists code name) . Map.lookup code $ subjects
@@ -275,11 +277,17 @@ instance HasAddConstraint Student StudentId where
 instance HasDeleteConstraint Student StudentId where
   preDeleteCheck _ = return ()
 
--- | Add many students to the database. If adding one student fails,
+-- | Add many entities to the database. If adding one fails,
 -- everything fails, as expected by atomicity.
+addCcas     :: Bool -> Vector Cca -> IUpdate
+addTeachers :: Bool -> Vector Teacher -> IUpdate
+addSubjects :: Bool -> Vector Subject -> IUpdate
 addStudents :: Bool -> Vector Student -> IUpdate
+addCcas     = V.mapM_ . addCca
+addSubjects = V.mapM_ . addSubject
+addTeachers = V.mapM_ . addTeacher
 addStudents = V.mapM_ . addStudent
--- TODO add an extra argument to identify the row of the CSV file.
+
 
 addCca     :: Bool -> Cca -> IUpdate
 addSubject :: Bool -> Subject -> IUpdate

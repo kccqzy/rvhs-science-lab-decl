@@ -50,7 +50,10 @@ subjectCodesParser = void . many . subjectCodeParser
           (code, subject) <- lift $ Map.toList candidates
           case T.stripPrefix code str of
            Nothing -> mzero
-           Just remaining -> put (T.dropWhile (PT.inClass " \t,;.&/\\+") remaining, Set.insert subject parsed)
+           Just remaining -> put (T.dropWhile isAllowedSubjectCodeSeparator remaining, Set.insert subject parsed)
+
+isAllowedSubjectCodeSeparator :: Char -> Bool
+isAllowedSubjectCodeSeparator = PT.inClass " \t,;.&/\\+"
 
 -- | Use a variant of the Sardinas-Patterson algorithm to find whether a given
 -- set of codes is uniquely decodable. This is used when adding new codes.
