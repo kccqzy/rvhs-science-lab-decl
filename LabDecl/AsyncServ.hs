@@ -33,8 +33,7 @@ import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
 
-import qualified RNCryptor
-
+import qualified LabDecl.RNCryptor as RNCryptor
 import LabDecl.TeXRenderAssets
 import LabDecl.Types
 import LabDecl.Utilities

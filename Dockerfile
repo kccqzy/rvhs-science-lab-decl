@@ -10,7 +10,7 @@ RUN stack setup
 RUN stack install alex happy
 COPY LICENSE Setup.hs stack.yaml labdecl.cabal /buildhome/
 RUN stack build --only-dependencies
-COPY tex-report.tar.gz Main.hs RNCryptor.hs /buildhome/
+COPY tex-report.tar.gz Main.hs /buildhome/
 COPY LabDecl /buildhome/LabDecl
 COPY static /buildhome/static
 COPY templates /buildhome/templates

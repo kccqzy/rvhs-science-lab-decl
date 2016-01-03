@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module RNCryptor (Credentials(..), encrypt, decrypt) where
+module LabDecl.RNCryptor (Credentials(..), encrypt, decrypt) where
 
 import Control.Monad
 import Control.Monad.Trans (liftIO)

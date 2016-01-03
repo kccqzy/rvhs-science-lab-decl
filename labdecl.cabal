@@ -67,19 +67,3 @@ executable labdecl
                        random >=1.1,
                        lifted-async >=0.7
   default-language:    Haskell2010
-
-
-library
-  exposed-modules:     RNCryptor
-  other-extensions:    RecordWildCards
-  build-depends:       base >=4.7,
-                       mtl >=2.1,
-                       errors >=2.0,
-                       bytestring >=0.10,
-                       attoparsec >=0.10,
-                       byteable >=0.1,
-                       cryptohash >=0.11,
-                       cipher-aes >=0.2,
-                       pbkdf >=1.1,
-                       entropy >=0.3
-  default-language:    Haskell2010
