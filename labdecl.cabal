@@ -11,6 +11,7 @@ cabal-version:       >=1.10
 executable labdecl
   main-is:             Main.hs
   other-extensions:    RecordWildCards, TemplateHaskell, TypeFamilies, DeriveDataTypeable, CPP, OverloadedStrings, QuasiQuotes, ViewPatterns, FlexibleContexts, MultiParamTypeClasses, ExistentialQuantification, TupleSections, ScopedTypeVariables, Rank2Types, DeriveGeneric, GeneralizedNewtypeDeriving, FunctionalDependencies
+  ghc-options:         -threaded
   build-depends:       base >=4.7,
                        mtl >=2.1,
                        errors >=2.0,
