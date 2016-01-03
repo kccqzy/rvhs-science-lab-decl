@@ -10,5 +10,6 @@ export LISTEN_PORT=8081
 export APPROOT="http://127.0.0.1:8081"
 export DEVELOPMENT=1
 
+stack build --only-dependencies --haddock-deps
 stack build
 stack exec labdecl
