@@ -29,6 +29,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified Data.Attoparsec.ByteString.Char8 as PC
+import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -636,13 +637,8 @@ postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmis
 postUnlockManySubmissionsR :: Handler Value
 postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionOpen)) (ireq rawIdsField "ids")
 
-postManyStudentsR :: Handler Value
-postManyStudentsR = do
-  acid <- getAcid <$> ask
-  fileinfo <- runInputPost (ireq fileField "csv")
-  force <- runInputPost (ireq checkBoxField "force")
-  bs <- fileSource fileinfo $$ sinkLbs
-  result <- runExceptT $ do
+processUploadedCsv :: (MonadIO m) => Acid.AcidState Database -> CL.ByteString -> m (Either TL.Text (Vector Student))
+processUploadedCsv acid bs = runExceptT $ do
     maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
     csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
     csvData <- hoistEither $ parseCSV csvText
@@ -671,9 +667,6 @@ postManyStudentsR = do
            ParseNothing _ -> hoistEither . Left $ errCSVSubjectCodeNothing rowNumber subjCombi
            ParseInternalError -> hoistEither . Left $ errCSVSubjectCodeInternalError rowNumber subjCombi
       return $ Student (StudentId 0) name chinese witness klass indexNo subjectIds nric SubmissionNotOpen
-  case result of
-   Left e -> invalidArgs [TL.toStrict e]
-   Right vs -> acidUpdateHandler $ AddStudents force vs
   where parseClass' row bs = note (errCSVClassNoParse row (T.decodeUtf8 bs)) $ hush $ parseClass bs
         parseNric' row bs = note (errCSVNricNoParse row (T.decodeUtf8 bs)) $ hush $ parseNric bs
         parseIndex :: Int -> C.ByteString -> Either TL.Text Int
@@ -684,6 +677,17 @@ postManyStudentsR = do
            Just t -> return . Just $ t ^. idField
            Nothing -> if s `elem` emptyFieldDesig then return Nothing else Left $ errCSVWitnessNoParse row s
         emptyFieldDesig = [ "", "-", "--", "---", "\8210", "\8211", "\8212", "\65112" ]
+
+postManyStudentsR :: Handler Value
+postManyStudentsR = do
+  acid <- getAcid <$> ask
+  fileinfo <- runInputPost (ireq fileField "csv")
+  force <- runInputPost (ireq checkBoxField "force")
+  bs <- fileSource fileinfo $$ sinkLbs
+  result <- processUploadedCsv acid bs
+  case result of
+   Left e -> invalidArgs [TL.toStrict e]
+   Right vs -> acidUpdateHandler $ AddStudents force vs
 
 
 -- |

@@ -29,9 +29,6 @@ camelCaseToUnderScore = concatMap go
   where go c | isUpper c = '_' : [toLower c]
              | otherwise = [c]
 
-fromSndMaybe :: (a, Maybe b) -> Maybe (a, b)
-fromSndMaybe = liftM2 (<$>) ((,) . fst) snd
-
 lift2 :: (MonadTrans t1, MonadTrans t2, Monad (t1 m), Monad m) => m a -> t2 (t1 m) a
 lift2 = lift . lift
 
