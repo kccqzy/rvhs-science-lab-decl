@@ -13,3 +13,4 @@ libraries:
 handlers:
 - url: .*
   script: app.app
+  secure: always
