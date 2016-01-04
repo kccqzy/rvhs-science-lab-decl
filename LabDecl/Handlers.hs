@@ -118,7 +118,8 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/teachers           AdminTeachersR GET
 /admin/students           AdminStudentsR GET
 /admin/logout             AdminLogoutR   GET
-/                         HomepageR      GET
+/old                      HomepageR      GET
+/                         NewHomepageR   GET
 /static                   StaticR        EmbeddedStatic getStatic
 /auth                     AuthR          Auth getAuth
 |])
@@ -157,6 +158,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized AdminStudentsR        _ = requirePrivilege PrivTeacher
   isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
+  isAuthorized NewHomepageR          _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
 
@@ -709,3 +711,28 @@ getHomepageR = do
            addScript $ StaticR app_min_js
            toWidget $(hamletFile "templates/app.hamlet")
            toWidget $(cassiusFile "templates/app.cassius")
+
+getNewHomepageR :: Handler Html
+getNewHomepageR = do
+  dev <- isDevelopment <$> ask
+  defaultLayout $ do
+    setTitle "River Valley High School Science Lab Declaration"
+    toWidgetHead $ [shamlet|<meta charset=utf-8>|]
+    toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
+    toWidgetHead $ [shamlet|<meta name=viewport content=width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no>|]
+    addStylesheet $ StaticR bootstrap_min_css
+    addStylesheet $ StaticR bootstrapt_min_css
+    addScript $ StaticR jquery_js
+    addScript $ StaticR jquery_mobile_custom_js
+    addScript $ StaticR underscore_js
+    addScript $ StaticR immutable_js
+    toWidget $ [shamlet|<div #body>|]
+    if dev
+      then do
+      addScript $ StaticR react_js
+      addScript $ StaticR reactdom_js
+      toWidget $(juliusFileReload "static/appv2.min.js")
+      else do
+      addScript $ StaticR react_min_js
+      addScript $ StaticR reactdom_min_js
+      addScript $ StaticR appv2_min_js

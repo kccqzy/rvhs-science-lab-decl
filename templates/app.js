@@ -323,10 +323,13 @@ $(function () {
                     if (sketchManager.hasDrawn()) {
                         $("#submit-signature").val(canvas.toDataURL("image/png"));
                         $("#submit-ua").val(navigator.userAgent);
+                        console.log($(this).serialize());
+                        /*
                         $.post("/api/students/" + studentData.id + "/submit", $(this).serialize(), function () {
                             sketchManager.destroyEventListeners();
                             pageController.forward();
                         });
+                         */
                     } else {
                         alert("You have not signed yet.");
                     }
