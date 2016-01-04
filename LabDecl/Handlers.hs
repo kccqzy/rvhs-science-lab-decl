@@ -635,7 +635,7 @@ adminSite dev = do
    Just (u, p) -> do
      toWidgetHead $ [shamlet|<meta #meta-user name=x-labdecl-user value=#{u}>|]
      toWidgetHead $ [shamlet|<meta #meta-priv name=x-labdecl-priv value=#{p}>|]
-  toWidgetHead $ [shamlet|<meta name=viewport content=width=992>|]
+  toWidgetHead $ [shamlet|<meta name=viewport content=width=1200>|]
   addStylesheet $ StaticR bootstrap_min_css
   addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js

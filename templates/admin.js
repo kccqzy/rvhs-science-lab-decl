@@ -79,8 +79,8 @@ $(function() {
             // Fortunately, reestablishing connection is automatic.
             conn = new window.EventSource(url);
             conn.onmessage = callback;
-            conn.onerror = () => {console.log("APIConnectionSSE: conn.onerror");};
-            conn.onclose = () => {console.log("APIConnectionSSE: conn.onclose");};
+            conn.onerror = () => {console.log("APIConnectionSSE: " + pathname + ": conn.onerror");};
+            conn.onclose = () => {console.log("APIConnectionSSE: " + pathname + ": conn.onclose");};
         };
 
         let close = () => {
@@ -1282,37 +1282,31 @@ $(function() {
         AdminTeachersR: "displayName"
     })));
 
-    var AdminStudentsR = React_createClass(_.defaults({
-        getInitialState: function() {
-            var that = this;
-            var ccaConn = APIConnection("/api/ccas");
-            var teacherConn = APIConnection("/api/teachers");
-            var subjectConn = APIConnection("/api/subjects");
-            var classConn = APIConnection("/api/classes");
-            ccaConn.registerCallback(function(d) {
-                return that.setState({
-                    ccaInfo: d
-                });
+    class AdminStudentsR extends React_Component {
+        constructor(props) {
+            let ccaConn = APIConnection("/api/ccas");
+            let teacherConn = APIConnection("/api/teachers");
+            let subjectConn = APIConnection("/api/subjects");
+            let classConn = APIConnection("/api/classes");
+
+            ccaConn.registerCallback((d) => {
+                this.setState({ccaInfo: d});
+                this.reserializeForm();
             });
-            teacherConn.registerCallback(function(d) {
-                return that.setState({
-                    teacherInfo: d
-                });
+            teacherConn.registerCallback((d) => {
+                this.setState({teacherInfo: d});
+                this.reserializeForm();
             });
-            subjectConn.registerCallback(function(d) {
-                return that.setState({
-                    subjectInfo: d
-                });
+            subjectConn.registerCallback((d) => {
+                this.setState({subjectInfo: d});
+                this.reserializeForm();
             });
-            classConn.registerCallback(function(d) {
-                return that.setState({
-                    classInfo: d
-                });
+            classConn.registerCallback((d) => {
+                this.setState({classInfo: d});
+                this.reserializeForm();
             });
-            var emptyData = {
-                data: []
-            };
-            return {
+            let emptyData = {data: []};
+            this.state = {
                 queryString: "searchby=none",
                 selected: "class",
                 hideWithoutWitness: true,
@@ -1324,241 +1318,127 @@ $(function() {
                 subjectInfo: emptyData,
                 classInfo: emptyData
             };
-        },
-        componentWillUnmount: function() {
+        }
+
+        reserializeForm() {
+            console.log(this);
+            this.setState({queryString: $(this.refs.searchbyForm).serialize()});
+        }
+
+        componentDidUpdate(prevProps, prevState) {
+            if (prevState.selected !== this.state.selected)
+                this.reserializeForm();
+        }
+
+        componentWillUnmount() {
             this.state.ccaConn.close();
             this.state.teacherConn.close();
-            return this.state.subjectConn.close();
-        },
-        render: function() {
-            var that = this;
-            var onRadioChange = function(e) {
-                return (e.target.checked ?
-                    that.setState({
-                        selected: e.target.value
-                    }) :
-                    undefined);
-            };
-            var onCheckClick = function(e) {
-                console.log(e.target.checked);
-                return that.setState({
-                    hideWithoutWitness: e.target.checked
-                });
-            };
-            var customFilter = function(data) {
-                return (that.state.hideWithoutWitness ?
-                    _.filter(data,function(d) {
-                        return d.witnesser;
-                    }) :
-                    data);
-            };
-            var onViewButtonClick = function(e) {
-                e.preventDefault();
-                return that.setState({
-                    queryString: ($("#searchbyForm")).serialize()
-                });
-            };
-            var auxiliary = {
-                teacherInfo: that.state.teacherInfo,
-                ccaInfo: that.state.ccaInfo,
-                subjectInfo: that.state.subjectInfo,
-                classInfo: that.state.classInfo
-            };
-            var offsetClassName = "col-sm-9 col-sm-offset-3 col-md-7 col-md-offset-2 col-lg-6 col-lg-offset-2";
-            return React_createElement("div",{},React_createElement("div",{
-                className: "row"
-            },React_createElement("h4",{
-                className: offsetClassName
-            },"Which students would you like to see?")),React_createElement("form",{
-                role: "form",
-                id: "searchbyForm",
-                className: "form-horizontal"
-            },React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "class",
-                defaultChecked: true,
-                onChange: onRadioChange
-            }),"Search By Class"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "class") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "class"
-                },__map(auxiliary.classInfo.data,function(klass) {
-                    var klassstr = (klass[0] + klass[1]);
-                    return React_createElement("option",{
-                        value: klassstr,
-                        key: klassstr
-                    },klassstr);
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "level",
-                defaultChecked: false,
-                onChange: onRadioChange
-            }),"Search By Level"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "level") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "level"
-                },__map(_.uniq(auxiliary.classInfo.data,false,function(k) {
-                    return k[0];
-                }),function(klass) {
-                    return React_createElement("option",{
-                        value: klass[0],
-                        key: klass[0]
-                    },"Year ",klass[0]);
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "name",
-                defaultChecked: false,
-                onChange: onRadioChange
-            }),"Search By Approx. Name"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "name") ?
-                React_createElement("input",{
-                    type: "text",
-                    className: "form-control",
-                    name: "name",
-                    placeholder: "Enter an approximate name, e.g. Xin Yi"
-                }) :
-                React_createElement("input",{
-                    type: "text",
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "subject",
-                defaultChecked: false,
-                onChange: onRadioChange
-            }),"Search By Subject"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "subject") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "id"
-                },__map(auxiliary.subjectInfo.data,function(subject) {
-                    return React_createElement("option",{
-                        value: subject.id,
-                        key: subject.id
-                    },subject.name," (",(__map(subject.level,function(l) {
-                        return ("Year " + l);
-                    })).join(", "),")");
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "cca",
-                defaultChecked: false,
-                onChange: onRadioChange
-            }),"Search By CCA"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "cca") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "id"
-                },__map(auxiliary.ccaInfo.data,function(cca) {
-                    return React_createElement("option",{
-                        value: cca.id,
-                        key: cca.id
-                    },cca.name," (",cca.category,")");
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "radio form-group"
-            },React_createElement("label",{
-                className: "col-sm-3 col-md-2 col-lg-2 control-label"
-            },React_createElement("input",{
-                type: "radio",
-                name: "searchby",
-                value: "teacher",
-                defaultChecked: false,
-                onChange: onRadioChange
-            }),"Search By Witness"),React_createElement("div",{
-                className: "col-sm-9 col-md-7 col-lg-6"
-            },((this.state.selected === "teacher") ?
-                React_createElement("select",{
-                    className: "form-control",
-                    name: "id"
-                },__map(auxiliary.teacherInfo.data,function(teacher) {
-                    return React_createElement("option",{
-                        value: teacher.id,
-                        key: teacher.id
-                    },teacher.name," (",teacher.witness_name,")");
-                })) :
-                React_createElement("select",{
-                    className: "form-control",
-                    disabled: true
-                })))),React_createElement("div",{
-                className: "form-group"
-            },React_createElement("div",{
-                className: offsetClassName
-            },React_createElement("div",{
-                className: "checkbox"
-            },React_createElement("label",{},React_createElement("input",{
-                type: "checkbox",
-                defaultChecked: true,
-                onChange: onCheckClick
-            })," Hide Students Without Witness")))),React_createElement("div",{
-                className: "form-group"
-            },React_createElement("div",{
-                className: offsetClassName
-            },React_createElement("button",{
-                type: "submit",
-                className: "btn btn-primary",
-                onClick: onViewButtonClick
-            },"View")))),React_createElement("div",{
-                className: "row"
-            },React_createElement(EntityPage,{
-                wsUrl: ("/api/students?" + this.state.queryString),
-                auxiliary: auxiliary,
-                customFilter: customFilter
-            })));
+            this.state.subjectConn.close();
+            this.state.classConn.close();
         }
-    },{
-        render: function() {
-            return false;
+
+        render() {
+            let onRadioChange = (e) => {
+                if (e.target.checked)
+                    this.setState({selected: e.target.value});
+            };
+            let onCheckClick = (e) => {this.setState({hideWithoutWitness: e.target.checked});};
+            let customFilter = (data) => this.state.hideWithoutWitness ? _.filter(data, (d) => d.witnesser) : data;
+            let auxiliary = {
+                teacherInfo: this.state.teacherInfo,
+                ccaInfo: this.state.ccaInfo,
+                subjectInfo: this.state.subjectInfo,
+                classInfo: this.state.classInfo
+            };
+            let mainControlSize = "col-sm-9 col-md-7 col-lg-6 ";
+            let labelSize = "col-sm-3 col-md-2 col-lg-2 ";
+            let labelOffset = "col-md-offset-1 col-lg-offset-1 ";
+            let offset = "col-sm-offset-3 col-md-offset-3 col-lg-offset-3 ";
+
+            return E("div", {},
+                     E("div", {className: "row"},
+                       E("h4", {className: offset + ' ' + mainControlSize},
+                         "Which students would you like to see?")),
+                     E("form", {role: "form", ref: "searchbyForm", className: "form-horizontal"},
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "class", defaultChecked: true, onChange: onRadioChange}),
+                           "Search By Class"),
+                         E("div", {className: mainControlSize},
+                           this.state.selected === "class" ?
+                           E("select", {className: "form-control", name: "class", onChange: this.reserializeForm.bind(this)},
+                             __map(auxiliary.classInfo.data,
+                                   (klass) => {
+                                       let klassstr = (klass[0] + klass[1]);
+                                       return E("option", {value: klassstr, key: klassstr}, klassstr);
+                                   })) :
+                           E("select", {className: "form-control", disabled: true}))),
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "level", defaultChecked: false, onChange: onRadioChange}),
+                           "Search By Level"),
+                         E("div", {className: mainControlSize},
+                           this.state.selected === "level" ?
+                           E("select", {className: "form-control", name: "level", onChange: this.reserializeForm.bind(this)},
+                             __map(_.uniq(auxiliary.classInfo.data, false, (k) => k[0]),
+                                   (klass) => E("option", {value: klass[0], key: klass[0]}, "Year ", klass[0]))) :
+                           E("select", {className: "form-control", disabled: true}))),
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "name", defaultChecked: false, onChange: onRadioChange}),
+                           "Search By Approx. Name"),
+                         E("div", {className: mainControlSize},
+                           (this.state.selected === "name" ?
+                            E("input", {type: "text", className: "form-control", name: "name", placeholder: "Enter an approximate name, e.g. Xin Yi", onChange: this.reserializeForm.bind(this)}) :
+                            E("input", {type: "text", className: "form-control", disabled: true})))),
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "subject", defaultChecked: false, onChange: onRadioChange}),
+                           "Search By Subject"),
+                         E("div", {className: mainControlSize},
+                           (this.state.selected === "subject" ?
+                            E("select", {className: "form-control", name: "id", onChange: this.reserializeForm.bind(this)},
+                              __map(_.sortBy(auxiliary.subjectInfo.data, (subject) => subject.name), (subject) =>
+                                    E("option", {value: subject.id, key: subject.id},
+                                      subject.name,
+                                      " (",
+                                      __map(subject.level, (l) => "Year " + l).join(", "),
+                                      ")"))) :
+                            E("select", {className: "form-control", disabled: true})))),
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "cca", defaultChecked: false, onChange: onRadioChange}),
+                           "Search By CCA"),
+                         E("div", {className: mainControlSize},
+                           (this.state.selected === "cca" ?
+                            E("select", {className: "form-control", name: "id", onChange: this.reserializeForm.bind(this)},
+                              __map(auxiliary.ccaInfo.data, (cca) =>
+                                    E("option", {value: cca.id, key: cca.id},
+                                      cca.name,
+                                      " (", cca.category, ")"))) :
+                            E("select", {className: "form-control", disabled: true})))),
+                       E("div", {className: "radio form-group"},
+                         E("label", {className: labelOffset + labelSize + "control-label"},
+                           E("input", {type: "radio", name: "searchby", value: "teacher", defaultChecked: false, onChange: onRadioChange}),
+                           "Search By Witness"),
+                         E("div", {className: mainControlSize},
+                           (this.state.selected === "teacher" ?
+                            E("select", {className: "form-control", name: "id", onChange: this.reserializeForm.bind(this)},
+                              __map(auxiliary.teacherInfo.data, (teacher) =>
+                                    E("option", {
+                                        value: teacher.id,
+                                        key: teacher.id
+                                    }, teacher.name, " (", teacher.witness_name, ")"))) :
+                            E("select", {className: "form-control", disabled: true})))),
+                       E("div", {className: "form-group"},
+                         E("div", {className: offset + ' ' + mainControlSize},
+                           E("div", {className: "checkbox"},
+                             E("label", {}, E("input", {type: "checkbox", defaultChecked: true, onChange: onCheckClick}),
+                               " Hide Students Without Witness"))))),
+                     E("div", {className: "row"},
+                       E(EntityPage, {wsUrl: "/api/students?" + this.state.queryString, auxiliary: auxiliary, customFilter: customFilter})));
         }
-    },_.invert({
-        AdminStudentsR: "displayName"
-    })));
+    }
 
     var lookupForeign = function(dataset,id) {
         return (_.find(dataset.data,function(v) {
