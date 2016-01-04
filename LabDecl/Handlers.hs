@@ -9,6 +9,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module LabDecl.Handlers where
 
 import Control.Monad
@@ -38,6 +40,7 @@ import qualified Data.IntSet as IntSet
 import qualified Data.Aeson as JSON
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
+import Data.IxSet (Proxy(..))
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
 import qualified Network.HTTP.Types as HTTP
@@ -55,6 +58,7 @@ import Text.Julius (juliusFileReload)
 import LabDecl.Utilities
 import LabDecl.Types
 import LabDecl.AcidicModels
+import LabDecl.AcidicModelInstances
 import LabDecl.FuzzyCsv
 import LabDecl.EntityCsv
 import LabDecl.Models
@@ -573,106 +577,14 @@ postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmis
 postUnlockManySubmissionsR :: Handler Value
 postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionOpen)) (ireq rawIdsField "ids")
 
-isCsvFieldEmpty :: T.Text -> Bool
-isCsvFieldEmpty = T.null . T.concat . T.split (`elem` ['-','\8210','\8211','\8212','\65112'])
 
--- | Parses a subject code string into a set of subjects in a human friendly
--- manner, but return error messages instead of an ADT. TODO: The dependence on
--- CSV-specific error messages and rowNumber should be eliminated, and this
--- function moved to SubjectCodes.hs.
-explainParseSubjectCode :: (Monad m) => RowNumber -> Map T.Text Subject -> T.Text -> ExceptT TL.Text m (Set SubjectId)
-explainParseSubjectCode rowNumber allSubjectsInLevel code = do
-    let possibilities = parseSubjectCodeFriendly allSubjectsInLevel code
-    case possibilities of
-      ParseSuccess subjectSet -> return $ Set.mapMonotonic (^. idField) subjectSet
-      ParseAmbiguous subjectSets -> do
-        let (set1:set2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) subjectSets
-        hoistEither . Left $ errCSVStudentSubjectCodeAmbiguous rowNumber code set1 set2
-      ParseIncomplete (remaining, parsedSet) -> do
-        let parsedSetFormatted = T.intercalate ", " . map (^. subjectName) . Set.toList $ parsedSet
-        hoistEither . Left $ errCSVStudentSubjectCodeIncomplete rowNumber code remaining parsedSetFormatted
-      ParseNothing _ -> hoistEither . Left $ errCSVStudentSubjectCodeNothing rowNumber code
-      ParseInternalError -> hoistEither . Left $ errCSVStudentSubjectCodeInternalError rowNumber code
-
-processStudentCsv :: MonadIO m => Acid.AcidState Database -> Vector (RowNumber, CsvStudent) -> ExceptT TL.Text m (Vector Student)
-processStudentCsv acid csvData = do
-    -- We first get all subjects and teacher because we need them during
-    -- validation.
-    allSubjects <- liftIO $ mapM (fmap subjectsToMap . Acid.query acid . ListSubjectsByLevel) [1..6]
-    allTeachers <- liftIO $ teachersToMap <$> Acid.query acid ListTeachers
-    V.forM csvData $ \(rowNumber', CsvStudent{..}) -> do
-      let rowNumber = succ rowNumber' -- The rowNumber is 1-indexed while rowNumber' is 0-indexed.
-      name <- if isCsvFieldEmpty _csvStudentName
-              then hoistEither . Left . errCSVGenericObjectNoProperty "student" "name" $ rowNumber
-              else return $ T.toTitle _csvStudentName
-      klass@(Class (level, _)) <- hoistEither . parseClassInCsv rowNumber . T.encodeUtf8 $ _csvStudentKlass
-      indexNo <- hoistEither . parseIndexInCsv rowNumber . T.encodeUtf8 $ _csvStudentIndexNo
-      nric <- hoistEither . parseNricInCsv rowNumber . T.encodeUtf8 $ _csvStudentNric
-      witness <- hoistEither . parseWitnessNameInCsv rowNumber allTeachers $ _csvStudentWitness
-      let chinese = if isCsvFieldEmpty _csvStudentChinese then T.empty else _csvStudentChinese
-      subjectIds <- if isCsvFieldEmpty _csvStudentSubjCombi
-                    then return Set.empty
-                    else explainParseSubjectCode rowNumber (allSubjects !! (level-1)) _csvStudentSubjCombi
-      return $ Student (StudentId 0) name chinese witness klass indexNo subjectIds nric SubmissionNotOpen
-  where parseClassInCsv row bs = note (errCSVStudentClassNoParse row (T.decodeUtf8 bs)) . hush $ parseClass bs
-        parseNricInCsv row bs = note (errCSVStudentNricNoParse row (T.decodeUtf8 bs)) . hush $ parseNric bs
-        parseIndexInCsv row bs = note (errCSVStudentIndexNumNoParse row (T.decodeUtf8 bs)) . hush $ PC.parseOnly (PC.decimal <* PC.endOfInput) bs
-        parseWitnessNameInCsv row teacherMap s =
-          case Map.lookup s teacherMap of
-           Just t -> return . Just $ t ^. idField
-           Nothing -> if isCsvFieldEmpty s then return Nothing else Left $ errCSVStudentWitnessNoParse row s
-
-csvBooleanResponse response = do
-  let trueResponses = T.toCaseFold <$> ["Yes", "Y", "True", "T", "1", "Oui", "Yup", "Yeah"]
-  let falseResponses = T.toCaseFold <$> ["No", "N", "False", "F", "0", "Non", "Nope", "Nah", "-", "\8210", "\8211", "\8212", "\65112"]
-  case T.toCaseFold response of
-    t | t `elem` trueResponses -> return True
-    t | t `elem` falseResponses -> return False
-    t | T.null t -> return False
-    _ -> Nothing
-
-processSubjectCsv :: MonadIO m => Acid.AcidState Database -> Vector (RowNumber, CsvSubject) -> ExceptT TL.Text m (Vector Subject)
-processSubjectCsv acid csvData =
-  V.forM csvData $ \(rowNumber', CsvSubject{..}) -> do
-      let rowNumber = succ rowNumber' -- The rowNumber is 1-indexed while rowNumber' is 0-indexed.
-      -- _csvSubjectCode, _csvSubjectName, _csvSubjectIsScience, _csvSubjectLevel :: T.Text
-      name <- if isCsvFieldEmpty _csvSubjectName
-              then hoistEither . Left . errCSVGenericObjectNoProperty "subject" "name" $ rowNumber
-              else return $ T.toTitle _csvSubjectName
-      let code = if isCsvFieldEmpty _csvSubjectCode then Nothing else Just $ T.toUpper _csvSubjectCode
-      isScience <- hoistEither . note (errCSVSubjectIsScienceNoParse rowNumber _csvSubjectIsScience) $ csvBooleanResponse _csvSubjectIsScience
-      level <- hoistEither . liftM IntSet.fromList . parseLevelsInCsv rowNumber . T.encodeUtf8 $ _csvSubjectLevel
-      return $ Subject (SubjectId 0) code name isScience level
-  where parseLevelsInCsv row bs = note (errCSVSubjectLevelNoParse row (T.decodeUtf8 bs)) . hush $
-          PC.parseOnly (PC.sepBy1' PC.decimal (PC.char ',' *> PC.skipSpace) <* PC.endOfInput) bs
-
-processTeacherCsv :: MonadIO m => Acid.AcidState Database -> Vector (RowNumber, CsvTeacher) -> ExceptT TL.Text m (Vector Teacher)
-processTeacherCsv acid csvData =
-  V.forM csvData $ \(rowNumber', CsvTeacher{..}) -> do
-      let rowNumber = succ rowNumber' -- The rowNumber is 1-indexed while rowNumber' is 0-indexed.
-      when (isCsvFieldEmpty _csvTeacherName) . hoistEither . Left . errCSVGenericObjectNoProperty "teacher" "name" $ rowNumber
-      when (isCsvFieldEmpty _csvTeacherUnit) . hoistEither . Left . errCSVGenericObjectNoProperty "teacher" "unit" $ rowNumber
-      when (isCsvFieldEmpty _csvTeacherWitness) . hoistEither . Left . errCSVGenericObjectNoProperty "teacher" "witness name" $ rowNumber
-      unless (validateEmail _csvTeacherEmail) . hoistEither . Left $ errCSVTeacherEmailNoParse rowNumber _csvTeacherEmail
-      isAdmin <- hoistEither . note (errCSVTeacherAdminNoParse rowNumber _csvTeacherAdmin) $ csvBooleanResponse _csvTeacherAdmin
-      return $ Teacher (TeacherId 0) isAdmin _csvTeacherUnit _csvTeacherName _csvTeacherWitness (Email _csvTeacherEmail)
-
-processCcaCsv :: MonadIO m => Acid.AcidState Database -> Vector (RowNumber, CsvCca) -> ExceptT TL.Text m (Vector Cca)
-processCcaCsv acid csvData =
-  V.forM csvData $ \(rowNumber', CsvCca{..}) -> do
-      let rowNumber = succ rowNumber' -- The rowNumber is 1-indexed while rowNumber' is 0-indexed.
-      when (isCsvFieldEmpty _csvCcaName) . hoistEither . Left . errCSVGenericObjectNoProperty "CCA" "name" $ rowNumber
-      when (isCsvFieldEmpty _csvCcaCategory) . hoistEither . Left . errCSVGenericObjectNoProperty "CCA" "category" $ rowNumber
-      return $ Cca (CcaId 0) _csvCcaName _csvCcaCategory
-
-postManyHandler :: (Acid.UpdateEvent ev,
-                    Acid.MethodResult ev ~ Either TL.Text (),
-                    Acid.MethodState ev ~ Database) =>
-                   (T.Text -> Either TL.Text (Vector (RowNumber, a)))
-                   -> (forall m. (MonadIO m) => Acid.AcidState Database -> Vector (RowNumber, a) -> ExceptT TL.Text m (Vector t))
-                   -> (Bool -> Vector t -> ev)
-                   -> Handler Value
-postManyHandler csvParser csvProcessor ev = do
+postManyHandler :: forall a i le re ae ase.
+                   (HasCsvProcessor a i le re ae ase,
+                    Acid.UpdateEvent ase,
+                    Acid.MethodResult ase ~ Either TL.Text (),
+                    Acid.MethodState ase ~ Database
+                   ) => Proxy a -> Handler Value
+postManyHandler _ = do
   acid <- getAcid <$> ask
   fileinfo <- runInputPost (ireq fileField "csv")
   force <- runInputPost (ireq checkBoxField "force")
@@ -680,23 +592,25 @@ postManyHandler csvParser csvProcessor ev = do
   result <- runExceptT $ do
     maybeText <- liftIO . tryDecodeAllEncodings . CL.toStrict $ bs
     csvText <- hoistEither $ note errCSVTextDecodeFailed maybeText
-    csvData <- hoistEither $ csvParser csvText
-    csvProcessor acid csvData
+    csvProcessor' acid csvText
   case result of
    Left e -> invalidArgs [TL.toStrict e]
-   Right vs -> acidUpdateHandler $ ev force vs
+   Right vs -> acidUpdateHandler' $ addEntitiesEvent' force vs
+  where csvProcessor' = csvProcessor :: Acid.AcidState Database -> T.Text -> ExceptT TL.Text Handler (Vector a)
+        addEntitiesEvent' = addEntitiesEvent :: Bool -> Vector a -> ase
+        acidUpdateHandler' = acidUpdateHandler :: (Acid.UpdateEvent ase, Acid.MethodResult ase ~ Either TL.Text (), Acid.MethodState ase ~ Database) => ase -> Handler Value
 
 postManyStudentsR :: Handler Value
-postManyStudentsR = postManyHandler parseStudentCsv processStudentCsv AddStudents
+postManyStudentsR = postManyHandler (Proxy :: Proxy Student)
 
 postManySubjectsR :: Handler Value
-postManySubjectsR = postManyHandler parseSubjectCsv processSubjectCsv AddSubjects
+postManySubjectsR = postManyHandler (Proxy :: Proxy Subject)
 
 postManyTeachersR :: Handler Value
-postManyTeachersR = postManyHandler parseTeacherCsv processTeacherCsv AddTeachers
+postManyTeachersR = postManyHandler (Proxy :: Proxy Teacher)
 
 postManyCcasR :: Handler Value
-postManyCcasR = postManyHandler parseCcaCsv processCcaCsv AddCcas
+postManyCcasR = postManyHandler (Proxy :: Proxy Cca)
 
 -- |
 -- = HTML handlers

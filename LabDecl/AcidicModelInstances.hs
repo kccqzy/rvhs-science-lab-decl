@@ -1,51 +1,40 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 module LabDecl.AcidicModelInstances where
+
+import Data.Vector (Vector)
 
 import LabDecl.Types
 import LabDecl.AcidicModels
 
-type family LookupByIdEvent i where
-  LookupByIdEvent CcaId     = LookupCcaById
-  LookupByIdEvent TeacherId = LookupTeacherById
-  LookupByIdEvent SubjectId = LookupSubjectById
-  LookupByIdEvent StudentId = LookupStudentById
+class (HasPrimaryKey a i) => HasCRUDEvents a i lookupEv removeEv addEv addManyEv | i -> lookupEv, a -> removeEv, a -> addEv, a -> addManyEv where
+  lookupByIdEvent :: i -> lookupEv
+  removeEntityEvent :: i -> removeEv
+  addEntityEvent :: Bool -> a -> addEv
+  addEntitiesEvent :: Bool -> Vector a -> addManyEv
 
-type family AddEntityEvent i where
-  AddEntityEvent Cca     = AddCca
-  AddEntityEvent Teacher = AddTeacher
-  AddEntityEvent Subject = AddSubject
-  AddEntityEvent Student = AddStudent
-
-type family RemoveEntityEvent i where
-  RemoveEntityEvent Cca     = RemoveCca
-  RemoveEntityEvent Teacher = RemoveTeacher
-  RemoveEntityEvent Subject = RemoveSubject
-  RemoveEntityEvent Student = RemoveStudent
-
-class (HasPrimaryKey a i) => HasCRUDEvents a i where
-  lookupByIdEvent :: i -> LookupByIdEvent i
-  addEntityEvent :: Bool -> a -> AddEntityEvent a
-  removeEntityEvent :: i -> RemoveEntityEvent a
-
-instance HasCRUDEvents Cca CcaId where
+instance HasCRUDEvents Cca CcaId LookupCcaById RemoveCca AddCca AddCcas where
   lookupByIdEvent = LookupCcaById
-  addEntityEvent = AddCca
   removeEntityEvent = RemoveCca
+  addEntityEvent = AddCca
+  addEntitiesEvent = AddCcas
 
-instance HasCRUDEvents Teacher TeacherId where
+instance HasCRUDEvents Teacher TeacherId LookupTeacherById RemoveTeacher AddTeacher AddTeachers where
   lookupByIdEvent = LookupTeacherById
-  addEntityEvent = AddTeacher
   removeEntityEvent = RemoveTeacher
+  addEntityEvent = AddTeacher
+  addEntitiesEvent = AddTeachers
 
-instance HasCRUDEvents Subject SubjectId where
+instance HasCRUDEvents Subject SubjectId LookupSubjectById RemoveSubject AddSubject AddSubjects where
   lookupByIdEvent = LookupSubjectById
-  addEntityEvent = AddSubject
   removeEntityEvent = RemoveSubject
+  addEntityEvent = AddSubject
+  addEntitiesEvent = AddSubjects
 
-instance HasCRUDEvents Student StudentId where
+instance HasCRUDEvents Student StudentId LookupStudentById RemoveStudent AddStudent AddStudents where
   lookupByIdEvent = LookupStudentById
-  addEntityEvent = AddStudent
   removeEntityEvent = RemoveStudent
+  addEntityEvent = AddStudent
+  addEntitiesEvent = AddStudents

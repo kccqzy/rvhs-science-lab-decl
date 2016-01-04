@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 module LabDecl.SubjectCodes where
@@ -7,9 +8,11 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.State (get, put, execStateT, StateT)
 import Control.Error
+import Control.Lens ((^.))
 import Data.List
 import Data.Function
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Attoparsec.Text as PT
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -17,6 +20,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import LabDecl.Types
+import LabDecl.ErrMsg
 
 data HumanFriendlyParseResult = ParseSuccess (Set Subject)
                               | ParseAmbiguous [Set Subject]
@@ -69,3 +73,19 @@ uniquelyDecodable codes = head $ catMaybes $ zipWith test danglingSuffixes dangl
           | T.empty `elem` ssi || any (`elem` codeList) ssi = Just False
           | ssEi = Just True
           | otherwise = Nothing
+
+-- | Parses a subject code string into a set of subjects in a human friendly
+-- manner, but return error messages instead of an ADT.
+explainParseSubjectCode :: Map T.Text Subject -> T.Text -> Either TL.Text (Set SubjectId)
+explainParseSubjectCode allSubjectsInLevel code = do
+    let possibilities = parseSubjectCodeFriendly allSubjectsInLevel code
+    case possibilities of
+      ParseSuccess subjectSet -> return $ Set.mapMonotonic (^. idField) subjectSet
+      ParseAmbiguous subjectSets -> do
+        let (set1:set2:_) = map (T.intercalate ", " . map (^. subjectName) . Set.toList) subjectSets
+        Left $ errStudentSubjectCodeAmbiguous code set1 set2
+      ParseIncomplete (remaining, parsedSet) -> do
+        let parsedSetFormatted = T.intercalate ", " . map (^. subjectName) . Set.toList $ parsedSet
+        Left $ errStudentSubjectCodeIncomplete code remaining parsedSetFormatted
+      ParseNothing _ -> Left $ errStudentSubjectCodeNothing code
+      ParseInternalError -> Left $ errStudentSubjectCodeInternalError code

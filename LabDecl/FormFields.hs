@@ -76,10 +76,10 @@ rawIdsField = checkMMap fw bw textField
   where bw = undefined -- XXX
         fw = return . parseIntList . T.encodeUtf8
 
-existingIdField :: (HasCRUDEvents a i, RenderMessage site FormMessage,
-                    Acid.QueryEvent (LookupByIdEvent i),
-                    Acid.MethodResult (LookupByIdEvent i) ~ Maybe a) =>
-                   (site -> Acid.AcidState (Acid.MethodState (LookupByIdEvent i))) -> T.Text -> Field (HandlerT site IO) i
+existingIdField :: (HasCRUDEvents a i le re ae ase, RenderMessage site FormMessage,
+                    Acid.QueryEvent le,
+                    Acid.MethodResult le ~ Maybe a) =>
+                   (site -> Acid.AcidState (Acid.MethodState le)) -> T.Text -> Field (HandlerT site IO) i
 existingIdField getAcid errMsg = checkMMap fw bw intField
   where bw = idDestructor
         fw i = do
