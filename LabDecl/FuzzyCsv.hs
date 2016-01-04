@@ -58,7 +58,10 @@ getCanonicalMap aliases = Map.foldrWithKey (\k v r -> r <> Map.fromList ((,k) <$
 
 -- | Decodes a stream of csv text into a 2D vector.
 decodeCsv :: T.Text -> Either CsvError (Vector2D T.Text)
-decodeCsv = note ErrDecodeFailed . hush . CSV.decodeCSV CSV.defCSVSettings
+decodeCsv t = note ErrDecodeFailed . hush . CSV.decodeCSV settings $ t
+  where settings = if T.count "," t > T.count "\t" t
+                   then CSV.defCSVSettings
+                   else CSV.defCSVSettings { CSV.csvSep = '\t' }
 
 fromSndMaybe :: (a, Maybe b) -> Maybe (a, b)
 fromSndMaybe = liftM2 (<$>) ((,) . fst) snd

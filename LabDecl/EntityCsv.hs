@@ -130,6 +130,8 @@ parseSubjectCsv = parseGenericCsv [
   (csvSubjectLevel, ["Applies to", "Levels", "Level", "Year", "Years", "Applicable to"])
                                   ]
 
+-- TODO: We should refactor this. Instead of doing this manually, we should have a list of pairs of lens and a function to transform a default entity to the desired one.
+
 processStudentCsv :: MonadIO m => Acid.AcidState Database -> T.Text -> ExceptT TL.Text m (Vector Student)
 processStudentCsv acid csvStream = do
     csvData <- hoistEither $ parseStudentCsv csvStream

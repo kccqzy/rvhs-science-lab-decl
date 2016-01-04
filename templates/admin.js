@@ -711,7 +711,7 @@ $(function() {
                         "")
                 })),React_createElement("p",{
                 className: "help-block"
-            },"Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in CSV. They will, however, still appear on PDF files if they are also science subjects.")),React_createElement("div",{
+            },"Compulsory subjects do not have a subject code, because since everyone takes them, there is no reason to specify them in uploaded CSV/TSV/TXT files. They will, however, still appear on PDF files if they are also science subjects.")),React_createElement("div",{
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "level"
@@ -770,7 +770,7 @@ $(function() {
             return React_createElement(AjaxFailableActionModal,{
                 actionButtonStyle: "primary",
                 actionButtonLabel: "Upload",
-                title: "Add " + dataSpec.humanNamePlural + " via Uploading CSV File",
+                title: "Add " + dataSpec.humanNamePlural + " via Uploading CSV/TSV/TXT File",
                 ajaxParam: ajaxParam
             },React_createElement("form",{
                 id: "uploaderForm",
@@ -778,15 +778,15 @@ $(function() {
                 role: "form"
             },React_createElement("p",{
                 className: "help-block"
-            },"This allows you to upload a CSV file of " + dataSpec.humanNamePluralInSentence + " and add all of them. This is an all-or-nothing operation: even if only one " + dataSpec.humanNameInSentence + " could not be added, none of the " + dataSpec.humanNamePluralInSentence + " will be added."),React_createElement("div",{
+            },"This allows you to upload a CSV/TSV/TXT file of " + dataSpec.humanNamePluralInSentence + " and add all of them. This is an all-or-nothing operation: even if only one " + dataSpec.humanNameInSentence + " could not be added, none of the " + dataSpec.humanNamePluralInSentence + " will be added."),React_createElement("div",{
                 className: "form-group"
             },React_createElement("label",{
                 htmlFor: "csv"
-            },"CSV File"),React_createElement("input",{
+            },"CSV/TSV/TXT File"),React_createElement("input",{
                 type: "file",
                 className: "form-control",
                 name: "csv",
-                accept: "text/csv,.csv",
+                accept: "text/csv,.csv,text/plain,.txt,text/tab-separated-values,.tsv",
                 required: true
             }))));
         }
@@ -1209,7 +1209,7 @@ $(function() {
                        type: "button",
                        className: "btn btn-default",
                        onClick: onBatchUploadButtonClick
-                   },"Add New (CSV File)"),React_createElement("button",{
+                   },"Add New (CSV/TSV/TXT File)"),React_createElement("button",{
                     type: "button",
                     className: "btn btn-default",
                     onClick: onAddButtonClick
