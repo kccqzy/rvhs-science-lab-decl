@@ -53,7 +53,7 @@ subjectCodesParser = void . many . subjectCodeParser
            Just remaining -> put (T.dropWhile isAllowedSubjectCodeSeparator remaining, Set.insert subject parsed)
 
 isAllowedSubjectCodeSeparator :: Char -> Bool
-isAllowedSubjectCodeSeparator = PT.inClass " \t,;.&/\\+"
+isAllowedSubjectCodeSeparator = PT.inClass $ " \t,;.&/\\+" ++ ['\8194'..'\8203'] ++ "\8239\8287\12288\160"
 
 -- | Use a variant of the Sardinas-Patterson algorithm to find whether a given
 -- set of codes is uniquely decodable. This is used when adding new codes.
