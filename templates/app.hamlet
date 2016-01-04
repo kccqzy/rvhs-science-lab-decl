@@ -8,7 +8,7 @@
                  <img src=@{StaticR rvcrayon_jpg} style="height: 2em">
                  <br>
                  Science Lab Undertaking Exercise
-             <p .explanation>Welcome!<br>In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.<br>If you have an iPad, it is <strong>highly recommended</strong> that you use an iPad to proceed due to the convenience afforded by the larger screen.
+             <p .explanation>Welcome!<br>In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.<br>If you have a Personal Learning Device (PLD) with a large screen (tablets instead of phones), it is <strong>highly recommended</strong> that you use such a device to proceed due to the convenience afforded by the larger screen.
              <div .interactive-content>
                  <button .continue-button type=submit>
          <div #page1 .page>
@@ -39,7 +39,7 @@
                      <button .continue-button type=submit>
          <div #page4 .page>
              <h1 .main-title>Personal Information
-             <p .explanation>Check your details shown below are correct and provide your email address, mobile number and CCA(s), if any.
+             <p .explanation>Check your details shown below are correct and provide your <strong>frequently used</strong> email address, mobile number and CCA(s), if any.
              <div .interactive-content>
                      <table>
                          <tr>
@@ -49,7 +49,7 @@
                              <th>Subject(s)
                              <td #table-subjects>&nbsp;
                          <tr>
-                             <th>Email Address
+                             <th><strong>Frequently Used</strong> Email Address
                              <td>
                                  <input name=email type=email #submit-email autocomplete=email placeholder="Tap to enter">
                          <tr>
@@ -69,7 +69,7 @@
         <div #page5 .page>
             <h1 .main-title>Undertaking Declaration
             <p .explanation>By signing below, I agree that:
-            <p .explanation .smaller>(a) I have attended the Laboratory Briefing by my science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student Organiser;<br>(b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
+            <p .explanation .smaller>(a) I have attended the Laboratory Briefing by my science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student's Handbook;<br>(b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.
             <div .interactive-content>
                 <div .canvas>
                 <input type=hidden name=sig #submit-signature>
