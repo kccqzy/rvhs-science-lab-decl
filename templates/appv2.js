@@ -357,19 +357,28 @@ if (typeof Object.assign != 'function') {
         this.displayName = 'Page0Welcome';
       }
       render() {
-        return E(GenericPage, {
-          preTitleContent: E('div', {className: 'row', style: {padding: '30px 0'}},
-                             E('img', {className: 'center-block img-responsive', width: 200, src: '/static/res/rvcrayon.jpg'})),
-          title: 'RVHS Science Lab Undertaking',
-          explanation: E('div', {},
-                         E('p', {}, 'Welcome!'),
-                         E('p', {}, 'In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.'),
-                         E('p', {}, 'If you have a Personal Learning Device (PLD) with a large screen (tablets instead of phones), it is ', E('strong', {}, 'highly recommended'), ' that you use such a device to proceed due to the convenience afforded by the larger screen.')),
-          content: E('div', {},
-                     E('div', {className: 'row', style: {padding: '30px 0'}},
-                       E('p', {className: 'text-center'},
-                         E('button', {className: 'btn btn-primary', onClick: this.props.onContinueClick}, "Continue"))))
-        });
+        if (document.ontouchmove === undefined)
+          return E(GenericPage, {
+            title: 'Device Unsupported',
+            explanation: E('div', {},
+                           E('p', {}, 'Welcome to River Valley High School Science Lab Undertaking Declaration Site. You will need to perform a signature, therefore to use this website, you need a touchscreen. Your device and/or your browser does not support touch.'),
+                           E('p', {}, 'If you are a teacher, please ',
+                             E('a', {href: '/admin'}, 'log in and visit the administrator console'), '.'))
+          });
+        else
+          return E(GenericPage, {
+            preTitleContent: E('div', {className: 'row', style: {padding: '30px 0'}},
+                               E('img', {className: 'center-block img-responsive', width: 200, src: '/static/res/rvcrayon.jpg'})),
+            title: 'RVHS Science Lab Undertaking',
+            explanation: E('div', {},
+                           E('p', {}, 'Welcome!'),
+                           E('p', {}, 'In this exericse, you will verify and provide essential personal information. At the same time, you will undertake to agree to the Science Laboratory Rules and endorse your declaration.'),
+                           E('p', {}, 'If you have a Personal Learning Device (PLD) with a large screen (tablets instead of phones), it is ', E('strong', {}, 'highly recommended'), ' that you use such a device to proceed due to the convenience afforded by the larger screen.')),
+            content: E('div', {},
+                       E('div', {className: 'row', style: {padding: '30px 0'}},
+                         E('p', {className: 'text-center'},
+                           E('button', {className: 'btn btn-primary', onClick: this.props.onContinueClick}, "Continue"))))
+          });
       }
     }
     Page0Welcome.propTypes = {onContinueClick: PT.func.isRequired};
