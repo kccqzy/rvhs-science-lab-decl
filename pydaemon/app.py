@@ -8,7 +8,7 @@ from google.appengine.api import mail
 from google.appengine.ext import blobstore
 import cloudstorage as gcs
 
-bucket_name = 'rvhs-labdecl-blobs'
+bucket_name = 'rvhs-lab-declaration-pdfs'
 
 class Homepage(webapp2.RequestHandler):
     def get(self):
