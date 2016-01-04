@@ -386,6 +386,20 @@ instance PathPiece Class where
   toPathPiece (Class (l, c)) = T.pack $ show l ++ [c]
   fromPathPiece = hush . parseClass . T.encodeUtf8
 
+existingIdField :: (HasCRUDEvents a i le re ae ase, RenderMessage site FormMessage,
+                    Acid.QueryEvent le,
+                    Acid.MethodResult le ~ Maybe a) =>
+                   (site -> Acid.AcidState (Acid.MethodState le)) -> T.Text -> Field (HandlerT site IO) i
+existingIdField getAcid errMsg = checkMMap fw bw intField
+  where bw = idDestructor
+        fw i = do
+          let rv = idConstructor i
+          acid <- getAcid <$> ask
+          e <- liftIO $ Acid.query acid $ lookupByIdEvent rv
+          case e of
+           Nothing -> return . Left $ errMsg
+           Just _ -> return . Right $ rv
+
 ccaIdField :: Field Handler CcaId
 ccaIdField = existingIdField getAcid "no such cca"
 
@@ -417,17 +431,42 @@ acidFormUpdateHandler eventCon form = do
   force <- runInputPost (ireq checkBoxField "force")
   acidUpdateHandler $ eventCon force entity
 
--- | Enumerate all CCAs with all information. Public.
-getCcasR :: Handler TypedContent
-getCcasR = acidQueryHandler ListCcas
+-- | Enumeration handlers. The one for student is specially handled.
+getCcasR     :: Handler TypedContent
+getSubjectsR :: Handler TypedContent
+getTeachersR :: Handler TypedContent
+getCcasR     = acidQueryHandler ListCcas
+getSubjectsR = acidQueryHandler ListSubjects
+getTeachersR = acidQueryHandler ListTeachers
 
--- | Add new CCA. Requires admin.
-postCcasR :: Handler Value
-postCcasR = acidFormUpdateHandler AddCca $ ccaForm (CcaId 0)
+-- | Add-thing handlers. Too lazy to make it generic and write HasForm class and instances.
+postCcasR     :: Handler Value
+postSubjectsR :: Handler Value
+postTeachersR :: Handler Value
+postStudentsR :: Handler Value
+postCcasR     = acidFormUpdateHandler AddCca     $ ccaForm (CcaId 0)
+postSubjectsR = acidFormUpdateHandler AddSubject $ subjectForm (SubjectId 0)
+postTeachersR = acidFormUpdateHandler AddTeacher $ teacherForm (TeacherId 0)
+postStudentsR = acidFormUpdateHandler AddStudent $ studentForm (StudentId 0)
 
--- | Get information about a single Cca. Public.
-getCcaR :: CcaId -> Handler TypedContent
-getCcaR = acidQueryHandler . LookupCcaById
+-- | Get information about a single thing.
+getOneHandler :: forall a i le re ae ase.
+                 (HasCRUDEvents a i le re ae ase,
+                  Acid.QueryEvent le,
+                  Acid.MethodResult le ~ Maybe a,
+                  Acid.MethodState le ~ Database
+                 ) => Proxy a -> i -> Handler TypedContent
+getOneHandler _ = acidQueryHandler . lookupByIdEvent'
+  where lookupByIdEvent' = lookupByIdEvent :: i -> le
+
+getCcaR     :: CcaId     -> Handler TypedContent
+getSubjectR :: SubjectId -> Handler TypedContent
+getTeacherR :: TeacherId -> Handler TypedContent
+getStudentR :: StudentId -> Handler TypedContent
+getCcaR     = getOneHandler (Proxy :: Proxy Cca)
+getSubjectR = getOneHandler (Proxy :: Proxy Subject)
+getTeacherR = getOneHandler (Proxy :: Proxy Teacher)
+getStudentR = getOneHandler (Proxy :: Proxy Student)
 
 -- | Edit CCA. Requires admin.
 putCcaR :: CcaId -> Handler Value
@@ -439,15 +478,6 @@ deleteCcaR = acidUpdateHandler . RemoveCca
 
 deleteCcasR :: Handler Value
 deleteCcasR = acidFormUpdateHandler (const RemoveCcas) (iopt rawIdsField "ids")
-
-getSubjectsR :: Handler TypedContent
-getSubjectsR = acidQueryHandler ListSubjects
-
-postSubjectsR :: Handler Value
-postSubjectsR = acidFormUpdateHandler AddSubject $ subjectForm (SubjectId 0)
-
-getSubjectR :: SubjectId -> Handler TypedContent
-getSubjectR = acidQueryHandler . LookupSubjectById
 
 putSubjectR :: SubjectId -> Handler Value
 putSubjectR = acidFormUpdateHandler ReplaceSubject . subjectForm
@@ -466,15 +496,6 @@ getTestDecodeR = do -- TODO use parseSubjectCodeFriendly
   let parsed = Set.toList <$> parseSubjectCode (subjectsToMap allSubjects) str
   return $ object [ "meta" .= object ["code" .=  (200 :: Int) ], "data" .= parsed ]
   where oneLevelField = radioFieldList $ map (liftM2 (,) (T.pack . show) id) [1..6]
-
-getTeachersR :: Handler TypedContent
-getTeachersR = acidQueryHandler ListTeachers
-
-postTeachersR :: Handler Value
-postTeachersR = acidFormUpdateHandler AddTeacher $ teacherForm (TeacherId 0)
-
-getTeacherR :: TeacherId -> Handler TypedContent
-getTeacherR = acidQueryHandler . LookupTeacherById
 
 putTeacherR :: TeacherId -> Handler Value
 putTeacherR = acidFormUpdateHandler ReplaceTeacher . teacherForm
@@ -550,12 +571,6 @@ getStudentsR = do
   QueryEvent _ ev <- runInputGet (ireq searchByField "searchby")
   acidQueryHandler ev
 
-postStudentsR :: Handler Value
-postStudentsR = acidFormUpdateHandler AddStudent $ studentForm (StudentId 0)
-
-getStudentR :: StudentId -> Handler TypedContent
-getStudentR = acidQueryHandler . LookupStudentById
-
 putStudentR :: StudentId -> Handler Value
 putStudentR = acidFormUpdateHandler ReplaceStudent . studentForm
 
@@ -601,16 +616,13 @@ postManyHandler _ = do
         acidUpdateHandler' = acidUpdateHandler :: (Acid.UpdateEvent ase, Acid.MethodResult ase ~ Either TL.Text (), Acid.MethodState ase ~ Database) => ase -> Handler Value
 
 postManyStudentsR :: Handler Value
-postManyStudentsR = postManyHandler (Proxy :: Proxy Student)
-
 postManySubjectsR :: Handler Value
-postManySubjectsR = postManyHandler (Proxy :: Proxy Subject)
-
 postManyTeachersR :: Handler Value
+postManyCcasR     :: Handler Value
+postManyStudentsR = postManyHandler (Proxy :: Proxy Student)
+postManySubjectsR = postManyHandler (Proxy :: Proxy Subject)
 postManyTeachersR = postManyHandler (Proxy :: Proxy Teacher)
-
-postManyCcasR :: Handler Value
-postManyCcasR = postManyHandler (Proxy :: Proxy Cca)
+postManyCcasR     = postManyHandler (Proxy :: Proxy Cca)
 
 -- |
 -- = HTML handlers

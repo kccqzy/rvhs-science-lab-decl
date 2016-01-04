@@ -9,7 +9,7 @@ import Data.Vector (Vector)
 import LabDecl.Types
 import LabDecl.AcidicModels
 
-class (HasPrimaryKey a i) => HasCRUDEvents a i lookupEv removeEv addEv addManyEv | i -> lookupEv, a -> removeEv, a -> addEv, a -> addManyEv where
+class HasPrimaryKey a i => HasCRUDEvents a i lookupEv removeEv addEv addManyEv | i -> lookupEv, a -> removeEv, a -> addEv, a -> addManyEv where
   lookupByIdEvent :: i -> lookupEv
   removeEntityEvent :: i -> removeEv
   addEntityEvent :: Bool -> a -> addEv

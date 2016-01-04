@@ -75,17 +75,3 @@ rawIdsField :: (HasPrimaryKey a i, RenderMessage site FormMessage) => Field (Han
 rawIdsField = checkMMap fw bw textField
   where bw = undefined -- XXX
         fw = return . parseIntList . T.encodeUtf8
-
-existingIdField :: (HasCRUDEvents a i le re ae ase, RenderMessage site FormMessage,
-                    Acid.QueryEvent le,
-                    Acid.MethodResult le ~ Maybe a) =>
-                   (site -> Acid.AcidState (Acid.MethodState le)) -> T.Text -> Field (HandlerT site IO) i
-existingIdField getAcid errMsg = checkMMap fw bw intField
-  where bw = idDestructor
-        fw i = do
-          let rv = idConstructor i
-          acid <- getAcid <$> ask
-          e <- liftIO $ Acid.query acid $ lookupByIdEvent rv
-          case e of
-           Nothing -> return . Left $ errMsg
-           Just _ -> return . Right $ rv

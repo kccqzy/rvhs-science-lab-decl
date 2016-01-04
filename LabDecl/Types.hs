@@ -189,7 +189,7 @@ instance Default Database where
 -- type. The typeclass also ensures there exists a lens from the
 -- record to its ID, and there exists a way to convert an integer to
 -- an ID.
-class (Indexable a, Ord a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
+class (FromJSON a, ToJSON a, Indexable a, Ord a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
   idField :: Lens' a i
   idConstructor :: Int -> i
   idDestructor :: i -> Int
