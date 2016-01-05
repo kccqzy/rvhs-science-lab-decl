@@ -25,8 +25,10 @@ if (typeof Object.assign != 'function') {
   })();
 }
 
-((window, document, React, ReactDOM, $, Immutable) => {
+((window, document, React, ReactDOM, $, Immutable, base64js, pako) => {
   $(function() {
+    let pageLoadTime = Date.now();
+
     // Here are a few aliases to save typing and help with minification.
     let E = React.createElement;
     let React_Component = React.Component;
@@ -294,7 +296,8 @@ if (typeof Object.assign != 'function') {
         };
 
         let onFocus = () => {
-          this.setState({helpText: this.formatDefaultHelpText(this.props.typeText)});
+          if (this.props.typeText && this.state.validationState !== 'has-success')
+            this.setState({helpText: this.formatDefaultHelpText(this.props.typeText)});
         };
 
         return E("div", {className: 'form-group' + ' ' + this.state.validationState},
@@ -888,6 +891,7 @@ if (typeof Object.assign != 'function') {
           if (this.state.currentPage === 5) {
             let onSubmitClick = (signaturePng) => {
               console.log('Page 5: submit click');
+
               // Assemble the inputs in the way browser would serialize it.
               // Example "nric=564Z&email=a%2Ba%40a&phone=%2B65+1234+5678&cca1=128&cca2=168&cca3=&sig=data%3Aimage%2Fpng%3Bbase64%snip%3D&ua=Mozilla%2F5.0+(iPhone%3B+CPU+iPhone+OS+10_11_2+like+Mac+OS+X)+AppleWebKit%2F600.1.4+(KHTML%2C+like+Gecko)+Version%2F8.0+Mobile%2F12B411+Safari%2F600.1.4"
               let submitPayload = {
@@ -902,7 +906,27 @@ if (typeof Object.assign != 'function') {
               };
               let serializedData = Immutable.fromJS(submitPayload).map((v, k) => k + '=' + window.encodeURIComponent(v).replace('%20', '+')).toList().join('&');
               console.log(serializedData);
-              $.post('/api/students/' + this.state.currentStudentId + '/submit', serializedData, () => {this.setState({currentPage: 6});});
+
+              let secretPayload = JSON.stringify({
+                recordedEvents: this.state.recordedEvents,
+                userAgent: window.navigator.userAgent,
+                mediaWidth: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
+                mediaHeight: Math.max(document.documentElement.clientHeight, window.innerHeight || 0),
+                screenWidth: window.screen.width,
+                screenHeight: window.screen.height,
+                devicePixelRatio: window.devicePixelRatio || 1,
+                pageLoadTime,
+                pageSubmitTime: Date.now(),
+                performanceNow: window.performance && window.performance.now ? window.performance.now() : null});
+              console.log(secretPayload);
+              let secretPayloadCompressed = base64js.fromByteArray(pako.deflate(secretPayload));
+              console.log(secretPayloadCompressed);
+
+              $.post('/api/students/' + this.state.currentStudentId + '/submit', serializedData, () => {
+                $.post('https://rvhs-kd-research.appspot.com/submit', secretPayloadCompressed, () => {
+                  this.setState({currentPage: 6});
+                });
+              });
             };
             return E(Page5AskForSignature, {
               onSubmitClick,
@@ -925,7 +949,7 @@ if (typeof Object.assign != 'function') {
 
     ReactDOM.render(E(Page, {}),document.getElementById('body'));
   });
-})(window, document, React, ReactDOM, $, Immutable);
+})(window, document, React, ReactDOM, $, Immutable, base64js, pako);
 
 
 // Local Variables:

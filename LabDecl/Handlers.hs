@@ -728,6 +728,8 @@ getNewHomepageR = do
     addScript $ StaticR jquery_mobile_custom_js
     addScript $ StaticR underscore_js
     addScript $ StaticR immutable_js
+    addScript $ StaticR pako_deflate_min_js
+    addScript $ StaticR b64_min_js
     toWidget $ [shamlet|<div #body>|]
     if dev
       then do
