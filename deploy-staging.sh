@@ -3,7 +3,7 @@ set -e
 set -x
 
 # Create docker machine and start it.
-if ! docker-machine ls | grep '^labdecl-staging\b'; then
+if ! docker-machine ls -q | grep '^labdecl-staging$'; then
 
     docker-machine create --driver google \
                    --google-project rvhs-sci-lab-undertaking \

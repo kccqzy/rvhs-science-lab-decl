@@ -1,9 +1,15 @@
 #!/bin/bash
+
+echo "Type 'Deploy to production' to continue"
+
+read -r line
+[ "$line" != "Deploy to production" ] && exit 1
+
 set -e
 set -x
 
 # Create docker machine and start it.
-if ! docker-machine ls | grep '^labdecl-production\b'; then
+if ! docker-machine ls -q | grep '^labdecl-production$'; then
 
     docker-machine create --driver google \
                    --google-project rvhs-sci-lab-undertaking \
