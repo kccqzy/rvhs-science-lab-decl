@@ -25,37 +25,34 @@
   \draw [thick] (sep begin) -- (sep end);
   \node (school name) at (sep begin) [anchor=south west, font={\fontspec[Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}]{MP-MediumCapt.otf}}] {River Valley High School};
   \node (dept name) at (sep end) [yshift=-1mm, anchor=south east, font=\footnotesize\itshape] {Science \& Technology Department};
-  \node (title) at ($(sep begin)!.5!(sep end)$) [anchor=north, font=\large\fontspec{MP-Subh.otf}] {Science Laboratory Rules Undertaking Declaration};
+  \node (title) at ($(sep begin)!.5!(sep end)$) [anchor=north, font=\large\fontspec{MP-Subh.otf}] {Undertaking Declaration Certificate};
 \end{tikzpicture}
 \end{center}
 
 All students are to comply with the rules concerning the use of all science laboratories, including the Design and Technology workshops. The term ``laboratory'' herein refers to all science laboratories and workshops.
 
 \begin{enumerate}[(a)]
-\item I have attended the \emph{Laboratory Briefing} by my science subject teacher(s). I have also read and understood the \emph{Science Laboratory Rules} in the \emph{River Valley High School Student Organiser}.
-\item I hereby undertake and agree to abide by these rules \emph{at all times}. I will conduct myself in a \emph{responsible} manner when using the laboratory.
+\item I have attended the \emph{Laboratory Briefing} by my science subject teacher and have read and understood the \emph{Science Laboratory Rules} in the \emph{RVHS Student's Handbook};
+\item I hereby undertake and agree to abide by these rules at all times. I will conduct myself in a responsible manner when using the laboratory.
 \end{enumerate}
 
 \begin{center}
   \definecolor{blueblack}{RGB}{58,61,167}
   \begin{tikzpicture}[font=\small]
-    \matrix (form one) [matrix of nodes, column 1/.style={text width=8em, align=left, font=\itshape}, column 2/.style={text width=21em, align=center, color=blueblack}, row sep=1em, column sep=1em, nodes={anchor=base}] {
-      Name of Student & |(student name) | {\addfontfeatures{Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}} #{name}} \\
+    \matrix (form one) [matrix of nodes, column 1/.style={text width=8em, align=left, font=\itshape}, column 2/.style={text width=21em, align=center, color=blueblack, font={\large\addfontfeatures{Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}}}}, row sep=1em, column sep=1em, nodes={anchor=base}] {
+      Name of Student & |(student name) | {#{name}} \\
       Class & |(class) | {#{className}} \\
       Index Number & |(index no) | {#{indexNumber}} \\
       Science Subject(s) & |(subjects) | {#{subjects}} \\
     };
 
-    \matrix [column sep=1em, matrix of nodes, nodes={align=center}, column 1/.style={text width=9em}, column 2/.style={text width=13em}, column 3/.style={text width=6em}, row 1/.style={color=blueblack}, row 2/.style={font=\itshape}] at ($(form one.south west)+(0,-4em)$) [anchor=north west] {
-      |(signature) | \includegraphics[width=9em]{./sig.png} & |(witness) | {\addfontfeatures{Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}} #{witnessName}} & |(date) | {\today} \\
+    \matrix [column sep=1em, matrix of nodes, nodes={align=center}, column 1/.style={text width=9em}, column 2/.style={text width=13em}, column 3/.style={text width=6.5em}, row 1/.style={color=blueblack}, row 2/.style={font=\itshape}] at ($(form one.south west)+(0,-3em)$) [anchor=north west] {
+      |(signature) | \includegraphics[width=9em]{./sig.png} & |(witness) | {\addfontfeatures{Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}} #{witnessName}} & |(date) | {\addfontfeatures{Kerning=Uppercase, Letters={UppercaseSmallCaps,SmallCaps}}\today} \\
       Signature of Student & Witness & Date \\
     };
 
     \foreach \x in {student name, class, index no, subjects, signature, witness, date}
-    \draw [densely dotted] (\x.south west) -- (\x.south east);
+    \draw [densely dotted] ($(\x.base west)-(0,.3333em)$) -- ($(\x.base east)-(0,.3333em)$);
   \end{tikzpicture}
 \end{center}
-
-
-
 \end{document}

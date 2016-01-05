@@ -151,8 +151,8 @@ generateMail student pdf = do
          Nothing -> error "renderMail: Cannot render for a student who has not completed submission."
          Just (Email e) -> e
   let mailSender = "River Valley High School Science Department <rvhs.science.oracle@gmail.com>"
-  let mailSubject = "Completion of Science Lab Undertaking Form"
-  let mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed declaration form is in the attachment for your reference."
+  let mailSubject = "Completion of Undertaking Declaration Certificate (UDC)"
+  let mailBody = "Thank you for taking part in the science lab undertaking exercise. The completed UDC is in the attachment for your reference."
   fileName <- generateFileName student
   let mailAttachments = [(fileName, ByteString64 pdf)]
   return GAEMail {..}
