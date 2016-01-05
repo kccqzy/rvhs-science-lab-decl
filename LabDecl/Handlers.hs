@@ -120,6 +120,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/logout             AdminLogoutR   GET
 /old                      HomepageR      GET
 /                         NewHomepageR   GET
+/robots.txt               RobotsR        GET
 /static                   StaticR        EmbeddedStatic getStatic
 /auth                     AuthR          Auth getAuth
 |])
@@ -161,6 +162,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized NewHomepageR          _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
+  isAuthorized RobotsR               _ = requirePrivilege PrivNone
 
   -- | Static files.
   addStaticContent = embedStaticContent getStatic StaticR Right
@@ -736,3 +738,6 @@ getNewHomepageR = do
       addScript $ StaticR react_min_js
       addScript $ StaticR reactdom_min_js
       addScript $ StaticR appv2_min_js
+
+getRobotsR :: Handler TypedContent
+getRobotsR = respondSource "text/plain" $ sendChunkBS "User-agent: *\nDisallow: /\n"
