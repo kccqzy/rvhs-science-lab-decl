@@ -102,33 +102,35 @@ errInvalidPublicSubmission = [stext| “You don’t try to game the
   that has enough working knowledge of HTML, JavaScript, JSON, HTTP to
   achieve it. Email me at qzy@qzy.io or find me on Twitter @kccqzy. |]
 
-errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV file. You
-  may wish to open the CSV file in Notepad, TextEdit or another
-  plain-text editing utility to visually inspect the structure of the
-  file.  |]
+errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV/TSV/TXT
+  file. You may wish to open the CSV/TSV/TXT file in Notepad, TextEdit
+  or another plain-text editing utility to visually inspect the
+  structure of the file. |]
 
-errCSVTextDecodeFailed = [stext| Cannot decode the uploaded CSV file
-  using available text encodings. A list of common text encodings
-  (including UTF-8, both endianness of UTF-16 and UTF-32, GB18030 and
-  others) are tried but none of them successfully decoded the
-  file. Did you accidentally upload an Excel file instead?  |]
+errCSVTextDecodeFailed = [stext| Cannot decode the uploaded
+  CSV/TSV/TXT file using available text encodings. A list of common
+  text encodings (including UTF-8, both endianness of UTF-16 and
+  UTF-32, GB18030 and others) are tried but none of them successfully
+  decoded the file. Did you accidentally upload an Excel file instead?
+  |]
 
 errCSVHeaderNotFound headers = [stext| Cannot find the required table
-  columns in the uploaded CSV file. The CSV file must contain the
-  following required columns: #{headers}, preceded by a header row.  |]
+  columns in the uploaded CSV/TSV/TXT file. The CSV/TSV/TXT file must
+  contain the following required columns: #{headers}, preceded by a
+  header row. |]
 
 errCSVCellNotFound i j = [stext| Cannot find the cell #{j}#{i} while
-  processing the uploaded CSV file. Perhaps the CSV file is truncated
-  or damaged during uploading.  |]
+  processing the uploaded CSV/TSV/TXT file. Perhaps the CSV/TSV/TXT
+  file is truncated or damaged during uploading. |]
 
 errCSVDuplicateColumnHeader cells = [stext| Cannot understand the
   table column headers because there seem to exist multiple columns
   with the same meaning. Please check the cells #{cells} of the
-  uploaded CSV file. |]
+  uploaded CSV/TSV/TXT file. |]
 
 errCSVProcessError (row, errmsg) = [stext| The following error has
-  occurred while processing row #{rowPlusOne} of the uploaded CSV
-  file: #{errmsg}. |]
+  occurred while processing row #{rowPlusOne} of the uploaded
+  CSV/TSV/TXT file: #{errmsg} |]
   where rowPlusOne = 1 + row
 
 errStudentClassNoParse bs = [stext| Cannot understand “#{bs}” as a
@@ -137,7 +139,7 @@ errStudentClassNoParse bs = [stext| Cannot understand “#{bs}” as a
 
 errStudentNricNoParse nric = [stext| Cannot understand “#{nric}” as
   NRIC because it has incorrect format. The correct format of NRIC is:
-  optionally some X’s followed by four decimal digits followed by an
+  optionally some X’s followed by three decimal digits followed by an
   uppercase letter which must be one of “JZIHGFEDCBAXWUTRQPNMLK”. |]
 
 errStudentSubjectCodeAmbiguous subjcode interp1 interp2 = [stext|
