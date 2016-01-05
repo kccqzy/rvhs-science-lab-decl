@@ -10,20 +10,20 @@ if ! docker-machine ls -q | grep '^labdecl-staging$'; then
                    --google-zone asia-east1-a \
                    --google-machine-type f1-micro \
                    --google-address labdecl-staging-ip \
+                   --google-preemptible \
+                   --google-tags http-server,https-server \
                    --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1404-trusty-v20151113 \
                    labdecl-staging
 
-    # Get HTTPS Certificates. This step requires manual intervention! First the
-    # firewall setting needs to be changed to allow 80 and 443 traffic. Then a
-    # human needs to enter domain names that correspond to the current IP
-    # address of the instance.
+    # Get HTTPS Certificates. 
+    docker-machine env labdecl-staging || docker-machine regenerate-certs labdecl-staging
     eval $(docker-machine env labdecl-staging)
     docker run -it --rm -p 443:443 -p 80:80 \
            --name letsencrypt \
            -v /etc/letsencrypt:/etc/letsencrypt \
            -v /var/lib/letsencrypt:/var/lib/letsencrypt \
            quay.io/letsencrypt/letsencrypt:latest \
-           auth
+           auth --email qzy@qzy.io -d staging.rvhs.space --agree-tos
 
 elif [ "Running" != "$(docker-machine status labdecl-staging)" ]; then
     docker-machine start labdecl-staging
@@ -53,6 +53,7 @@ rm -rf ../deploy-context
 if docker ps -a --format '{{.Names}}' | grep labdecl-app-staging; then
     if docker ps --format '{{.Names}}' | grep labdecl-app-staging; then
         docker stop labdecl-app-staging
+        docker-machine ssh labdecl-staging sudo rm -f /database/state/Database/open.lock
     fi
     docker rm labdecl-app-staging
 fi
