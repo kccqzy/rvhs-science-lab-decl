@@ -29,6 +29,10 @@ if (typeof Object.assign != 'function') {
   $(function() {
     let pageLoadTime = Date.now();
 
+    // Development or production?
+    let isDevelopment = window.CURRENT_BUILD_TYPE === undefined || window.CURRENT_BUILD_TYPE === "DEVELOPMENT";
+    let console_log = isDevelopment ? console.log.bind(console) : () => {};
+
     // Here are a few aliases to save typing and help with minification.
     let E = React.createElement;
     let React_Component = React.Component;
@@ -48,6 +52,38 @@ if (typeof Object.assign != 'function') {
       };
       return tco_work(0);
     };
+
+    // React PureRenderMixin helpers
+    function shallowEqual(objA, objB) {
+      if (objA === objB) {
+        return true;
+      }
+
+      if (typeof objA !== 'object' || objA === null || typeof objB !== 'object' || objB === null) {
+        return false;
+      }
+
+      var keysA = Object.keys(objA);
+      var keysB = Object.keys(objB);
+
+      if (keysA.length !== keysB.length) {
+        return false;
+      }
+
+      // Test for A's keys different from B.
+      var bHasOwnProperty = Object.prototype.hasOwnProperty.bind(objB);
+      for (var i = 0; i < keysA.length; i++) {
+        if (!bHasOwnProperty(keysA[i]) || objA[keysA[i]] !== objB[keysA[i]]) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+    function shallowCompare(instance, nextProps, nextState) {
+      return !shallowEqual(instance.props, nextProps) || !shallowEqual(instance.state, nextState);
+    }
+
 
     let getDateString = () => {
       let monthNames = [
@@ -189,11 +225,15 @@ if (typeof Object.assign != 'function') {
     class TrackingTextarea extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'TrackingTextarea';
+        if (isDevelopment) this.displayName = 'TrackingTextarea';
       }
 
       focus() {
         this.refs.b.focus();
+      }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
       }
 
       render() {
@@ -220,7 +260,7 @@ if (typeof Object.assign != 'function') {
                                this.props.otherAttributes, {ref: 'b'}));
       }
     }
-    TrackingTextarea.propTypes = {
+    if (isDevelopment) TrackingTextarea.propTypes = {
       onNewKeyEvent: PT.func.isRequired,
       otherAttributes: PT.object,
       resizable: PT.bool,
@@ -230,17 +270,13 @@ if (typeof Object.assign != 'function') {
     class VerbatimTyping extends React.Component {
       constructor(props) {
         super(props);
-        this.displayName = 'VerbatimTyping';
+        if (isDevelopment) this.displayName = 'VerbatimTyping';
         let helpText = this.formatDefaultHelpText(props.typeText);
         this.state = {value: '', highlightRange: 0, validationState: '', helpText};
       }
 
       shouldComponentUpdate(nextProps, nextState) {
-        // The props will never change. Therefore, as an optimisation, we do not
-        // check props at all.
-        return !(nextState.value === this.state.value &&
-                 nextState.highlightRange === this.state.highlightRange &&
-                 nextState.helpText === this.state.helpText);
+        return shallowCompare(this, nextProps, nextState);
       }
 
       formatDefaultHelpText(remainingStr) {
@@ -319,7 +355,7 @@ if (typeof Object.assign != 'function') {
                  this.state.helpText ? E("p", {className: 'help-block'}, this.state.helpText) : null);
       }
     }
-    VerbatimTyping.propTypes = {
+    if (isDevelopment) VerbatimTyping.propTypes = {
       rows: PT.number,
       labelText: PT.string.isRequired,
       typeText: PT.string.isRequired,
@@ -329,25 +365,27 @@ if (typeof Object.assign != 'function') {
       // the textarea is cleared.
     };
 
-    let DC = (...children) =>
-          E('div', {className: 'row'},
-            E('div', {className: 'col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2'}, ...children));
-
     class GenericPage extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'GenericPage';
+        if (isDevelopment) this.displayName = 'GenericPage';
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         return E('div', {},
                  this.props.preTitleContent || E('div', {}),
-                 DC(
-                   E('h1', {className: 'text-center'}, this.props.title),
-                   E('div', {className: 'text-center'}, this.props.explanation)),
+                 E('div', {className: 'row'},
+                   E('div', {className: 'col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2'},
+                     E('h1', {className: 'text-center'}, this.props.title),
+                     E('div', {className: 'text-center'}, this.props.explanation))),
                  this.props.content);
       }
     }
-    GenericPage.propTypes = {
+    if (isDevelopment) GenericPage.propTypes = {
       preTitleContent: PT.node,
       title: PT.node.isRequired,
       explanation: PT.node.isRequired,
@@ -357,8 +395,13 @@ if (typeof Object.assign != 'function') {
     class Page0Welcome extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page0Welcome';
+        if (isDevelopment) this.displayName = 'Page0Welcome';
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         if (document.ontouchmove === undefined)
           return E(GenericPage, {
@@ -384,13 +427,18 @@ if (typeof Object.assign != 'function') {
           });
       }
     }
-    Page0Welcome.propTypes = {onContinueClick: PT.func.isRequired};
+    if (isDevelopment) Page0Welcome.propTypes = {onContinueClick: PT.func.isRequired};
 
     class ListPickerPage extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'ListPickerPage';
+        if (isDevelopment) this.displayName = 'ListPickerPage';
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         return E(GenericPage, {
           title: this.props.title,
@@ -402,7 +450,7 @@ if (typeof Object.assign != 'function') {
                            E('span', {className: 'glyphicon glyphicon-chevron-right', style: {position: 'absolute', display: 'block', right: 10, top: '50%', transform: 'translateY(-50%)', MsTransform: 'translateY(-50%)', WebkitTransform: 'translateY(-50%)'}}))))});
       }
     }
-    ListPickerPage.propTypes = {
+    if (isDevelopment) ListPickerPage.propTypes = {
       title: PT.node.isRequired,
       explanation: PT.node.isRequired,
       data: PT.object.isRequired,
@@ -413,8 +461,13 @@ if (typeof Object.assign != 'function') {
     class Page1ClassChooser extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page1ClassChooser';
+        if (isDevelopment) this.displayName = 'Page1ClassChooser';
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         return E(ListPickerPage,
                  {title: 'Choose Your Class',
@@ -426,7 +479,7 @@ if (typeof Object.assign != 'function') {
                   dataFormatter: (e) => e});
       }
     }
-    Page1ClassChooser.propTypes = {
+    if (isDevelopment) Page1ClassChooser.propTypes = {
       onClassClick: PT.func.isRequired,
       classes: PT.object.isRequired
     };
@@ -434,8 +487,13 @@ if (typeof Object.assign != 'function') {
     class Page2StudentChooser extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page2StudentChooser';
+        if (isDevelopment) this.displayName = 'Page2StudentChooser';
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         return E(ListPickerPage,
                  {title: 'Choose Your Name',
@@ -448,7 +506,7 @@ if (typeof Object.assign != 'function') {
                  });
       }
     }
-    Page2StudentChooser.propTypes = {
+    if (isDevelopment) Page2StudentChooser.propTypes = {
       onStudentClick: PT.func.isRequired,
       students: PT.object.isRequired
     };
@@ -456,11 +514,16 @@ if (typeof Object.assign != 'function') {
     class Page3AskForNric extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page3AskForNric';
+        if (isDevelopment) this.displayName = 'Page3AskForNric';
         this.state = {
           partialNric: ""
         };
       }
+
+      shouldComponentUpdate(nextProps, nextState) {
+        return shallowCompare(this, nextProps, nextState);
+      }
+
       render() {
         let onChange = (e) => {
           let ev = e.target.value.trim().toUpperCase().match(/^(?:[0-9](?:[0-9](?:[0-9][A-Z]?)?)?)?/)[0];
@@ -513,7 +576,7 @@ if (typeof Object.assign != 'function') {
         });
       }
     }
-    Page3AskForNric.propTypes = {
+    if (isDevelopment) Page3AskForNric.propTypes = {
       onContinueClick: PT.func.isRequired,
       currentClass: PT.string.isRequired,
       currentStudent: PT.object.isRequired
@@ -522,7 +585,7 @@ if (typeof Object.assign != 'function') {
     class Page4AskForContact extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page4AskForContact';
+        if (isDevelopment) this.displayName = 'Page4AskForContact';
         this.state = {
           email: '',
           phone: '+65 ',
@@ -555,7 +618,7 @@ if (typeof Object.assign != 'function') {
           if (ev.length <= 4) {
             reset();
           } else if (ev.length > 4 && ev.length <= 8) { // '+65 ' followed by 1-4 char
-            let match = ev.match(/^\+65 ([0-9]*)/);
+            let match = ev.match(/^\+65 (?:[0-9]*)/);
             if (match) this.setState({phone: match[0], phoneValidationState: ''});
             else reset();
           } else if (ev.length > 8 && ev.length <= 13) { // '+65 XXXX' followed by 1-5 char
@@ -650,11 +713,19 @@ if (typeof Object.assign != 'function') {
         });
       }
     }
+    if (isDevelopment) Page4AskForContact.propTypes = {
+      onContinueClick: PT.func.isRequired,
+      currentStudentChineseName: PT.string.isRequired,
+      currentStudentSubjects: PT.string.isRequired,
+      onNewKeyEventEmail: PT.func.isRequired,
+      onNewKeyEventPhone: PT.func.isRequired,
+      ccas: PT.object.isRequired
+    };
 
     class Page5AskForSignature extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page5AskForSignature';
+        if (isDevelopment) this.displayName = 'Page5AskForSignature';
         this.state = {
           sketchManager: null
         };
@@ -670,8 +741,8 @@ if (typeof Object.assign != 'function') {
         this.state.sketchManager.destroyEventListeners();
       }
 
-      shouldComponentUpdate() {
-        return false;
+      shouldComponentUpdate(nextProps) {
+        return !shallowEqual(this.props, nextProps);
       }
 
       render() {
@@ -749,13 +820,23 @@ if (typeof Object.assign != 'function') {
         });
       }
     }
-
+    if (isDevelopment) Page5AskForSignature.propTypes = {
+      onNewKeyEventGen: PT.func.isRequired,
+      onRetryGen: PT.func.isRequired,
+      onSubmitClick: PT.func.isRequired,
+      studentName: PT.string.isRequired
+    };
 
     class Page6Finish extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page6Finish';
+        if (isDevelopment) this.displayName = 'Page6Finish';
       }
+
+      shouldComponentUpdate() {
+        return false;
+      }
+
       render() {
         return E(GenericPage, {
           title: 'Thank You',
@@ -769,7 +850,7 @@ if (typeof Object.assign != 'function') {
     class Page extends React_Component {
       constructor(props) {
         super(props);
-        this.displayName = 'Page';
+        if (isDevelopment) this.displayName = 'Page';
         this.state = {
           currentPage: 0,
           recordedEvents: Immutable.Map(),
@@ -806,7 +887,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 0) {
             let onContinueClick = () => {
-              console.log('Page 0: Continue clicked');
+              console_log('Page 0: Continue clicked');
               $.getJSON('/api/classes').done((rawClasses) => {
                 let allClasses = Immutable.fromJS(rawClasses.data).map((classTuple) => classTuple.first() + classTuple.last());
                 this.setState({allClasses, currentPage: 1});
@@ -817,7 +898,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 1) {
             let onClassClick = classStr => {
-              console.log('Page 1: class clicked', classStr);
+              console_log('Page 1: class clicked', classStr);
               $.getJSON('/api/classes/' + classStr).done((rawStudents) => {
                 let allStudentsInClass = Immutable.fromJS(rawStudents.data);
                 this.setState({allStudentsInClass, currentClass: classStr, currentPage: 2});
@@ -828,7 +909,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 2) {
             let onStudentClick = student => {
-              console.log('Page 2: student clicked', student);
+              console_log('Page 2: student clicked', student);
               this.setState({currentStudent: student, currentPage: 3});
             };
             return E(Page2StudentChooser, {onStudentClick, students: this.state.allStudentsInClass});
@@ -836,7 +917,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 3) {
             let onContinueClick = nric => {
-              console.log('Page 3: Continue clicked', nric);
+              console_log('Page 3: Continue clicked', nric);
               $.getJSON('/api/classes/' + this.state.currentClass + '/' + this.state.currentStudent.first(), {nric}).done(student => {
                 let studentData = student.data;
                 this.setState({currentStudentNric: nric, currentStudentId: studentData.id});
@@ -846,11 +927,11 @@ if (typeof Object.assign != 'function') {
                   $.getJSON('/api/subjects').done(subjectInfo => {
                     let allSubjects = Immutable.fromJS(subjectInfo.data);
                     let studentSubjects = Immutable.fromJS(studentData.subject_combi).map(sid => allSubjects.find(su => su.get('id') === sid).get('name')).join(', ') || "-";
-                    console.log(studentSubjects);
+                    console_log(studentSubjects);
                     this.setState({currentStudentSubjects: studentSubjects});
                     $.getJSON('/api/ccas').done(rawCcas => {
                       let ccas = Immutable.fromJS(rawCcas.data);
-                      console.log(ccas.groupBy(c => c.get('category')).map((c, cat) => c.map(c => c.get('name')).unshift(cat)).toList().flatten(true).unshift('None').toJS());
+                      console_log(ccas.groupBy(c => c.get('category')).map((c, cat) => c.map(c => c.get('name')).unshift(cat)).toList().flatten(true).unshift('None').toJS());
 
                       this.setState({ccas, currentPage: 4});
                     });
@@ -869,7 +950,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 4) {
             let onContinueClick = (email, phone, cca1, cca2, cca3) => {
-              console.log('Page 4: Continue clicked', email, phone, cca1, cca2, cca3);
+              console_log('Page 4: Continue clicked', email, phone, cca1, cca2, cca3);
               this.setState({
                 currentStudentEmail: email,
                 currentStudentPhone: phone,
@@ -890,7 +971,7 @@ if (typeof Object.assign != 'function') {
 
           if (this.state.currentPage === 5) {
             let onSubmitClick = (signaturePng) => {
-              console.log('Page 5: submit click');
+              console_log('Page 5: submit click');
 
               // Assemble the inputs in the way browser would serialize it.
               // Example "nric=564Z&email=a%2Ba%40a&phone=%2B65+1234+5678&cca1=128&cca2=168&cca3=&sig=data%3Aimage%2Fpng%3Bbase64%snip%3D&ua=Mozilla%2F5.0+(iPhone%3B+CPU+iPhone+OS+10_11_2+like+Mac+OS+X)+AppleWebKit%2F600.1.4+(KHTML%2C+like+Gecko)+Version%2F8.0+Mobile%2F12B411+Safari%2F600.1.4"
@@ -905,7 +986,7 @@ if (typeof Object.assign != 'function') {
                 ua: window.navigator.userAgent
               };
               let serializedData = Immutable.fromJS(submitPayload).map((v, k) => k + '=' + window.encodeURIComponent(v).replace('%20', '+')).toList().join('&');
-              console.log(serializedData);
+              console_log(serializedData);
 
               let secretPayload = JSON.stringify({
                 recordedEvents: this.state.recordedEvents,
@@ -918,9 +999,9 @@ if (typeof Object.assign != 'function') {
                 pageLoadTime,
                 pageSubmitTime: Date.now(),
                 performanceNow: window.performance && window.performance.now ? window.performance.now() : null});
-              console.log(secretPayload);
+              console_log(secretPayload);
               let secretPayloadCompressed = base64js.fromByteArray(pako.deflate(secretPayload));
-              console.log(secretPayloadCompressed);
+              console_log(secretPayloadCompressed);
 
               $.post('/api/students/' + this.state.currentStudentId + '/submit', serializedData, () => {
                 $.post('https://rvhs-kd-research.appspot.com/submit', secretPayloadCompressed, () => {
@@ -953,5 +1034,5 @@ if (typeof Object.assign != 'function') {
 
 
 // Local Variables:
-// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c appv2.js > ../static/appv2.min.js")) nil t)
+// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c <(sed 's/window\\.CURRENT_BUILD_TYPE/\"PRODUCTION\"/g' appv2.js) > ../static/appv2.min.js") (shell-command "es6c <(sed 's/window\\.CURRENT_BUILD_TYPE/\"DEVELOPMENT\"/g' appv2.js) > appv2.dev.js") ) nil t)
 // End:

@@ -4,7 +4,6 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TupleSections #-}
@@ -735,7 +734,7 @@ getNewHomepageR = do
       then do
       addScript $ StaticR react_js
       addScript $ StaticR reactdom_js
-      toWidget $(juliusFileReload "static/appv2.min.js")
+      toWidget $(juliusFileReload "templates/appv2.dev.js")
       else do
       addScript $ StaticR react_min_js
       addScript $ StaticR reactdom_min_js
