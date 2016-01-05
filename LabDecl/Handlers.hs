@@ -16,10 +16,8 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Reader (ask)
 import Control.Monad.State (get, put, evalStateT)
-import Control.Monad.STM (atomically)
 import Control.Arrow (second)
-import Control.Concurrent.STM.TChan
-import Control.Concurrent.STM.TQueue
+import Control.Concurrent.STM
 import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
@@ -62,7 +60,6 @@ import LabDecl.FuzzyCsv
 import LabDecl.EntityCsv
 import LabDecl.Models
 import LabDecl.ErrMsg
-import LabDecl.AsyncServ
 import LabDecl.FieldParsers
 import LabDecl.FormFields
 import LabDecl.SubjectCodes
@@ -75,6 +72,8 @@ data LabDeclarationApp = LabDeclarationApp {
   getNotifyChan :: TChan (),
   getHttpManager :: HTTP.Manager,
   getAsyncQueue :: TQueue AsyncInput,
+  getCanBeShutdown :: TVar Bool,
+  getShutdownSignal :: TMVar Bool,
   getGoogleCredentials :: (T.Text, T.Text),
   getApproot :: T.Text,
   isDevelopment :: Bool
@@ -111,6 +110,8 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/students/#StudentId/submit      StudentSubmitR POST
 /api/students/#StudentId/unlock      UnlockSubmissionR POST
 /api/students/#StudentId/lock        LockSubmissionR POST
+/api/canShutdown          CanShutdownR   GET
+/api/shutdown             ShutdownR      POST
 /admin                    AdminHomeR     GET
 /admin/ccas               AdminCcasR     GET
 /admin/subjects           AdminSubjectsR GET
@@ -151,6 +152,8 @@ instance Yesod LabDeclarationApp where
   isAuthorized (StudentSubmitR _)    _ = requirePrivilege PrivNone
   isAuthorized (LockSubmissionR _)   _ = requirePrivilege PrivTeacher
   isAuthorized (UnlockSubmissionR _) _ = requirePrivilege PrivTeacher
+  isAuthorized CanShutdownR          _ = requirePrivilege PrivOperator
+  isAuthorized ShutdownR             _ = requirePrivilege PrivOperator
   isAuthorized AdminHomeR            _ = requirePrivilege PrivTeacher
   isAuthorized AdminCcasR            _ = requirePrivilege PrivTeacher
   isAuthorized AdminSubjectsR        _ = requirePrivilege PrivTeacher
@@ -159,9 +162,9 @@ instance Yesod LabDeclarationApp where
   isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized NewHomepageR          _ = requirePrivilege PrivNone
+  isAuthorized RobotsR               _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
-  isAuthorized RobotsR               _ = requirePrivilege PrivNone
 
   -- | Static files.
   addStaticContent = embedStaticContent getStatic StaticR Right
@@ -191,6 +194,7 @@ instance RenderMessage LabDeclarationApp FormMessage where
 data Privilege = PrivNone
                | PrivTeacher
                | PrivAdmin
+               | PrivOperator
                deriving (Show, Read, Eq, Ord)
 
 requirePrivilege :: Privilege -> Handler AuthResult
@@ -201,7 +205,7 @@ requirePrivilege privReq
       if dev
         then do
         setSession "user" "qzy@qzy.io"
-        setSession "priv" (T.pack (show PrivAdmin))
+        setSession "priv" (T.pack (show PrivOperator))
         return Authorized
         else maybe AuthenticationRequired
              (\(u, p) -> if p >= privReq
@@ -224,7 +228,7 @@ getPrivilege = do
               setSession "priv" (T.pack (show priv))
               return $ Just (aid, priv)
         if aid == "qzy@qzy.io"
-          then returnOk PrivAdmin
+          then returnOk PrivOperator
           else do
           acid <- getAcid <$> ask
           mbIdentity <- liftIO $ Acid.query acid $ LookupTeacherByEmail (Email aid)
@@ -520,6 +524,8 @@ getPublicStudentR klass index = do
   nric <- runInputGet (ireq nricField "nric")
   acidQueryHandler $ PublicLookupStudentByClassIndexNumber klass index nric
 
+-- This is so wrong. We need to write the thing to the queue before actually
+-- handling the request.
 postStudentSubmitR :: StudentId -> Handler Value
 postStudentSubmitR sid = do
   pngData <- runInputPost studentSubmitPngForm
@@ -533,7 +539,10 @@ postStudentSubmitR sid = do
                         (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi))
   mbWitness <- maybe (return Nothing) (liftIO . Acid.query acid . LookupTeacherById) (student ^. studentWitnesser)
   asyncQueue <- getAsyncQueue <$> ask
-  liftIO . atomically $ writeTQueue asyncQueue (student, mbWitness, subjects, pngData)
+  canBeShutDown <- getCanBeShutdown <$> ask
+  liftIO . atomically $ do
+    writeTQueue asyncQueue (student, mbWitness, subjects, pngData)
+    writeTVar canBeShutDown False
   return rv
 
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),
@@ -626,6 +635,22 @@ postManyStudentsR = postManyHandler (Proxy :: Proxy Student)
 postManySubjectsR = postManyHandler (Proxy :: Proxy Subject)
 postManyTeachersR = postManyHandler (Proxy :: Proxy Teacher)
 postManyCcasR     = postManyHandler (Proxy :: Proxy Cca)
+
+getCanShutdownR :: Handler Value
+getCanShutdownR = do
+  canBeShutDown <- getCanBeShutdown <$> ask
+  asyncQueue <- getAsyncQueue <$> ask
+  r <- liftIO . atomically $ do
+    isQueueEmpty <- isEmptyTQueue asyncQueue
+    cbsd <- readTVar canBeShutDown
+    return $ cbsd && isQueueEmpty
+  return $ object [ "meta" .= object ["code" .= (200 :: Int)], "data" .= r ]
+
+postShutdownR :: Handler TypedContent
+postShutdownR = do
+  shutdownSignal <- getShutdownSignal <$> ask
+  liftIO . atomically $ putTMVar shutdownSignal False
+  sendResponseStatus HTTP.status204 T.empty
 
 -- |
 -- = HTML handlers

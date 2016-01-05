@@ -12,7 +12,10 @@ $(function() {
 
     // Identity of current user through meta elements
     let identUser = $("#meta-user").attr("value");
-    let identPriv = $("#meta-priv").attr("value");
+    let identIsAdmin = (() => {
+        let identPriv = $("#meta-priv").attr("value");
+        return identPriv === "PrivAdmin" || identPriv === "PrivOperator";
+    })();
 
     // An API Connection using WebSocket. Using SSE is now preferred, and so
     // this is for Internet Explorer only. The APIConnectionWS and
@@ -180,7 +183,7 @@ $(function() {
                     value,
                     that.props.entity
                 ]));
-            }),((identPriv === "PrivAdmin") ?
+            }),(identIsAdmin ?
                 React_createElement("td",{
                     className: "text-right"
                 },React_createElement("div",{
@@ -343,7 +346,7 @@ $(function() {
                 className: "table-responsive"
             },React_createElement("table",{
                 className: "table"
-            },React_createElement("thead",{},React_createElement("tr",{},headers,((identPriv === "PrivAdmin") ?
+            },React_createElement("thead",{},React_createElement("tr",{},headers,(identIsAdmin ?
                 React_createElement("th",{}) :
                 null))),rows));
         }
@@ -1134,7 +1137,7 @@ $(function() {
                 className: "row"
             },React_createElement("div",{
                 className: "col-sm-11 col-md-8 col-lg-7"
-            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",((identPriv === "PrivAdmin") ?
+            },React_createElement("h2",{},"Welcome"),React_createElement("p",{},"Welcome to the admin console for RVHS Science Lab Undertaking Project. Click Manage Students from the tab above to view information about students.",(identIsAdmin ?
                 " As an administrator, you can also manage other things from the above tabs." :
                 null))));
         }
@@ -1198,7 +1201,7 @@ $(function() {
                     }
                 },React_createElement("p",{},"Are you sure you want to delete all ",hnamepl," currently stored in the database? ")),getModalWrapper());
             };
-            return React_createElement("div",{},((identPriv === "PrivAdmin") ?
+            return React_createElement("div",{},(identIsAdmin ?
                 React_createElement("div",{
                     className: "pull-right btn-group",
                     role: "toolbar",
@@ -1859,7 +1862,7 @@ $(function() {
                         route)
                 },(page).pageName));
                 return ((page).onlyAdmin ?
-                    ((identPriv === "PrivAdmin") ?
+                    (identIsAdmin ?
                         tab :
                         null) :
                     tab);
@@ -1882,7 +1885,7 @@ $(function() {
                     top: "-0.2em",
                     margin: "0 0.3em 0 0"
                 }
-            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + identUser) + ". "),((identPriv === "PrivAdmin") ?
+            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + identUser) + ". "),(identIsAdmin ?
                 "You are an administrator. " :
                 null),React_createElement("a",{
                 href: "/auth/logout"

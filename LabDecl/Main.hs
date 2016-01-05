@@ -4,9 +4,11 @@ module LabDecl.Main where
 import Control.Monad
 import Control.Exception
 import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Data.String (fromString)
 import Data.Default (def)
+import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as C
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import qualified Data.Text as T
@@ -14,12 +16,16 @@ import qualified Data.Acid.Local as Acid
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
+import System.Posix.Signals
 import System.Environment (getEnv, lookupEnv)
 import System.IO.Temp (withTempDirectory, createTempDirectory)
 import Yesod.Core.Dispatch (toWaiApp)
 
 import LabDecl.Handlers
-import LabDecl.AsyncServ
+import LabDecl.PDFServices
+
+data WillShutdown = WillShutdown deriving (Show, Typeable)
+instance Exception WillShutdown
 
 main = do
   developmentEnvVar <- lookupEnv "DEVELOPMENT"
@@ -50,21 +56,43 @@ main = do
     -- HTTP manager
     httpManager <- HTTP.newManager HTTP.tlsManagerSettings
 
-    -- queues and channels
+    -- TVars, queues and channels
     notifyChan <- atomically newBroadcastTChan
     asyncQueue <- atomically newTQueue
+    canBeShutDown <- atomically $ newTVar True
+    shutdownSignal <- atomically newEmptyTMVar
 
     rendererTempDir <- createTempDirectory dir "renderer"
 
+    -- POSIX signal handlers
+    let onReceivePOSIXSignal = atomically $ putTMVar shutdownSignal True
+    installHandler sigINT (Catch onReceivePOSIXSignal) Nothing
+    installHandler sigTERM (Catch onReceivePOSIXSignal) Nothing
+
     -- acid state
-    bracket (Acid.openLocalState def) Acid.createCheckpointAndClose $ \acid -> do
-      forkIO $ asyncMain isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue
-      toWaiApp LabDeclarationApp { getStatic = eStatic,
-                                   getAcid = acid,
-                                   getNotifyChan = notifyChan,
-                                   getHttpManager = httpManager,
-                                   getAsyncQueue = asyncQueue,
-                                   getGoogleCredentials = (googleClientId, googleClientSecret),
-                                   getApproot = approot,
-                                   isDevelopment = isDevelopment
-                                } >>= Warp.runSettings (setSettings Warp.defaultSettings)
+    let wait = do
+          needQuit <- atomically $ takeTMVar shutdownSignal
+          unless needQuit wait
+          -- If invoked from a web request, we cannot actually quit because the
+          -- service daemon will restart us. This is why the postSubjectsR
+          -- handler puts in False but real POSIX signal handlers put in True.
+          -- The recursive wait is necessary because, what if we first receive a
+          -- web shutdown request and then a POSIX signal?
+    bracket (Acid.openLocalState def) ((>> wait) . Acid.createCheckpointAndClose) $ \acid -> do
+      forkIO $ pdfServiceThread isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue canBeShutDown
+      t <- async $ toWaiApp LabDeclarationApp { getStatic = eStatic,
+                                                getAcid = acid,
+                                                getNotifyChan = notifyChan,
+                                                getHttpManager = httpManager,
+                                                getAsyncQueue = asyncQueue,
+                                                getCanBeShutdown = canBeShutDown,
+                                                getShutdownSignal = shutdownSignal,
+                                                getGoogleCredentials = (googleClientId, googleClientSecret),
+                                                getApproot = approot,
+                                                isDevelopment = isDevelopment
+                                              } >>= Warp.runSettings (setSettings Warp.defaultSettings)
+      atomically $ readTMVar shutdownSignal
+      putStrLn "****** WILL SHUTDOWN AFTER 2 SEC ******"
+      threadDelay 2000000
+      putStrLn "****** WILL SHUTDOWN IMMEDIATELY ******"
+      cancel t

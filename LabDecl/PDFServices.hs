@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-module LabDecl.AsyncServ where
+module LabDecl.PDFServices (pdfServiceThread) where
 
 import Control.Monad
 import Control.Monad.Trans
@@ -11,6 +11,8 @@ import Control.Concurrent.STM
 import Control.Concurrent.Async
 import Control.Concurrent
 import Data.Char
+import Data.Monoid
+import Data.Default
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
@@ -28,7 +30,6 @@ import qualified Network.HTTP.Client as HTTP
 import Text.Shakespeare.Text (textFile)
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as GZip
-import System.Log.Logger (Priority(..), logM) -- TODO use System.Log.FastLogger instead
 import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
@@ -38,6 +39,7 @@ import LabDecl.TeXRenderAssets
 import LabDecl.Types
 import LabDecl.Utilities
 import LabDecl.AcidicModels
+import LabDecl.AsyncQueue
 
 data GAEMail = GAEMail {
   mailSender :: T.Text,
@@ -106,7 +108,7 @@ escapeLaTeX = foldr1 (.) . map (uncurry T.replace) $ [("~", "\\textasciitilde ")
 -- directory, a jobname and other supporting files.
 generatePDF :: FilePath -> FilePath -> String -> [(FilePath, CL.ByteString)] -> IO C.ByteString
 generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir -> do
-    Tar.unpack dir  . Tar.read . GZip.decompress $ reportTarGz
+    Tar.unpack dir reportAssets
     let reportDir = dir ++ "/report/"
     mapM_ (uncurry CL.writeFile . first (reportDir++)) files
     void $ runTeX lualatex "report" reportDir
@@ -128,6 +130,7 @@ generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir
           hClose devNullR
           hClose devNullW
           return ec
+        reportAssets = Tar.read . GZip.decompress $ reportTarGz
 
 generateFileName :: Student -> IO T.Text
 generateFileName student = do
@@ -157,27 +160,36 @@ generateMail student pdf = do
   let mailAttachments = [(fileName, ByteString64 pdf)]
   return GAEMail {..}
 
-type AsyncInput = (Student, Maybe Teacher, Set Subject, CL.ByteString)
-
-asyncMain :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> IO ()
-asyncMain isDevelopment acid manager lualatex dir notifyChan queue = forever $ do
-  (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
-  let tex = generateTeX student witness subjects
-  genPDFOp <- async $ generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
-  eitherPDF <- waitCatch genPDFOp
-  case eitherPDF of
-   Left e -> logM "generatePDF" ERROR $ "LaTeX render failed (details = " ++ show e ++ ") when rendering for student " ++ show student
-   Right pdf -> do
-     filename <- generateFileName student
-     fileUploadOp <- liftIO . async $ generateFileUpload student pdf >>= uploadFile isDevelopment manager
-     sendMailOp <- liftIO . async $ generateMail student pdf >>= sendMail isDevelopment manager
-     eitherFileUpload <- waitCatch fileUploadOp
-     eitherSendMail <- waitCatch sendMailOp
-     case eitherFileUpload of
-      Left e -> logM "uploadFile" ERROR $ "Upload PDF failed (details = " ++ show e ++ ") when rendering for student " ++ show student
-      _ -> return ()
-     case eitherSendMail of
-      Left e -> logM "sendMail" ERROR $ "Send mail failed (details = " ++ show e ++ ") when rendering for student " ++ show student
-      _ -> return ()
-     void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) filename
-     liftIO . atomically $ writeTChan notifyChan ()
+pdfServiceThread :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> TVar Bool -> IO ()
+pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeShutDown = do
+  internalQueue <- atomically newTQueue
+  forkIO $ internalQueueMain canBeShutDown internalQueue -- this should be passed in from main
+  forever $ do
+    (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
+    let tex = generateTeX student witness subjects
+    -- TODO refactor this
+    atomically . writeTQueue internalQueue $ def {
+      taskName = "PDF Generation for student " <> show (student ^. idField),
+      task = do
+          pdf <- generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
+          atomically $
+            writeTQueue internalQueue $ def {
+              taskName = "Send Mail With PDF for student " <> show (student ^. idField),
+              task = do
+                  generateMail student pdf >>= sendMail isDevelopment manager
+                  atomically $
+                    writeTQueue internalQueue $ def {
+                      taskName = "Upload PDF for student " <> show (student ^. idField),
+                      task = do
+                          generateFileUpload student pdf >>= uploadFile isDevelopment manager
+                          atomically $
+                            writeTQueue internalQueue $ def {
+                              taskName = "Save to database for student " <> show (student ^. idField),
+                              task = do
+                                  fileName <- generateFileName student
+                                  void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
+                                  liftIO . atomically $ writeTChan notifyChan ()
+                              }
+                      }
+              }
+      }

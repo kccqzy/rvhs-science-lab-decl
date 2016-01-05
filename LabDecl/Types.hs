@@ -13,6 +13,7 @@ import Control.Lens (Lens', makePrisms, makeLenses, (^.))
 import Control.Error
 import Data.Function
 import qualified Data.ByteString.Char8 as C
+import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -163,6 +164,9 @@ instance Indexable Student where
     ixFun $ maybeToList . (^. studentWitnesser),
     ixFun $ textIndex True . (^. studentName)
     ]
+
+-- | The data needed to perform an asynchronous build of PDF, etc.
+type AsyncInput = (Student, Maybe Teacher, Set Subject, CL.ByteString)
 
 -- | A table in the database, with the actual IxSet database and a
 -- counter for the current ID.
