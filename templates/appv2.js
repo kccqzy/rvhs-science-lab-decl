@@ -526,7 +526,7 @@ if (typeof Object.assign != 'function') {
 
       render() {
         let onChange = (e) => {
-          let ev = e.target.value.trim().toUpperCase().match(/^(?:[0-9](?:[0-9](?:[0-9][A-Z]?)?)?)?/)[0];
+          let ev = e.target.value.trim().toUpperCase().match(/^(?:[0-9](?:[0-9](?:[0-9][JZIHGFEDCBAXWUTRQPNMLK]?)?)?)?/)[0];
           this.setState({partialNric: ev});
         };
 
