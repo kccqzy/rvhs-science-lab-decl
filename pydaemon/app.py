@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 import base64
@@ -9,6 +10,9 @@ from google.appengine.ext import blobstore
 import cloudstorage as gcs
 
 bucket_name = 'rvhs-lab-declaration-pdfs'
+
+def is_development():
+    return os.environ['SERVER_SOFTWARE'].startswith('Development') or os.environ['CURRENT_VERSION_ID'].split('.')[0].endswith('dev')
 
 class Homepage(webapp2.RequestHandler):
     def get(self):
@@ -37,7 +41,10 @@ class MailDaemon(webapp2.RequestHandler):
             self.response.set_status(400)
             return
         try:
-            mail_msg.send()
+            if not is_development():
+                mail_msg.send()
+            else:
+                logging.info('Pretending to send mail')
         except Exception as e:
             logging.error('Send mail failed: %s', e)
             mail.send_mail_to_admins(sender='rvhs.science.oracle@gmail.com', subject='Attempt to send email rejected by Google',
@@ -57,8 +64,11 @@ class StorageDaemon(webapp2.RequestHandler):
         except Exception as e:
             self.response.set_status(400)
         else:
-            with gcs.open(file_name, 'w', content_type=file_ct) as gcsf:
-                gcsf.write(base64.b64decode(file_content))
+            if not is_development():
+                with gcs.open(file_name, 'w', content_type=file_ct) as gcsf:
+                    gcsf.write(base64.b64decode(file_content))
+            else:
+                logging.info('Pretending to upload')
             self.response.set_status(204)
 
     def get(self):
