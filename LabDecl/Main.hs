@@ -8,7 +8,6 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Data.String (fromString)
 import Data.Default (def)
-import Data.Typeable (Typeable)
 import qualified Data.ByteString.Char8 as C
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import qualified Data.Text as T
@@ -24,9 +23,7 @@ import Yesod.Core.Dispatch (toWaiApp)
 import LabDecl.Handlers
 import LabDecl.PDFServices
 
-data WillShutdown = WillShutdown deriving (Show, Typeable)
-instance Exception WillShutdown
-
+main :: IO ()
 main = do
   developmentEnvVar <- lookupEnv "DEVELOPMENT"
   let isDevelopment = case developmentEnvVar of

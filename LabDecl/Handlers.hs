@@ -21,19 +21,13 @@ import Control.Concurrent.STM
 import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
-import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
-import qualified Data.Attoparsec.ByteString.Char8 as PC
 import Data.Vector (Vector)
-import qualified Data.Vector as V
-import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import qualified Data.IntSet as IntSet
 import qualified Data.Aeson as JSON
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Advanced as Acid
@@ -56,7 +50,6 @@ import LabDecl.Utilities
 import LabDecl.Types
 import LabDecl.AcidicModels
 import LabDecl.AcidicModelInstances
-import LabDecl.FuzzyCsv
 import LabDecl.EntityCsv
 import LabDecl.Models
 import LabDecl.ErrMsg

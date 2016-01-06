@@ -61,8 +61,6 @@ $(liftM concat . mapM (deriveJSON defaultOptions {
   fieldLabelModifier = jsonLabel
   }) $ [''GAEMail, ''GAEFile])
 
-type AsyncPipeline a b = a -> IO b
-
 sendGae :: JSON.ToJSON a => String -> Bool -> HTTP.Manager -> a -> IO ()
 sendGae endpoint isDevelopment manager payload = do
   let url = hostname ++ endpoint

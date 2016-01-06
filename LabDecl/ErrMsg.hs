@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 module LabDecl.ErrMsg where
 
 import Control.Lens

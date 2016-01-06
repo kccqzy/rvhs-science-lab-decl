@@ -9,22 +9,18 @@ module LabDecl.FormFields where
 
 import Control.Monad
 import Control.Monad.Trans
-import Control.Monad.Reader (ask)
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64.Lazy as CL64
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import qualified Data.Acid as Acid
-import qualified Data.Acid.Advanced as Acid
 import Data.Time.Calendar (Day(..))
 import Data.Time.Clock (utctDay, getCurrentTime)
 import Yesod.Core
 import Yesod.Form hiding (emailField)
 
 import LabDecl.Types
-import LabDecl.AcidicModelInstances
 import LabDecl.FieldParsers
 
 -- | Just return the result in the context of checkMMap.
