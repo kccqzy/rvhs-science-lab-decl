@@ -22,7 +22,7 @@ if ! docker-machine ls -q | grep '^labdecl-staging$'; then
            -v /etc/letsencrypt:/etc/letsencrypt \
            -v /var/lib/letsencrypt:/var/lib/letsencrypt \
            quay.io/letsencrypt/letsencrypt:latest \
-           auth --email qzy@qzy.io -d staging.rvhs.space --agree-tos
+           auth --email qzy@qzy.io -d staging-rvhs-space.qzy.st --agree-tos
 
 elif [ "Running" != "$(docker-machine status labdecl-staging)" ]; then
     docker-machine start labdecl-staging
@@ -58,13 +58,13 @@ if docker ps -a --format '{{.Names}}' | grep labdecl-app-staging; then
 fi
 
 # Run the app.
-docker run -e "APPROOT=https://staging.rvhs.space" \
+docker run -e "APPROOT=https://staging-rvhs-space.qzy.st" \
        --name labdecl-app-staging \
        -v /database:/database \
        --restart=always \
        --log-driver=json-file \
        --log-opt max-size=100m \
-       -h staging.rvhs.space \
+       -h staging-rvhs-space.qzy.st \
        -p 8081:8081 \
        -d labdecl-app-staging
 
