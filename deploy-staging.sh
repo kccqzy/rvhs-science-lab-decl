@@ -10,7 +10,6 @@ if ! docker-machine ls -q | grep '^labdecl-staging$'; then
                    --google-zone asia-east1-a \
                    --google-machine-type f1-micro \
                    --google-address labdecl-staging-ip \
-                   --google-preemptible \
                    --google-tags http-server,https-server \
                    --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1404-trusty-v20151113 \
                    labdecl-staging
