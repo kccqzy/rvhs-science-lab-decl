@@ -4,3 +4,4 @@ state/
 .stack-work/
 .tern-port
 SECRETS
+*.prof

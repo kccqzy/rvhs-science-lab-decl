@@ -9,5 +9,5 @@ RUN mkdir /tmp/latex-run
 ENV LATEX_RUN_FOLDER=/tmp/latex-run GOOGLE_CLIENT_ID=950258003533-ogulko7oiqag755tgglr77akncrutqua.apps.googleusercontent.com GOOGLE_CLIENT_SECRET=p0nv-ZRvAf6Pxi2NpdIu6v2G LUALATEX=/texlive-2014-portable/bin/x86_64-linux/lualatex LISTEN_PORT=8081 LISTEN_HOST="*4"
 WORKDIR /database
 EXPOSE 8081
-CMD /buildresult/labdecl
+CMD /buildresult/labdecl +RTS -N -qa -A8m -sstderr
 STOPSIGNAL SIGINT

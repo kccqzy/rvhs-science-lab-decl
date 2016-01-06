@@ -17,5 +17,5 @@ COPY templates /buildhome/templates
 RUN mkdir /buildresult && stack build --copy-bins --local-bin-path /buildresult
 ENV LATEX_RUN_FOLDER=/tmp/latex-run GOOGLE_CLIENT_ID=NULL GOOGLE_CLIENT_SECRET=NULL LUALATEX=/texlive-2014-portable/bin/x86_64-linux/lualatex LISTEN_PORT=8081 LISTEN_HOST="*4"
 EXPOSE 8081
-CMD /buildresult/labdecl
+CMD /buildresult/labdecl +RTS -N -qa -A8m -sstderr
 STOPSIGNAL SIGINT
