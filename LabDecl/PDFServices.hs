@@ -176,14 +176,9 @@ pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeS
               taskName = "Upload PDF for student " <> show' (student ^. idField),
               task = do
                   generateFileUpload student pdf >>= uploadFile isDevelopment manager
-                  atomically $
-                    writeTQueue internalQueue $ def {
-                      taskName = "Save to database for student " <> show' (student ^. idField),
-                      task = do
-                          fileName <- generateFileName student
-                          void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
-                          liftIO . atomically $ writeTChan notifyChan ()
-                      }
+                  fileName <- generateFileName student
+                  void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
+                  liftIO . atomically $ writeTChan notifyChan ()
               }
           atomically $
             writeTQueue internalQueue $ def {
