@@ -167,29 +167,27 @@ pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeS
   forever $ do
     (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
     let tex = generateTeX student witness subjects
-    -- TODO refactor this
     atomically . writeTQueue internalQueue $ def {
       taskName = "PDF Generation for student " <> show (student ^. idField),
       task = do
           pdf <- generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
           atomically $
             writeTQueue internalQueue $ def {
-              taskName = "Send Mail With PDF for student " <> show (student ^. idField),
+              taskName = "Upload PDF for student " <> show (student ^. idField),
               task = do
-                  generateMail student pdf >>= sendMail isDevelopment manager
+                  generateFileUpload student pdf >>= uploadFile isDevelopment manager
                   atomically $
                     writeTQueue internalQueue $ def {
-                      taskName = "Upload PDF for student " <> show (student ^. idField),
+                      taskName = "Save to database for student " <> show (student ^. idField),
                       task = do
-                          generateFileUpload student pdf >>= uploadFile isDevelopment manager
-                          atomically $
-                            writeTQueue internalQueue $ def {
-                              taskName = "Save to database for student " <> show (student ^. idField),
-                              task = do
-                                  fileName <- generateFileName student
-                                  void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
-                                  liftIO . atomically $ writeTChan notifyChan ()
-                              }
+                          fileName <- generateFileName student
+                          void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
+                          liftIO . atomically $ writeTChan notifyChan ()
                       }
+              }
+          atomically $
+            writeTQueue internalQueue $ def {
+              taskName = "Send Mail With PDF for student " <> show (student ^. idField),
+              task = generateMail student pdf >>= sendMail isDevelopment manager
               }
       }
