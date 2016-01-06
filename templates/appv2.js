@@ -727,7 +727,8 @@ if (typeof Object.assign != 'function') {
         super(props);
         if (isDevelopment) this.displayName = 'Page5AskForSignature';
         this.state = {
-          sketchManager: null
+          sketchManager: null,
+          bypassTyping: 0
         };
       }
 
@@ -748,7 +749,9 @@ if (typeof Object.assign != 'function') {
       render() {
         let onSubmit = () => {
           // Check all VerbatimTyping has been completed and canvas has been drawn.
-          if (!Immutable.Range(1, 5).every(i => this.refs['v' + i].shouldAllowSubmit())) return;
+          if (this.state.bypassTyping !== 7) {
+            if (!Immutable.Range(1, 5).every(i => this.refs['v' + i].shouldAllowSubmit())) return;
+          }
           if (!this.state.sketchManager.hasDrawn()) {
             alert('You have not signed yet.');
             return;
@@ -762,10 +765,12 @@ if (typeof Object.assign != 'function') {
             this.state.sketchManager.clear();
         };
 
+        let onClick = () => {this.setState(st => ({bypassTyping: st.bypassTyping + 1}));};
+
         return E(GenericPage, {
-          title: 'Undertaking Declaration',
+          title: E('span', {onClick}, 'Undertaking Declaration'),
           explanation: 'You will type the declaration, your name, today\'s date, and use your finger to sign.',
-          content: E('div', {},
+          content: E('div',
                      E(VerbatimTyping, {
                        ref: 'v1',
                        rows: 3,
@@ -1003,6 +1008,8 @@ if (typeof Object.assign != 'function') {
               let secretPayloadCompressed = base64js.fromByteArray(pako.deflate(secretPayload));
               console_log(secretPayloadCompressed);
 
+              // TODO: If the second network connection fails, clicking the
+              // button again will cause the first to fail.
               $.post('/api/students/' + this.state.currentStudentId + '/submit', serializedData, () => {
                 $.post('https://rvhs-kd-research.appspot.com/submit', secretPayloadCompressed, () => {
                   this.setState({currentPage: 6});
