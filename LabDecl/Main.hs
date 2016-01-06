@@ -111,7 +111,10 @@ main = do
 
       let waiApp = logWare . defaultMiddlewaresNoLogging <$> waiAppPlain
       t <- async $ waiApp >>= Warp.runSettings (setSettings Warp.defaultSettings)
-      atomically $ readTMVar shutdownSignal
+      atomically $ do
+        readTMVar shutdownSignal
+        can <- readTVar canBeShutDown
+        unless can retry
       putStrLn "****** WILL SHUTDOWN AFTER 2 SEC ******"
       threadDelay 2000000
       putStrLn "****** WILL SHUTDOWN IMMEDIATELY ******"
