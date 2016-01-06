@@ -33,6 +33,7 @@ import qualified Codec.Compression.GZip as GZip
 import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
+import qualified Yesod.Core.Types as YT
 
 import qualified LabDecl.RNCryptor as RNCryptor
 import LabDecl.TeXRenderAssets
@@ -158,11 +159,11 @@ generateMail student pdf = do
   let mailAttachments = [(fileName, ByteString64 pdf)]
   return GAEMail {..}
 
-pdfServiceThread :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> TVar Bool -> IO ()
-pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeShutDown = do
+pdfServiceThread :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> TVar Bool -> YT.Logger -> IO ()
+pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeShutDown logger = do
   let show' = C.pack . show
   internalQueue <- atomically newTQueue
-  forkIO $ internalQueueMain canBeShutDown internalQueue -- this should be passed in from main
+  forkIO $ internalQueueMain logger canBeShutDown internalQueue -- this should be passed in from main
   forever $ do
     (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
     let tex = generateTeX student witness subjects

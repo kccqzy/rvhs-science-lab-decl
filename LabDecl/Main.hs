@@ -16,9 +16,13 @@ import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTP
 import System.Posix.Signals
+import qualified System.Log.FastLogger as FastLogger
+import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
+import qualified Network.Wai.Logger as WaiLogger
 import System.Environment (getEnv, lookupEnv)
 import System.IO.Temp (withTempDirectory, createTempDirectory)
-import Yesod.Core.Dispatch (toWaiApp)
+import Yesod.Core.Dispatch
+import qualified Yesod.Core.Types as YT
 
 import LabDecl.Handlers
 import LabDecl.PDFServices
@@ -66,7 +70,7 @@ main = do
     installHandler sigINT (Catch onReceivePOSIXSignal) Nothing
     installHandler sigTERM (Catch onReceivePOSIXSignal) Nothing
 
-    -- acid state
+    -- after shutdown
     let wait = do
           needQuit <- atomically $ takeTMVar shutdownSignal
           unless needQuit wait
@@ -75,19 +79,38 @@ main = do
           -- handler puts in False but real POSIX signal handlers put in True.
           -- The recursive wait is necessary because, what if we first receive a
           -- web shutdown request and then a POSIX signal?
+
+    -- logger and logging middleware
+    loggerSet' <- FastLogger.newStdoutLoggerSet FastLogger.defaultBufSize
+    (getter, _) <- WaiLogger.clockDateCacher
+    let logger = YT.Logger loggerSet' getter
+    logWare <- RequestLogger.mkRequestLogger def {
+      RequestLogger.destination = RequestLogger.Logger loggerSet',
+      RequestLogger.outputFormat = RequestLogger.Apache RequestLogger.FromHeader
+      }
+
+    -- acid state
     bracket (Acid.openLocalState def) ((>> wait) . Acid.createCheckpointAndClose) $ \acid -> do
-      forkIO $ pdfServiceThread isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue canBeShutDown
-      t <- async $ toWaiApp LabDeclarationApp { getStatic = eStatic,
-                                                getAcid = acid,
-                                                getNotifyChan = notifyChan,
-                                                getHttpManager = httpManager,
-                                                getAsyncQueue = asyncQueue,
-                                                getCanBeShutdown = canBeShutDown,
-                                                getShutdownSignal = shutdownSignal,
-                                                getGoogleCredentials = (googleClientId, googleClientSecret),
-                                                getApproot = approot,
-                                                isDevelopment = isDevelopment
-                                              } >>= Warp.runSettings (setSettings Warp.defaultSettings)
+
+      let site = LabDeclarationApp {
+            getStatic = eStatic,
+            getAcid = acid,
+            getNotifyChan = notifyChan,
+            getHttpManager = httpManager,
+            getAsyncQueue = asyncQueue,
+            getCanBeShutdown = canBeShutDown,
+            getShutdownSignal = shutdownSignal,
+            getGoogleCredentials = (googleClientId, googleClientSecret),
+            getApproot = approot,
+            isDevelopment = isDevelopment
+            }
+      let waiAppPlain = toWaiAppPlain site
+
+      -- launch pdfServiceThread
+      forkIO $ pdfServiceThread isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue canBeShutDown logger
+
+      let waiApp = logWare . defaultMiddlewaresNoLogging <$> waiAppPlain
+      t <- async $ waiApp >>= Warp.runSettings (setSettings Warp.defaultSettings)
       atomically $ readTMVar shutdownSignal
       putStrLn "****** WILL SHUTDOWN AFTER 2 SEC ******"
       threadDelay 2000000
