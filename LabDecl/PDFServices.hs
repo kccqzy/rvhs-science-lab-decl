@@ -160,23 +160,24 @@ generateMail student pdf = do
 
 pdfServiceThread :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> TVar Bool -> IO ()
 pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeShutDown = do
+  let show' = C.pack . show
   internalQueue <- atomically newTQueue
   forkIO $ internalQueueMain canBeShutDown internalQueue -- this should be passed in from main
   forever $ do
     (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
     let tex = generateTeX student witness subjects
     atomically . writeTQueue internalQueue $ def {
-      taskName = "PDF Generation for student " <> show (student ^. idField),
+      taskName = "PDF Generation for student " <> show' (student ^. idField),
       task = do
           pdf <- generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
           atomically $
             writeTQueue internalQueue $ def {
-              taskName = "Upload PDF for student " <> show (student ^. idField),
+              taskName = "Upload PDF for student " <> show' (student ^. idField),
               task = do
                   generateFileUpload student pdf >>= uploadFile isDevelopment manager
                   atomically $
                     writeTQueue internalQueue $ def {
-                      taskName = "Save to database for student " <> show (student ^. idField),
+                      taskName = "Save to database for student " <> show' (student ^. idField),
                       task = do
                           fileName <- generateFileName student
                           void . Acid.update acid $ PublicStudentSubmissionPdfRendered (student ^. studentId) fileName
@@ -185,7 +186,7 @@ pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeS
               }
           atomically $
             writeTQueue internalQueue $ def {
-              taskName = "Send Mail With PDF for student " <> show (student ^. idField),
+              taskName = "Send Mail With PDF for student " <> show' (student ^. idField),
               task = generateMail student pdf >>= sendMail isDevelopment manager
               }
       }

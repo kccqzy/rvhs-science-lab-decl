@@ -6,6 +6,7 @@ import Control.Monad
 import Control.Concurrent.STM
 import Control.Concurrent.Async
 import Control.Concurrent
+import qualified Data.ByteString.Char8 as C
 import Data.String
 import Data.Monoid
 import Data.Default
@@ -13,7 +14,7 @@ import System.Log.FastLogger
 import Network.Wai.Logger (clockDateCacher)
 
 data InternalQueueTask = InternalQueueTask {
-  taskName :: String,
+  taskName :: C.ByteString,
   previousAttemptCount :: Int,
   retryWaitIfFail :: Int,
   task :: IO ()
@@ -36,7 +37,7 @@ internalQueueMain canBeShutDown internalQueue = do
   (dateGetter, _) <- clockDateCacher
   let logger a = do
         date <- toLogStr <$> dateGetter
-        pushLogStr loggerSet $ date <> " internalQueue: " <> a <> "\n"
+        pushLogStr loggerSet $ "- - - [" <> date <> "] internalQueue: " <> a <> "\n"
 
   forever $ do
     -- Anything can happen here. The queue could be empty or nonempty; the pending task count can be zero or nonzero.
@@ -53,21 +54,22 @@ internalQueueMain canBeShutDown internalQueue = do
       return r
 
     let thisAttemptCount = logShow (1 + previousAttemptCount)
-    logger $ "Starting attempt " <> thisAttemptCount <> " of task \"" <> fromString taskName <> "\""
+    let taskNameLogStr = toLogStr taskName
+    logger $ "Starting attempt " <> thisAttemptCount <> " of task \"" <> taskNameLogStr <> "\""
     op <- async (void task)
     result <- waitCatch op
     case result of
-      Right () -> logger $ "Attempt " <> thisAttemptCount <> " of task \"" <> fromString taskName <> "\" succeeded" -- after this logging we are back to the beginning
+      Right () -> logger $ "Attempt " <> thisAttemptCount <> " of task \"" <> taskNameLogStr <> "\" succeeded" -- after this logging we are back to the beginning
       Left e -> do
-        logger $ "Attempt " <> thisAttemptCount <> " of task \"" <> fromString taskName <> "\" failed (details = " <> logShow e <> ")"
+        logger $ "Attempt " <> thisAttemptCount <> " of task \"" <> taskNameLogStr <> "\" failed (details = " <> logShow e <> ")"
         if previousAttemptCount == maximumRetries - 1
-          then logger $ "Task\"" <> fromString taskName <> "\" has permanently failed after reaching maximumRetries"
+          then logger $ "Task\"" <> toLogStr taskName <> "\" has permanently failed after reaching maximumRetries"
           else do
           atomically $ modifyTVar numTasksToBeAdded (1+)
           void . forkIO $ do -- throw away this thread...
-            logger $ "Will wait " <> fromString (show retryWaitIfFail) <> " microseconds before adding failed task \"" <> fromString taskName <> "\" back to queue"
+            logger $ "Will wait " <> fromString (show retryWaitIfFail) <> " microseconds before adding failed task \"" <> taskNameLogStr <> "\" back to queue"
             threadDelay retryWaitIfFail
-            logger $ "Will add failed task \"" <> fromString taskName <> "\" back to queue"
+            logger $ "Will add failed task \"" <> taskNameLogStr <> "\" back to queue"
             atomically $ do
               writeTVar canBeShutDown False -- No effect here. Should already be
                                             -- False.
