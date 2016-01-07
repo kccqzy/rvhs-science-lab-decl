@@ -15,8 +15,8 @@ module LabDecl.Handlers where
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Reader (ask)
-import Control.Monad.State (get, put, evalStateT)
 import Control.Arrow (second)
+import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.Async.Lifted
 import Control.Error
@@ -253,17 +253,48 @@ acidQueryHandler event = do
   -- request, compares the request, and possibly sends the request to a new
   -- TQueue.
   resultTQueue <- liftIO . atomically $ newTQueue
-  liftIO . atomically $ writeTChan theChan () -- This is for the first response.
-  async . (`evalStateT` JSON.Null) . forever $ do
-    -- Cannot use withAsync here because apparently the current thread may be
-    -- terminated. TODO: Investigate whether using async here will cause a
-    -- resource leak.
-        liftIO . atomically $ readTChan theChan
-        prevResponse <- get
-        (_, response) <- lift genResponse
-        when (response /= prevResponse) $ do
-          liftIO . atomically . writeTQueue resultTQueue . JSON.encode $ response
-          put response
+  responseTVar <- liftIO . atomically $ newTVar JSON.Null
+  (_, firstResponse) <- genResponse
+  liftIO . atomically . writeTVar responseTVar $ firstResponse
+  liftIO . atomically . writeTQueue resultTQueue . JSON.encode $ firstResponse
+
+  -- Investigation shows using async here will cause a resource leak i.e. the
+  -- thread is never killed, leading to accumulation of items in the TQueue, and
+  -- wasting time generating responses, which is why we need another watchDog
+  -- thread below. If the queue is not empty for 6 consecutive times, at
+  -- intervals of 10 seconds, it is considered that the thread responsible for
+  -- sending responses has died due to connection being closed. However, another
+  -- minor problem surfaces, in which a thread that never writes anything is
+  -- also not terminated. This is therefore solved by sending something to the
+  -- TQueue every 60 seconds regardless of whether there is such a need.
+
+  sendOnChange <- async . forever $ do
+    liftIO . atomically $ readTChan theChan
+    (_, response) <- genResponse
+    liftIO . atomically $ do
+      prevResponse <- readTVar responseTVar
+      when (response /= prevResponse) $ do
+        writeTVar responseTVar response
+        writeTQueue resultTQueue . JSON.encode $ response
+  sendOnTimer <- async . liftIO . forever $ do
+    threadDelay 60000000
+    atomically $ do
+      prevResponse <- readTVar responseTVar
+      writeTQueue resultTQueue . JSON.encode $ prevResponse
+
+  -- We need a watchdog thread here to cancel the thread when the queue is not
+  -- empty for 6 consecutive times, at intervals of 10 seconds.
+  let watchDog previousNotEmptyTimes = do
+        liftIO $ threadDelay 10000000
+        isEmptyThisTime <- liftIO . atomically . isEmptyTQueue $ resultTQueue
+        let notEmptyTimes = if isEmptyThisTime then 0 else 1 + previousNotEmptyTimes
+        if notEmptyTimes == 6
+          then do
+          cancel sendOnTimer
+          cancel sendOnChange
+          else watchDog notEmptyTimes
+
+  async $ watchDog (0 :: Int)
 
   let pushConnTimeouts = TimeoutSpec { retryTimeoutMilliseconds = 3000, keepAliveTimeoutMicroseconds = 10000000}
   beginSSE pushConnTimeouts resultTQueue . beginWS pushConnTimeouts resultTQueue $ do
