@@ -48,12 +48,6 @@ instance ToJSON ByteString64 where
 instance FromJSON ByteString64 where
     parseJSON o = parseJSON o >>= either fail (return . ByteString64) . C64.decode . T.encodeUtf8
 
--- | A better string representation of @Day@.
-instance ToJSON Day where
-  toJSON = toJSON . show
-instance FromJSON Day where
-  parseJSON = parseJSON >=> readZ
-
 -- | A few newtypes to wrap some values to be used as fields in
 -- ADT. This is because IxSet requires every index to have a different
 -- type.

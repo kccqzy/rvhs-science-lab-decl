@@ -6,10 +6,10 @@ RUN apt-get update && apt-get install -y stack libicu-dev && apt-get clean && rm
 ADD ./texlive-2014-portable.tar.xz /
 RUN mkdir /tmp/latex-run /buildhome
 WORKDIR /buildhome
+COPY LICENSE Setup.hs stack.yaml labdecl.cabal /buildhome/
 RUN stack setup
 RUN stack install alex happy
-COPY LICENSE Setup.hs stack.yaml labdecl.cabal /buildhome/
-RUN stack build --only-dependencies
+RUN stack build --only-dependencies --prefetch
 COPY tex-report.tar.gz Main.hs /buildhome/
 COPY LabDecl /buildhome/LabDecl
 COPY static /buildhome/static
