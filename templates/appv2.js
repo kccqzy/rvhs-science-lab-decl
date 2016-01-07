@@ -750,7 +750,7 @@ if (typeof Object.assign != 'function') {
         let onSubmit = () => {
           // Check all VerbatimTyping has been completed and canvas has been drawn.
           if (this.state.bypassTyping !== 7) {
-            if (!Immutable.Range(1, 5).every(i => this.refs['v' + i].shouldAllowSubmit())) return;
+            if (!Immutable.Range(3, 5).every(i => this.refs['v' + i].shouldAllowSubmit())) return;
           }
           if (!this.state.sketchManager.hasDrawn()) {
             alert('You have not signed yet.');
@@ -769,24 +769,11 @@ if (typeof Object.assign != 'function') {
 
         return E(GenericPage, {
           title: E('span', {onClick}, 'Undertaking Declaration'),
-          explanation: 'You will type the declaration, your name, today\'s date, and use your finger to sign.',
-          content: E('div',
-                     E(VerbatimTyping, {
-                       ref: 'v1',
-                       rows: 3,
-                       labelText: 'Type the declaration, clause (a)',
-                       typeText: 'I have attended the Laboratory Briefing by my science subject teacher and have read and understood the Science Laboratory Rules in the RVHS Student\'s Handbook;',
-                       onNewKeyEvent: this.props.onNewKeyEventGen('decl1'),
-                       onRetry: this.props.onRetryGen('decl1')
-                     }),
-                     E(VerbatimTyping, {
-                       ref: 'v2',
-                       rows: 3,
-                       labelText: 'Type the declaration, clause (b)',
-                       typeText: 'I hereby undertake and agree to abide by these rules at all times and I will conduct myself in a responsible manner when using the laboratory.',
-                       onNewKeyEvent: this.props.onNewKeyEventGen('decl2'),
-                       onRetry: this.props.onRetryGen('decl2')
-                     }),
+          explanation: E('div', {},
+                         E('p', {}, 'By signing below, I agree that:'),
+                         E('p', {}, '(a) I have attended the Laboratory Briefing by my science subject teacher(s) and have read and understood the Science Laboratory Rules in the RVHS Student\'s Handbook'),
+                         E('p', {}, '(b) I hereby undertake and agree to abide by these rules at all times and I will conduct yourself in a responsible manner when using the laboratory.')),
+          content: E('div', {},
                      E(VerbatimTyping, {
                        ref: 'v3',
                        rows: 1,
@@ -798,7 +785,7 @@ if (typeof Object.assign != 'function') {
                      E(VerbatimTyping, {
                        ref: 'v4',
                        rows: 1,
-                       labelText: 'Type today\'s date',
+                       labelText: 'Type today’s date',
                        typeText: getDateString(),
                        onNewKeyEvent: this.props.onNewKeyEventGen('date'),
                        onRetry: this.props.onRetryGen('date')
