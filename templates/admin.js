@@ -1324,8 +1324,13 @@ $(function() {
         }
 
         reserializeForm() {
-            console.log(this);
-            this.setState({queryString: $(this.refs.searchbyForm).serialize()});
+            let queryString = $(this.refs.searchbyForm).serialize();
+            // Those are derivative data, so if all students are deleted, we
+            // need to reset the queryString to its initial state.
+            if (queryString === "searchby=class" || queryString === "searchby=level")
+                this.setState({queryString: "searchby=none"});
+            else
+                this.setState({queryString});
         }
 
         componentDidUpdate(prevProps, prevState) {
