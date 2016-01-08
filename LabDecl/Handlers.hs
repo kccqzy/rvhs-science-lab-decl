@@ -42,7 +42,6 @@ import Yesod.Form hiding (emailField)
 import Yesod.EmbeddedStatic
 import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
-import Text.Cassius (cassiusFile, cassiusFileReload)
 import Text.Hamlet (hamletFile, hamletFileReload)
 import Text.Julius (juliusFileReload)
 
@@ -111,8 +110,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/teachers           AdminTeachersR GET
 /admin/students           AdminStudentsR GET
 /admin/logout             AdminLogoutR   GET
-/old                      HomepageR      GET
-/                         NewHomepageR   GET
+/                         HomepageR      GET
 /robots.txt               RobotsR        GET
 /static                   StaticR        EmbeddedStatic getStatic
 /auth                     AuthR          Auth getAuth
@@ -154,7 +152,6 @@ instance Yesod LabDeclarationApp where
   isAuthorized AdminStudentsR        _ = requirePrivilege PrivTeacher
   isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
-  isAuthorized NewHomepageR          _ = requirePrivilege PrivNone
   isAuthorized RobotsR               _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
@@ -747,26 +744,6 @@ getHomepageR = do
   dev <- isDevelopment <$> ask
   defaultLayout $ do
     setTitle "River Valley High School Science Lab Declaration"
-    addScript $ StaticR jquery_js
-    addScript $ StaticR jquery_mobile_custom_js
-    addScript $ StaticR underscore_js
-    if dev
-      then do
-           toWidgetHead $(hamletFileReload "templates/app.head.hamlet")
-           toWidget $(juliusFileReload "templates/app.es5.js")
-           toWidget $(hamletFileReload "templates/app.hamlet")
-           toWidget $(cassiusFileReload "templates/app.cassius")
-      else do
-           toWidgetHead $(hamletFile "templates/app.head.hamlet")
-           addScript $ StaticR app_min_js
-           toWidget $(hamletFile "templates/app.hamlet")
-           toWidget $(cassiusFile "templates/app.cassius")
-
-getNewHomepageR :: Handler Html
-getNewHomepageR = do
-  dev <- isDevelopment <$> ask
-  defaultLayout $ do
-    setTitle "River Valley High School Science Lab Declaration"
     toWidgetHead $ [shamlet|<meta charset=utf-8>|]
     toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
     toWidgetHead $ [shamlet|<meta name=viewport content=width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no>|]
@@ -774,7 +751,6 @@ getNewHomepageR = do
     addStylesheet $ StaticR bootstrapt_min_css
     addScript $ StaticR jquery_js
     addScript $ StaticR jquery_mobile_custom_js
-    addScript $ StaticR underscore_js
     addScript $ StaticR immutable_js
     addScript $ StaticR pako_deflate_min_js
     addScript $ StaticR b64_min_js
