@@ -677,52 +677,70 @@ postShutdownR = do
 -- |
 -- = HTML handlers
 
-adminSite :: Bool -> Widget
-adminSite dev = do
-  mbUserPriv <- (liftM2.liftM2) (,) (lookupSession "user") (lookupSession "priv")
-  case mbUserPriv of
-   Nothing -> return ()
-   Just (u, p) -> do
-     toWidgetHead $ [shamlet|<meta #meta-user name=x-labdecl-user value=#{u}>|]
-     toWidgetHead $ [shamlet|<meta #meta-priv name=x-labdecl-priv value=#{p}>|]
-  toWidgetHead $ [shamlet|<meta name=viewport content=width=1200>|]
+getRobotsR :: Handler T.Text
+getRobotsR = return "User-agent: *\nDisallow: /\n"
+
+baseSite :: Bool -> Widget
+baseSite dev = do
+  toWidgetHead $ [shamlet|<meta charset=utf-8>|]
+  toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
   addStylesheet $ StaticR bootstrap_min_css
   addStylesheet $ StaticR bootstrapt_min_css
   addScript $ StaticR jquery_js
-  addScript $ StaticR underscore_js
   addScript $ StaticR bootstrap_js
-  -- addScript $ StaticR immutable_js
   toWidget $ [shamlet|<div #body>|]
   if dev
     then do
     addScript $ StaticR react_js
     addScript $ StaticR reactdom_js
-    -- toWidget $(juliusFileReload "templates/admin.es5.js")
-    toWidget $(juliusFileReload "static/admin.min.js")
     else do
     addScript $ StaticR react_min_js
     addScript $ StaticR reactdom_min_js
-    addScript $ StaticR admin_min_js
+
+-- | The user-facing frontend.
+getHomepageR :: Handler Html
+getHomepageR = do
+  dev <- isDevelopment <$> ask
+  defaultLayout $ do
+    baseSite dev
+    setTitle "River Valley High School Science Lab Declaration"
+    toWidgetHead $ [shamlet|<meta name=viewport content=width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no>|]
+    addScript $ StaticR jquery_mobile_custom_js
+    addScript $ StaticR immutable_js
+    addScript $ StaticR pako_deflate_min_js
+    addScript $ StaticR b64_min_js
+    if dev
+      then toWidget $(juliusFileReload "templates/appv2.dev.js")
+      else addScript $ StaticR appv2_min_js
+
+generateAdminPages :: Html -> Handler Html
+generateAdminPages pageTitle = do
+  dev <- isDevelopment <$> ask
+  actualUserPriv <- (liftM2.liftM2) (,) (lookupSession "user") (lookupSession "priv")
+  simulateUserPriv <- if dev then (liftM2.liftM2) (,) (runInputGet . iopt textField $ "simuser") (runInputGet . iopt textField $ "simpriv") else return Nothing
+  defaultLayout $ do
+    case simulateUserPriv `mplus` actualUserPriv of
+      Nothing -> return ()
+      Just (u, p) -> do
+        toWidgetHead $ [shamlet|<meta #meta-user name=x-labdecl-user value=#{u}>|]
+        toWidgetHead $ [shamlet|<meta #meta-priv name=x-labdecl-priv value=#{p}>|]
+    baseSite dev
+    setTitle pageTitle
+    toWidgetHead $ [shamlet|<meta name=viewport content=width=1200>|]
+    addScript $ StaticR underscore_js
+    if dev
+      then toWidget $(juliusFileReload "static/admin.min.js")
+      else addScript $ StaticR admin_min_js
 
 getAdminLogoutR :: Handler Html
 getAdminLogoutR = do
   dev <- isDevelopment <$> ask
   defaultLayout $ do
     setTitle "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful"
-    addStylesheet $ StaticR bootstrap_min_css
-    addStylesheet $ StaticR bootstrapt_min_css
-    addScript $ StaticR jquery_js
-    addScript $ StaticR bootstrap_js
+    baseSite dev
     if dev
       then toWidget $(hamletFileReload "templates/didlogout.hamlet")
       else toWidget $(hamletFile "templates/didlogout.hamlet")
-
-generateAdminPages :: Html -> Handler Html
-generateAdminPages pageTitle = do
-  dev <- isDevelopment <$> ask
-  defaultLayout $ do
-    setTitle pageTitle
-    adminSite dev
 
 getAdminHomeR :: Handler Html
 getAdminHomeR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console"
@@ -738,33 +756,3 @@ getAdminSubjectsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Co
 
 getAdminStudentsR :: Handler Html
 getAdminStudentsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
-
--- | The user-facing frontend.
-getHomepageR :: Handler Html
-getHomepageR = do
-  dev <- isDevelopment <$> ask
-  defaultLayout $ do
-    setTitle "River Valley High School Science Lab Declaration"
-    toWidgetHead $ [shamlet|<meta charset=utf-8>|]
-    toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
-    toWidgetHead $ [shamlet|<meta name=viewport content=width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no>|]
-    addStylesheet $ StaticR bootstrap_min_css
-    addStylesheet $ StaticR bootstrapt_min_css
-    addScript $ StaticR jquery_js
-    addScript $ StaticR jquery_mobile_custom_js
-    addScript $ StaticR immutable_js
-    addScript $ StaticR pako_deflate_min_js
-    addScript $ StaticR b64_min_js
-    toWidget $ [shamlet|<div #body>|]
-    if dev
-      then do
-      addScript $ StaticR react_js
-      addScript $ StaticR reactdom_js
-      toWidget $(juliusFileReload "templates/appv2.dev.js")
-      else do
-      addScript $ StaticR react_min_js
-      addScript $ StaticR reactdom_min_js
-      addScript $ StaticR appv2_min_js
-
-getRobotsR :: Handler TypedContent
-getRobotsR = respondSource "text/plain" $ sendChunkBS "User-agent: *\nDisallow: /\n"

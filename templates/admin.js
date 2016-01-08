@@ -1925,5 +1925,5 @@ $(function() {
 
 
 // Local Variables:
-// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c -w admin.js > admin.es5.js") (shell-command "es6c admin.js > ../static/admin.min.js")) nil t)
+// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c admin.js > ../static/admin.min.js")) nil t)
 // End:
