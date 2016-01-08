@@ -1512,9 +1512,10 @@ $(function() {
             component: AdminHomeR,
             dataSpec: null
         },
+
         "/admin/ccas": {
             pageName: "Manage CCAs",
-            onlyAdmin: true,
+            onlyAdmin: false,
             component: AdminCcasR,
             dataSpec: {
                 humanName: "CCA",
@@ -1537,9 +1538,10 @@ $(function() {
                 ]
             }
         },
+
         "/admin/subjects": {
             pageName: "Manage Subjects",
-            onlyAdmin: true,
+            onlyAdmin: false,
             component: AdminSubjectsR,
             dataSpec: {
                 humanName: "Subject",
@@ -1584,6 +1586,7 @@ $(function() {
                 ]
             }
         },
+
         "/admin/teachers": {
             pageName: "Manage Teachers",
             onlyAdmin: true,
@@ -1629,6 +1632,7 @@ $(function() {
                 ]
             }
         },
+
         "/admin/students": {
             pageName: "Manage Students",
             onlyAdmin: false,
@@ -1892,7 +1896,7 @@ $(function() {
                 }
             }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + identUser) + ". "),(identIsAdmin ?
                 "You are an administrator. " :
-                null),React_createElement("a",{
+                "You are not an administrator, and many features and pages have been hidden."),React_createElement("a",{
                 href: "/auth/logout"
             },"Click here to logout. ")),React_createElement("div",{
                 role: "tabpanel"
