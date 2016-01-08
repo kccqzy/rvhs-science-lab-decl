@@ -236,6 +236,7 @@ acidQueryHandler :: (ToHTTPStatus (Acid.MethodResult ev),
                      ToJSON (Acid.MethodResult ev),
                      Acid.MethodState ev ~ Database) => ev -> Handler TypedContent
 acidQueryHandler event = do
+  addHeader "Cache-Control" "no-store, no-cache, must-revalidate"
   acid <- getAcid <$> ask
   let genResponse = do
         result <- liftIO $ Acid.query acid event
