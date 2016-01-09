@@ -11,6 +11,7 @@ import Control.Monad.State
 import Control.Error
 import Control.Lens
 import qualified Data.Foldable as F
+import Data.Default
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Vector (Vector)
@@ -23,6 +24,7 @@ import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
 import Data.Typeable (Typeable, typeOf)
 import qualified Data.Acid as Acid
+import Text.Pandoc.Readers.Markdown
 
 import LabDecl.Types
 import LabDecl.Utilities
@@ -107,6 +109,10 @@ listStudentsByLevel     l = searchEntities [(@>=<= (Class (l, 'A'), Class (l, 'Z
 
 searchStudentsByName :: T.Text -> IQuery (Set Student)
 searchStudentsByName name = searchEntities [(@* textIndex False name)]
+
+-- | Simply getting the current declaration text.
+getDeclarationText :: IQuery (Maybe T.Text)
+getDeclarationText = (Just . (^. declarationText)) <$> ask
 
 -- |
 -- = Updates
@@ -391,3 +397,10 @@ teacherChangeSubmissionStatus newStatus sid = do
 
 teacherChangeManySubmissionStatus :: StudentSubmission -> [StudentId] -> IUpdate
 teacherChangeManySubmissionStatus newStatus = mapM_ (teacherChangeSubmissionStatus newStatus)
+
+-- | Setting the declaration text.
+setDeclarationText :: T.Text -> IUpdate
+setDeclarationText text =
+  case readMarkdown def . T.unpack $ text of
+    Left _ -> lift (Left errMarkdownParseFailed)
+    Right _ -> declarationText .= text

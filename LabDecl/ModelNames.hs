@@ -30,6 +30,7 @@ eventNames = [
     'listStudentsByStatus,
     'listStudentsByLevel,
     'searchStudentsByName,
+    'getDeclarationText,
     'addCca,
     'addSubject,
     'addTeacher,
@@ -56,5 +57,6 @@ eventNames = [
     'publicStudentDoSubmission,
     'publicStudentSubmissionPdfRendered,
     'teacherChangeSubmissionStatus,
-    'teacherChangeManySubmissionStatus
+    'teacherChangeManySubmissionStatus,
+    'setDeclarationText
     ]

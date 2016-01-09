@@ -103,6 +103,9 @@ errInvalidPublicSubmission = [stext| “You don’t try to game the
   that has enough working knowledge of HTML, JavaScript, JSON, HTTP to
   achieve it. Email me at qzy@qzy.io or find me on Twitter @kccqzy. |]
 
+errMarkdownParseFailed = [stext| The given text could not be parsed as
+  Markdown as defined by the pandoc tool. |]
+
 errCSVDecodeFailed = [stext| Cannot decode the uploaded CSV/TSV/TXT
   file. You may wish to open the CSV/TSV/TXT file in Notepad, TextEdit
   or another plain-text editing utility to visually inspect the

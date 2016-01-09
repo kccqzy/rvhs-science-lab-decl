@@ -21,6 +21,7 @@ import Control.Concurrent.STM
 import Control.Concurrent.Async.Lifted
 import Control.Error
 import Control.Lens ((^.))
+import Data.Default
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -44,6 +45,8 @@ import Yesod.Auth
 import Yesod.Auth.GoogleEmail2 hiding (Email)
 import Text.Hamlet (hamletFile, hamletFileReload)
 import Text.Julius (juliusFileReload)
+import Text.Pandoc.Readers.Markdown
+import Text.Pandoc.Writers.HTML
 
 import LabDecl.Utilities
 import LabDecl.Types
@@ -102,6 +105,8 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/students/#StudentId/submit      StudentSubmitR POST
 /api/students/#StudentId/unlock      UnlockSubmissionR POST
 /api/students/#StudentId/lock        LockSubmissionR POST
+/api/decltext/test        TestDeclTextR  POST
+/api/decltext             DeclTextR      GET POST
 /api/canShutdown          CanShutdownR   GET
 /api/shutdown             ShutdownR      POST
 /admin                    AdminHomeR     GET
@@ -141,8 +146,10 @@ instance Yesod LabDeclarationApp where
   isAuthorized LockManySubmissionsR  _ = requirePrivilege PrivTeacher
   isAuthorized UnlockManySubmissionsR  _ = requirePrivilege PrivTeacher
   isAuthorized (StudentSubmitR _)    _ = requirePrivilege PrivNone
-  isAuthorized (LockSubmissionR _)   _ = requirePrivilege PrivTeacher
   isAuthorized (UnlockSubmissionR _) _ = requirePrivilege PrivTeacher
+  isAuthorized (LockSubmissionR _)   _ = requirePrivilege PrivTeacher
+  isAuthorized TestDeclTextR         _ = requirePrivilege PrivAdmin
+  isAuthorized DeclTextR             w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized CanShutdownR          _ = requirePrivilege PrivOperator
   isAuthorized ShutdownR             _ = requirePrivilege PrivOperator
   isAuthorized AdminHomeR            _ = requirePrivilege PrivTeacher
@@ -673,6 +680,24 @@ postShutdownR = do
   shutdownSignal <- getShutdownSignal <$> ask
   liftIO . atomically $ putTMVar shutdownSignal False
   sendResponseStatus HTTP.status204 T.empty
+
+-- | Declaration text handlers
+postTestDeclTextR :: Handler Value
+postTestDeclTextR = do
+  md <- runInputPost (ireq textField "markdown")
+  case writeHtmlString def <$> readMarkdown def (T.unpack md) of
+    Left _ -> return $ object [ "meta" .= object [ "code" .= (400 :: Int) ], "data" .= JSON.Null ]
+    Right r -> return $ object [ "meta" .= object [ "code" .= (200 :: Int) ], "data" .= r ]
+
+getDeclTextR :: Handler TypedContent
+getDeclTextR = acidQueryHandler GetDeclarationText
+
+postDeclTextR :: Handler Value
+postDeclTextR = do
+  md <- runInputPost (ireq textField "markdown")
+  case readMarkdown def (T.unpack md) of
+    Left _ -> return $ object [ "meta" .= object [ "code" .= (400 :: Int) ], "data" .= JSON.Null ]
+    Right _ -> acidUpdateHandler (SetDeclarationText md)
 
 -- |
 -- = HTML handlers

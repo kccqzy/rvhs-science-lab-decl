@@ -12,6 +12,7 @@ import Control.Monad
 import Control.Lens (Lens', makePrisms, makeLenses, (^.))
 import Control.Error
 import Data.Function
+import Data.Monoid
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
@@ -30,7 +31,7 @@ import GHC.Generics (Generic)
 import Data.Time.Calendar
 import Data.Aeson
 import Data.Aeson.TH
-import Data.SafeCopy (base, deriveSafeCopy)
+import Data.SafeCopy
 import Text.Shakespeare.Text (ToText)
 import Web.PathPieces
 import qualified Network.HTTP.Types.Status as HTTP
@@ -170,18 +171,44 @@ type IxSetCtr a = (Int, IxSet a)
 instance Indexable a => Default (IxSet a) where
   def = empty
 
+-- | The database, old version.
+data DatabaseV0 = DatabaseV0 {
+  _ccaDbV0 :: IxSetCtr Cca,
+  _subjectDbV0 :: IxSetCtr Subject,
+  _teacherDbV0 :: IxSetCtr Teacher,
+  _studentDbV0 :: IxSetCtr Student
+  }
+
 -- | The database.
 data Database = Database {
   _ccaDb :: IxSetCtr Cca,
   _subjectDb :: IxSetCtr Subject,
   _teacherDb :: IxSetCtr Teacher,
-  _studentDb :: IxSetCtr Student
+  _studentDb :: IxSetCtr Student,
+  _declarationText :: T.Text
   } deriving (Show, Data, Typeable)
 $(makeLenses ''Database)
 
+defaultDeclarationText :: T.Text
+defaultDeclarationText =
+  "All students are to comply with the rules concerning the use of all\n" <>
+  "science laboratories, including the Design and Technology workshops. The\n" <>
+  "term *laboratory* herein refers to all science laboratories and\n" <>
+  "workshops.\n\n" <>
+  "(a) I have attended the *Laboratory Briefing* by my science subject\n" <>
+  "    teacher and have read and understood the *Science Laboratory Rules*\n" <>
+  "    in the *RVHS Student's Handbook*;\n\n" <>
+  "(b) I hereby undertake and agree to abide by these rules at all times. I\n" <>
+  "    will conduct myself in a responsible manner when using\n" <>
+  "    the laboratory.\n\n"
+
+instance Migrate Database where
+  type MigrateFrom Database = DatabaseV0
+  migrate (DatabaseV0 a b c d) = Database a b c d defaultDeclarationText
+
 -- | The default database has empty tables.
 instance Default Database where
-  def = Database def def def def
+  def = Database def def def def defaultDeclarationText
 
 -- | There is a bijective mapping between a record type and its ID
 -- type. The typeclass also ensures there exists a lens from the
@@ -218,7 +245,8 @@ instance HasPrimaryKey Student StudentId where
   dbField = studentDb
 
 -- | SafeCopy instances for use with Acid.
-$(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student, ''Database])
+$(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student, ''DatabaseV0])
+$(deriveSafeCopy 1 'extension ''Database)
 
 -- | ToJSON and FromJSON instances for use when returning structured
 -- data.
