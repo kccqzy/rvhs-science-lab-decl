@@ -29,7 +29,6 @@ import Data.Aeson.TH
 import qualified Network.HTTP.Client as HTTP
 import Text.Shakespeare.Text (textFile)
 import qualified Codec.Archive.Tar as Tar
-import qualified Codec.Compression.GZip as GZip
 import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
@@ -129,7 +128,6 @@ generatePDF lualatex dir jobname files = withTempDirectory dir "latexjob" $ \dir
           hClose devNullR
           hClose devNullW
           return ec
-        reportAssets = Tar.read . GZip.decompress $ reportTarGz
 
 generateFileName :: Student -> IO T.Text
 generateFileName student = do

@@ -17,7 +17,7 @@ COPY LICENSE Setup.hs stack.yaml labdecl.cabal /buildhome/
 RUN /stack setup
 RUN /stack install alex happy
 RUN /stack build --only-dependencies --prefetch
-COPY tex-report.tar.gz Main.hs /buildhome/
+COPY tex-report.tar Main.hs /buildhome/
 COPY LabDecl /buildhome/LabDecl
 COPY static /buildhome/static
 COPY templates /buildhome/templates

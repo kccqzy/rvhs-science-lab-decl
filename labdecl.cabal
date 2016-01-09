@@ -36,7 +36,6 @@ executable labdecl
                        http-client >=0.4,
                        shakespeare >=2.0,
                        tar >=0.4,
-                       zlib >=0.5,
                        unix >=2.7,
                        temporary >=1.2,
                        process >=1.2,
