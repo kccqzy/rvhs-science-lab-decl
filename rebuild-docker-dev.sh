@@ -4,7 +4,7 @@ set -x
 
 # Create docker machine and start it.
 if ! docker-machine ls | grep '^labdecl-buildbot\b'; then
-    docker-machine create --driver vmwarefusion labdecl-buildbot
+    docker-machine create --driver vmwarefusion --vmwarefusion-memory-size 4096 labdecl-buildbot
 elif [ "Running" != "$(docker-machine status labdecl-buildbot)" ]; then
     docker-machine start labdecl-buildbot
 fi
@@ -12,7 +12,7 @@ fi
 eval $(docker-machine env labdecl-buildbot)
 
 # Build the app.
-docker build --memory=2g --file=./Dockerfile -t labdecl-build .
+docker build --file=./Dockerfile -t labdecl-build .
 
 APPROOT="http://$(docker-machine ip labdecl-buildbot):8081"
 
