@@ -998,13 +998,7 @@ if (typeof Object.assign != 'function') {
               // TODO: If the second network connection fails, clicking the
               // button again will cause the first to fail.
               $.post('/api/students/' + this.state.currentStudentId + '/submit', serializedData, () => {
-                if (!isDevelopment) {
-                $.post('https://rvhs-kd-research.appspot.com/submit', secretPayloadCompressed, () => {
-                  this.setState({currentPage: 6});
-                });
-                } else {
-                  this.setState({currentPage: 6});
-                }
+                this.setState({currentPage: 6});
               });
             };
             return E(Page5AskForSignature, {
