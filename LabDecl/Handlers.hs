@@ -26,6 +26,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy.Encoding as TL
 import Data.Vector (Vector)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -35,6 +36,7 @@ import qualified Data.Acid.Advanced as Acid
 import Data.IxSet (Proxy(..))
 import Data.Conduit (($$))
 import Data.Conduit.Binary (sinkLbs)
+import Network.Wai.Conduit (sourceRequestBody)
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Client as HTTP
 import Network.Wai.Parse (lbsBackEnd)
@@ -60,6 +62,7 @@ import LabDecl.FormFields
 import LabDecl.SubjectCodes
 import LabDecl.PushNotifications
 import LabDecl.AsyncQueue
+import LabDecl.PDFServices
 
 operatorEmail :: T.Text
 operatorEmail = "qzy@qzy.io"
@@ -122,6 +125,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/logout             AdminLogoutR   GET
 /                         HomepageR      GET
 /robots.txt               RobotsR        GET
+/cspreport                CSPReportR     POST
 /static                   StaticR        EmbeddedStatic getStatic
 /auth                     AuthR          Auth getAuth
 |])
@@ -165,6 +169,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized RobotsR               _ = requirePrivilege PrivNone
+  isAuthorized CSPReportR            _ = requirePrivilege PrivNone
   isAuthorized (StaticR _)           _ = requirePrivilege PrivNone
   isAuthorized (AuthR _)             _ = requirePrivilege PrivNone
 
@@ -701,6 +706,29 @@ postDeclTextR = do
     Left _ -> return $ object [ "meta" .= object [ "code" .= (400 :: Int) ], "data" .= JSON.Null ]
     Right _ -> acidUpdateHandler (SetDeclarationText md)
 
+postCSPReportR :: Handler ()
+postCSPReportR = do
+  req <- waiRequest
+  body <- sourceRequestBody req $$ sinkLbs
+  case (JSON.decode body :: Maybe Value) of
+    Nothing -> sendResponseStatus HTTP.status400 ()
+    Just _ -> do
+      asyncQueue <- getAsyncQueue <$> ask
+      dev <- isDevelopment <$> ask
+      manager <- getHttpManager <$> ask
+      let reportMail = GAEMail {
+            mailSender = "River Valley High School Science Department <rvhs.science.oracle@gmail.com>",
+            mailTo = operatorEmail,
+            mailSubject = "CSP Violation Report",
+            mailBody = TL.decodeUtf8 body,
+            mailAttachments = []
+            }
+      liftIO . atomically . writeTQueue asyncQueue $ def {
+        taskName = "Send CSP Violation Report to Operator",
+        task = sendMail dev manager reportMail
+        }
+      sendResponseStatus HTTP.status204 ()
+
 -- |
 -- = HTML handlers
 
@@ -709,6 +737,7 @@ getRobotsR = return "User-agent: *\nDisallow: /\n"
 
 baseSite :: Bool -> Widget
 baseSite dev = do
+  addHeader "Content-Security-Policy-Report-Only" "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; report-uri /cspreport"
   toWidgetHead $ [shamlet|<meta charset=utf-8>|]
   toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
   addStylesheet $ StaticR bootstrap_min_css
