@@ -59,6 +59,10 @@ import LabDecl.FieldParsers
 import LabDecl.FormFields
 import LabDecl.SubjectCodes
 import LabDecl.PushNotifications
+import LabDecl.AsyncQueue
+
+operatorEmail :: T.Text
+operatorEmail = "qzy@qzy.io"
 
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
@@ -66,7 +70,8 @@ data LabDeclarationApp = LabDeclarationApp {
   getAcid :: Acid.AcidState Database,
   getNotifyChan :: TChan (),
   getHttpManager :: HTTP.Manager,
-  getAsyncQueue :: TQueue AsyncInput,
+  getPDFService :: AsyncInput -> IO (),
+  getAsyncQueue :: TQueue InternalQueueTask,
   getCanBeShutdown :: TVar Bool,
   getShutdownSignal :: TMVar Bool,
   getGoogleCredentials :: (T.Text, T.Text),
@@ -201,7 +206,7 @@ requirePrivilege privReq
       dev <- isDevelopment <$> ask
       if dev
         then do
-        setSession "user" "qzy@qzy.io"
+        setSession "user" operatorEmail
         setSession "priv" (T.pack (show PrivOperator))
         return Authorized
         else maybe AuthenticationRequired
@@ -224,7 +229,7 @@ getPrivilege = do
               setSession "user" aid
               setSession "priv" (T.pack (show priv))
               return $ Just (aid, priv)
-        if aid == "qzy@qzy.io"
+        if aid == operatorEmail
           then returnOk PrivOperator
           else do
           acid <- getAcid <$> ask
@@ -567,11 +572,8 @@ postStudentSubmitR sid = do
                        (isNothing (s ^. subjectCode) ||
                         (s ^. subjectId) `Set.member` (student ^. studentSubjectCombi))
   mbWitness <- maybe (return Nothing) (liftIO . Acid.query acid . LookupTeacherById) (student ^. studentWitnesser)
-  asyncQueue <- getAsyncQueue <$> ask
-  canBeShutDown <- getCanBeShutdown <$> ask
-  liftIO . atomically $ do
-    writeTQueue asyncQueue (student, mbWitness, subjects, pngData)
-    writeTVar canBeShutDown False
+  pdfService <- getPDFService <$> ask
+  liftIO . pdfService $ (student, mbWitness, subjects, pngData)
   return rv
 
 data QueryEvent = forall ev. (ToHTTPStatus (Acid.MethodResult ev),

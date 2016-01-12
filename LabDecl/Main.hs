@@ -26,6 +26,7 @@ import qualified Yesod.Core.Types as YT
 
 import LabDecl.Handlers
 import LabDecl.PDFServices
+import LabDecl.AsyncQueue
 
 main :: IO ()
 main = do
@@ -92,11 +93,13 @@ main = do
     -- acid state
     bracket (Acid.openLocalState def) ((>> wait) . Acid.createCheckpointAndClose) $ \acid -> do
 
+      let pdfServiceCurried = pdfService isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue canBeShutDown
       let site = LabDeclarationApp {
             getStatic = eStatic,
             getAcid = acid,
             getNotifyChan = notifyChan,
             getHttpManager = httpManager,
+            getPDFService = pdfServiceCurried,
             getAsyncQueue = asyncQueue,
             getCanBeShutdown = canBeShutDown,
             getShutdownSignal = shutdownSignal,
@@ -106,8 +109,8 @@ main = do
             }
       let waiAppPlain = toWaiAppPlain site
 
-      -- launch pdfServiceThread
-      forkIO $ pdfServiceThread isDevelopment acid httpManager lualatex rendererTempDir notifyChan asyncQueue canBeShutDown logger
+      -- launch generic async queue
+      forkIO $ internalQueueMain logger canBeShutDown asyncQueue
 
       let waiApp = logWare . defaultMiddlewaresNoLogging <$> waiAppPlain
       t <- async $ waiApp >>= Warp.runSettings (setSettings Warp.defaultSettings)

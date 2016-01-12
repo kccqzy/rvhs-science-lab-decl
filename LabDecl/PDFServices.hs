@@ -1,7 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-module LabDecl.PDFServices (pdfServiceThread) where
+module LabDecl.PDFServices (
+  pdfService, GAEMail(..), GAEFile(..), sendMail, uploadFile) where
 
 import Control.Monad
 import Control.Monad.Trans
@@ -32,7 +33,6 @@ import qualified Codec.Archive.Tar as Tar
 import System.IO (openFile, hClose, IOMode(..))
 import System.IO.Temp (withTempDirectory)
 import qualified System.Process as Process
-import qualified Yesod.Core.Types as YT
 
 import qualified LabDecl.RNCryptor as RNCryptor
 import LabDecl.TeXRenderAssets
@@ -157,15 +157,14 @@ generateMail student pdf = do
   let mailAttachments = [(fileName, ByteString64 pdf)]
   return GAEMail {..}
 
-pdfServiceThread :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue AsyncInput -> TVar Bool -> YT.Logger -> IO ()
-pdfServiceThread isDevelopment acid manager lualatex dir notifyChan queue canBeShutDown logger = do
-  let show' = C.pack . show
-  internalQueue <- atomically newTQueue
-  forkIO $ internalQueueMain logger canBeShutDown internalQueue -- this should be passed in from main
-  forever $ do
-    (student, witness, subjects, signaturePng) <- atomically $ readTQueue queue
+pdfService :: Bool -> Acid.AcidState Database -> HTTP.Manager -> FilePath -> FilePath -> TChan () -> TQueue InternalQueueTask -> TVar Bool -> AsyncInput -> IO ()
+pdfService isDevelopment acid manager lualatex dir notifyChan internalQueue canBeShutDown input = do
+    let show' = C.pack . show
+    let (student, witness, subjects, signaturePng) = input
     let tex = generateTeX student witness subjects
-    atomically . writeTQueue internalQueue $ def {
+    atomically $ do
+     writeTVar canBeShutDown False
+     writeTQueue internalQueue $ def {
       taskName = "PDF Generation for student " <> show' (student ^. idField),
       task = do
           pdf <- generatePDF lualatex dir "report" [("sig.png", signaturePng), ("report.tex", tex)]
