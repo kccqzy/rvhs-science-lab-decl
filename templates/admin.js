@@ -360,61 +360,42 @@ $(function() {
 
     // The Modal dialog that takes control of input and needs to be
     // dealt with before the rest of the page is functional.
-    var Modal = React_createClass(_.defaults({
-        propTypes: {
-            canClose: React_PropTypes.bool.isRequired,
-            title: React_PropTypes.node.isRequired,
-            buttons: React_PropTypes.node,
-            children: React_PropTypes.node.isRequired
-        },
-        render: function() {
-            var header = React_createElement("div",{
-                className: "modal-header"
-            },(this.props.canClose ?
-                React_createElement("button",{
-                    type: "button",
-                    className: "close",
-                    id: "modalClose",
-                    "data-dismiss": "modal"
-                },React_createElement("span",{
-                    "aria-hidden": "true"
-                },"×"),React_createElement("span",{
-                    className: "sr-only"
-                },"Close")) :
-                ""),React_createElement("h4",{
-                className: "modal-title"
-            },this.props.title));
-            var footer = (this.props.buttons ?
-                React_createElement("div",{
-                    className: "modal-footer"
-                },this.props.buttons) :
-                "");
-            return React_createElement("div",{
-                id: "modal",
-                className: "modal fade"
-            },React_createElement("div",{
-                className: "modal-dialog"
-            },React_createElement("div",{
-                className: "modal-content"
-            },header,React_createElement("div",{
-                className: "modal-body"
-            },this.props.children),footer)));
-        },
-        componentDidMount: function() {
-            return (($(this.getDOMNode())).on("hidden.bs.modal",function() {
-                return React.unmountComponentAtNode(getModalWrapper());
-            })).modal({
-                keyboard: false,
-                backdrop: "static"
-            });
+    class Modal extends React_Component {
+        constructor(props) {
+            super(props);
+            this.displayName = 'Modal';
         }
-    },{
-        render: function() {
-            return false;
+
+        componentDidMount() {
+            $(this.refs.modal).on("hidden.bs.modal", () => {
+                ReactDOM.unmountComponentAtNode(getModalWrapper());
+            }).modal({keyboard: false, backdrop: "static"});
         }
-    },_.invert({
-        Modal: "displayName"
-    })));
+
+        render() {
+            let header = E("div", {className: "modal-header"},
+                           this.props.canClose ?
+                           E("button", {type: "button", className: "close", id: "modalClose", "data-dismiss": "modal"},
+                             E("span", {"aria-hidden": "true"}, "×"),
+                             E("span", {className: "sr-only"}, "Close")) : "",
+                           E("h4", {className: "modal-title"},
+                             this.props.title));
+            let footer = this.props.buttons ? E("div", {className: "modal-footer"}, this.props.buttons) : "";
+            return E("div", {ref: "modal", id: "modal", className: "modal fade"},
+                     E("div", {className: "modal-dialog"},
+                       E("div", {className: "modal-content"},
+                         header,
+                         E("div", {className: "modal-body"},
+                           this.props.children),
+                         footer)));
+        }
+    }
+    Modal.propTypes = {
+        canClose: React_PropTypes.bool.isRequired,
+        title: React_PropTypes.node.isRequired,
+        buttons: React_PropTypes.node,
+        children: React_PropTypes.node.isRequired
+    };
 
     var getModalWrapper = function() {
         return ($("#modal-wrapper")).get(0);
