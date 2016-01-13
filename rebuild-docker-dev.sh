@@ -25,9 +25,9 @@ docker run --rm \
        labdecl-build \
        cp -f /buildresult/labdecl /buildresult-host
 
-# Run the development build interactively.
-docker run -it \
-       -e "DEVELOPMENT=1" -e "APPROOT=$APPROOT" \
-       --rm -p 8081:8081 \
-       -v /Users/chamekim/Documents/Schoolwork/Post-RVHS/Lab-Declaration/src/state:/buildhome/state \
-       labdecl-build
+# Run the development build interactively (commented out).
+#docker run -it \
+#       -e "DEVELOPMENT=1" -e "APPROOT=$APPROOT" \
+#       --rm -p 8081:8081 \
+#       -v /Users/chamekim/Documents/Schoolwork/Post-RVHS/Lab-Declaration/src/state:/buildhome/state \
+#       labdecl-build
