@@ -67,6 +67,9 @@ import LabDecl.PDFServices
 operatorEmail :: T.Text
 operatorEmail = "qzy@qzy.io"
 
+cspViolationReportTo :: T.Text
+cspViolationReportTo = "CSP Violation Investigator <labdecl-csp@qzy.io>"
+
 -- | The foundation data type.
 data LabDeclarationApp = LabDeclarationApp {
   getStatic :: EmbeddedStatic,
@@ -718,7 +721,7 @@ postCSPReportR = do
       manager <- getHttpManager <$> ask
       let reportMail = GAEMail {
             mailSender = "River Valley High School Science Department <rvhs.science.oracle@gmail.com>",
-            mailTo = operatorEmail,
+            mailTo = cspViolationReportTo,
             mailSubject = "CSP Violation Report",
             mailBody = TL.decodeUtf8 body,
             mailAttachments = []
