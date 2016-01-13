@@ -737,7 +737,9 @@ getRobotsR = return "User-agent: *\nDisallow: /\n"
 
 baseSite :: Bool -> Widget
 baseSite dev = do
-  addHeader "Content-Security-Policy-Report-Only" "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; report-uri /cspreport"
+  addHeader "X-XSS-Protection" "1; mode=block"
+  addHeader "X-Frame-Options" "SAMEORIGIN"
+  addHeader "Content-Security-Policy" "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; report-uri /cspreport"
   toWidgetHead $ [shamlet|<meta charset=utf-8>|]
   toWidgetHead $ [shamlet|<meta http-equiv=X-UA-Compatible content=IE=edge>|]
   addStylesheet $ StaticR bootstrap_min_css
