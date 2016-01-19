@@ -5,12 +5,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module LabDecl.EntityCsv (
+module LabDecl.EntityUploadCsv (
   processStudentCsv,
   processCcaCsv,
   processSubjectCsv,
   processTeacherCsv,
-  HasCsvProcessor(..)
+  HasUploadCsvProcessor(..)
   ) where
 
 import Control.Monad
@@ -194,17 +194,17 @@ processCcaCsv csvStream = do
       when (isCsvFieldEmpty _csvCcaCategory) . hoistEither . Left . (rowNumber,) $ errGenericObjectNoProperty "CCA" "category"
       return $ Cca (CcaId 0) _csvCcaName _csvCcaCategory
 
-class HasCRUDEvents a i le re ae ase => HasCsvProcessor a i le re ae ase where
+class HasCRUDEvents a i le re ae ase => HasUploadCsvProcessor a i le re ae ase where
   csvProcessor :: forall m. MonadIO m => Acid.AcidState Database -> T.Text -> ExceptT TL.Text m (Vector a)
 
-instance HasCsvProcessor Cca CcaId LookupCcaById RemoveCca AddCca AddCcas where
+instance HasUploadCsvProcessor Cca CcaId LookupCcaById RemoveCca AddCca AddCcas where
   csvProcessor = const processCcaCsv
 
-instance HasCsvProcessor Subject SubjectId LookupSubjectById RemoveSubject AddSubject AddSubjects where
+instance HasUploadCsvProcessor Subject SubjectId LookupSubjectById RemoveSubject AddSubject AddSubjects where
   csvProcessor = const processSubjectCsv
 
-instance HasCsvProcessor Teacher TeacherId LookupTeacherById RemoveTeacher AddTeacher AddTeachers where
+instance HasUploadCsvProcessor Teacher TeacherId LookupTeacherById RemoveTeacher AddTeacher AddTeachers where
   csvProcessor = const processTeacherCsv
 
-instance HasCsvProcessor Student StudentId LookupStudentById RemoveStudent AddStudent AddStudents where
+instance HasUploadCsvProcessor Student StudentId LookupStudentById RemoveStudent AddStudent AddStudents where
   csvProcessor = processStudentCsv

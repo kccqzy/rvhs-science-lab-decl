@@ -54,7 +54,7 @@ import LabDecl.Utilities
 import LabDecl.Types
 import LabDecl.AcidicModels
 import LabDecl.AcidicModelInstances
-import LabDecl.EntityCsv
+import LabDecl.EntityUploadCsv
 import LabDecl.Models
 import LabDecl.ErrMsg
 import LabDecl.FieldParsers
@@ -645,7 +645,7 @@ postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubm
 
 
 postManyHandler :: forall a i le re ae ase.
-                   (HasCsvProcessor a i le re ae ase,
+                   (HasUploadCsvProcessor a i le re ae ase,
                     Acid.UpdateEvent ase,
                     Acid.MethodResult ase ~ Either TL.Text (),
                     Acid.MethodState ase ~ Database
