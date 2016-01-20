@@ -197,6 +197,7 @@ instance YesodAuth LabDeclarationApp where
   logoutDest _ = AdminLogoutR
   getAuthId = return . Just . credsIdent
   maybeAuthId = lookupSession "_ID"
+  onLogin = return ()
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
