@@ -135,228 +135,224 @@ $(function() {
 
     let APIConnection = window.EventSource ? APIConnectionSSE : window.WebSocket ? APIConnectionWS : APIConnectionPoll;
 
-    // I have not refactored the code below yet! They do not use ES6, and they
-    // use JS-natve mutable data structures!
+    // An EntityRow is a row of data in the table. Each row also has two action
+    // buttons. The prop firstRowSpan is a bit confusing: when zero, the first
+    // row is omitted entirely, but when nonzero, it specifies the number of
+    // rows to span.
+    class EntityRow extends React_Component {
+        constructor(props) {
+            super(props);
+            this.displayName = 'EntityRow';
+        }
+        render() {
+            let dataSpec = pageSpec[window.location.pathname].dataSpec;
+            let firstCell = (() => {
+                if (dataSpec.categoryColumn !== null && this.props.firstRowSpan) {
+                    let value = this.props.entity[dataSpec.categoryColumn[0]];
+                    let mapper = dataSpec.categoryColumn[1];
+                    return E("td", {rowSpan: this.props.firstRowSpan}, mapper.apply(this.props.auxiliary, [value, this.props.entity]));
+                }
+                else return null;
+            })();
+            let onEditButtonClick = () => {
+                ReactDOM.render(E(this.props.entityEditor,{
+                    auxiliary: this.props.auxiliary,
+                    entity: this.props.entity
+                }), getModalWrapper());
+            };
+            let onDeleteButtonClick = () => {
+                return ReactDOM.render(E(DeleteConfirmation,{
+                    auxiliary: this.props.auxiliary,
+                    entity: this.props.entity
+                }),getModalWrapper());
+            };
+            let editDeleteButtonsCell = E("td",{className: "text-right"},
+                                          E("div",{className: "btn-group", role: "group"},
+                                            E("button",{type: "button", className: "btn btn-default btn-xs", title: "Edit", onClick: onEditButtonClick},
+                                              E("span",{className: "glyphicon glyphicon-pencil", "aria-hidden": "true"})),
+                                            E("button",{type: "button", className: "btn btn-default btn-xs", title: "Remove", onClick: onDeleteButtonClick},
+                                              E("span",{className: "glyphicon glyphicon-trash", "aria-hidden": "true"}))));
 
-    // An EntityRow is a row of data in the table. Each row also has
-    // two action buttons.
-    var EntityRow = React_createClass(_.defaults({
-        propTypes: {
-            firstRowSpan: React_PropTypes.number.isRequired,
-            entity: React_PropTypes.object.isRequired,
-            entityEditor: React_PropTypes.any.isRequired,
-            auxiliary: React_PropTypes.object
-        },
-        render: function() {
-            var that = this;
-            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var firstCell = (((!(dataSpec.categoryColumn === null)) && that.props.firstRowSpan) ?
-                (function() {
-                    var value = that.props.entity[dataSpec.categoryColumn[0]];
-                    var mapper = dataSpec.categoryColumn[1];
-                    return React_createElement("td",{
-                        rowSpan: that.props.firstRowSpan
-                    },mapper.apply(that.props.auxiliary,[
-                        value,
-                        that.props.entity
-                    ]));
-                })() :
-                null);
-            var onEditButtonClick = function() {
-                return ReactDOM.render(React_createElement(that.props.entityEditor,{
-                    auxiliary: that.props.auxiliary,
-                    entity: that.props.entity
-                }),getModalWrapper());
-            };
-            var onDeleteButtonClick = function() {
-                return ReactDOM.render(React_createElement(DeleteConfirmation,{
-                    auxiliary: that.props.auxiliary,
-                    entity: that.props.entity
-                }),getModalWrapper());
-            };
-            return React_createElement("tr",{},firstCell,__map(dataSpec.columns,function(spec,idx) {
-                var value = that.props.entity[spec[0]];
-                var mapper = spec[1];
-                return React_createElement("td",{
-                    key: idx
-                },mapper.apply(that.props.auxiliary,[
-                    value,
-                    that.props.entity
-                ]));
-            }),(identIsAdmin ?
-                React_createElement("td",{
-                    className: "text-right"
-                },React_createElement("div",{
-                    className: "btn-group",
-                    role: "group"
-                },React_createElement("button",{
-                    type: "button",
-                    className: "btn btn-default btn-xs",
-                    title: "Edit",
-                    onClick: onEditButtonClick
-                },React_createElement("span",{
-                    className: "glyphicon glyphicon-pencil",
-                    "aria-hidden": "true"
-                })),React_createElement("button",{
-                    type: "button",
-                    className: "btn btn-default btn-xs",
-                    title: "Delete",
-                    onClick: onDeleteButtonClick
-                },React_createElement("span",{
-                    className: "glyphicon glyphicon-trash",
-                    "aria-hidden": "true"
-                })))) :
-                null));
+            return E("tr", {},
+                     firstCell,
+                     __map(dataSpec.columns,
+                           (spec, idx) => {
+                               let value = this.props.entity[spec[0]];
+                               let mapper = spec[1];
+                               return E("td", {key: idx}, mapper.apply(this.props.auxiliary, [value, this.props.entity]));
+                           }),
+                     identIsAdmin ? editDeleteButtonsCell : null);
         }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        EntityRow: "displayName"
-    })));
+    }
+    EntityRow.propTypes = {
+        firstRowSpan: React_PropTypes.number.isRequired,
+        entity: React_PropTypes.object.isRequired,
+        entityEditor: React_PropTypes.any.isRequired,
+        auxiliary: React_PropTypes.object
+    };
 
     // An EntityCategory is a group of data shared under a category,
     // presented as a tbody with a single cell spanning all of them.
-    var EntityCategory = React_createClass(_.defaults({
-        propTypes: {
-            entities: React_PropTypes.array.isRequired,
-            entityEditor: React_PropTypes.any.isRequired,
-            auxiliary: React_PropTypes.object
-        },
-        render: function() {
-            var that = this;
-            return React_createElement("tbody",{},__map(this.props.entities,function(entity,i,entities) {
-                return React_createElement(EntityRow,{
-                    key: entity.id,
-                    entityEditor: that.props.entityEditor,
-                    auxiliary: that.props.auxiliary,
-                    entity: entity,
-                    firstRowSpan: (i ?
-                        0 :
-                        entities.length)
-                });
-            }));
+    class EntityCategory extends React_Component {
+        constructor(props) {
+            super(props);
+            this.displayName = 'EntityCategory';
         }
-    },{
-        render: function() {
-            return false;
+        render() {
+            return E("tbody", {},
+                     __map(this.props.entities,
+                           (entity,i,entities) =>
+                           E(EntityRow, {key: entity.id, entityEditor: this.props.entityEditor, auxiliary: this.props.auxiliary, entity: entity,
+                                         firstRowSpan: i ? 0 : entities.length})));
         }
-    },_.invert({
-        EntityCategory: "displayName"
-    })));
+    }
+    EntityCategory.propTypes = {
+        entities: React_PropTypes.array.isRequired,
+        entityEditor: React_PropTypes.any.isRequired,
+        auxiliary: React_PropTypes.object
+    };
 
     // An EntityTable is the entire table for holding the data. It
     // receives events from the two action buttons on each row.
-    var EntityTable = React_createClass(_.defaults({
-        propTypes: {
-            conn: React_PropTypes.object.isRequired,
-            entityEditor: React_PropTypes.any.isRequired,
-            auxiliary: React_PropTypes.object,
-            customFilter: React_PropTypes.func
-        },
-        getInitialState: function() {
-            return {
-                tableData: {
-                    data: []
-                }
+    class EntityTable extends React_Component {
+        constructor(props) {
+            super(props);
+            this.displayName = 'EntityTable';
+            this.state = {
+                tableData: {data: []}
             };
-        },
-        registerCallback: function() {
-            var that = this;
-            return this.props.conn.registerCallback(function(d) {
-                return that.setState({
+        }
+
+        registerCallback() {
+            return this.props.conn.registerCallback((d) => {
+                return this.setState({
                     tableData: d
                 });
             });
-        },
-        componentDidMount: function() {
+        }
+
+        componentDidMount() {
             return this.registerCallback();
-        },
-        componentDidUpdate: function() {
+        }
+
+        componentDidUpdate() {
             return this.registerCallback();
-        },
-        componentWillUnmount: function() {
+        }
+
+        componentWillUnmount() {
             return this.props.conn.close();
-        },
-        componentWillReceiveProps: function(newProps) {
-            return ((this.props.conn.pathname() !== newProps.conn.pathname()) ?
-                this.props.conn.close() :
-                undefined);
-        },
-        render: function() {
-            var that = this;
-            var dataSpec = (pageSpec[window.location.pathname]).dataSpec;
-            var rawData = (this.props.customFilter || _.identity)(this.state.tableData.data);
-            var rows = ((dataSpec.categoryColumn === null) ?
-                (function() {
-                    var sortName = dataSpec.columns[0][0];
-                    var massagedData = _.sortBy(rawData,sortName);
-                    console.log(that.state.tableData);
-                    console.log(rawData);
-                    console.log(massagedData);
-                    return React_createElement("tbody",{},__map(massagedData,function(entity) {
-                        return React_createElement(EntityRow,{
-                            firstRowSpan: 1,
-                            entityEditor: that.props.entityEditor,
-                            auxiliary: that.props.auxiliary,
-                            entity: entity,
-                            key: entity.id
-                        });
-                    }));
-                })() :
-                (function() {
-                    var categoryName = dataSpec.categoryColumn[0];
-                    var sortName = dataSpec.columns[0][0];
-                    var massagedData = __map(_.sortBy(__map(_.groupBy(rawData,categoryName),function(v,k) {
-                        return {
-                            k: k,
-                            v: _.sortBy(v,sortName)
-                        };
-                    }),"k"),function(d) {
-                        return (d).v;
-                    });
-                    return __map(massagedData,function(entities) {
-                        var category = entities[0][categoryName];
-                        return React_createElement(EntityCategory,{
-                            entities: entities,
-                            entityEditor: that.props.entityEditor,
-                            auxiliary: that.props.auxiliary,
-                            key: category
-                        });
-                    });
-                })());
-            var displayColumnName = function(columnName) {
-                return ((Object.prototype.toString.call(columnName) === "[object Function]") ?
+        }
+
+        componentWillReceiveProps(newProps) {
+            if (this.props.conn.pathname() !== newProps.conn.pathname())
+                this.props.conn.close();
+        }
+
+        render() {
+            let dataSpec = pageSpec[window.location.pathname].dataSpec;
+            let rawData = (this.props.customFilter || _.identity)(this.state.tableData.data);
+
+            let rows = (() => {
+                if (dataSpec.categoryColumn) {
+                    let categoryName = dataSpec.categoryColumn[0];
+                    let sortName = dataSpec.columns[0][0];
+                    let massagedData = __map(_.sortBy(__map(_.groupBy(rawData,categoryName),
+                                                            (v,k) => ({k: k, v: _.sortBy(v,sortName)})),
+                                                      "k"),
+                                             (d) => d.v);
+                    return __map(massagedData,
+                                 (entities) =>
+                                 E(EntityCategory,{
+                                     entities: entities,
+                                     entityEditor: this.props.entityEditor,
+                                     auxiliary: this.props.auxiliary,
+                                     key: entities[0][categoryName]
+                                 }));
+                } else {
+                    let sortName = dataSpec.columns[0][0];
+                    let massagedData = _.sortBy(rawData,sortName);
+                    return E("tbody", {},
+                             __map(massagedData,
+                                   (entity) =>
+                                   E(EntityRow,{
+                                       firstRowSpan: 1,
+                                       entityEditor: this.props.entityEditor,
+                                       auxiliary: this.props.auxiliary,
+                                       entity: entity,
+                                       key: entity.id
+                                   })));
+                }
+            })();
+
+            let displayColumnName = (columnName) =>
+                    Object.prototype.toString.call(columnName) === "[object Function]" ?
                     columnName(rawData) :
-                    columnName);
-            };
-            var headers = __map((((dataSpec.categoryColumn === null) ?
-                [] :
-                [
-                    displayColumnName(dataSpec.categoryColumn[2])
-                ])).concat(__map(dataSpec.columns,function(v) {
-                return displayColumnName(v[2]);
-            })),function(label,idx) {
-                return React_createElement("th",{
-                    key: idx
-                },label);
-            });
-            return React_createElement("div",{
-                className: "table-responsive"
-            },React_createElement("table",{
-                className: "table"
-            },React_createElement("thead",{},React_createElement("tr",{},headers,(identIsAdmin ?
-                React_createElement("th",{}) :
-                null))),rows));
+                    columnName;
+
+            let editDeleteButtonsCell = (() => {
+                let onDeleteAllClick = () => {
+                    let ids = __map(rawData, "id").join(",");
+                    let count = rawData.length;
+                    let countDescription = count === 1 ? "1 " + dataSpec.humanNameInSentence : count + " " + dataSpec.humanNamePluralInSentence;
+
+                    let cannotDeleteNothingDialog = E(Modal,
+                                                      {
+                                                          canClose: true,
+                                                          title: "Nothing Currently Shown",
+                                                          buttons: E("button",{
+                                                              type: "button",
+                                                              className: "btn btn-default",
+                                                              "data-dismiss": "modal"
+                                                          },"Close"),
+                                                          children: E("p", {}, "Nothing is currently shown on screen.")
+                                                      });
+                    let confirmDeleteModal = E(AjaxFailableActionModal,
+                                               {
+                                                   title: "Deleting All " + dataSpec.humanNamePlural + " Currently Shown",
+                                                   actionButtonLabel: "Yes, Delete All Currently Shown",
+                                                   actionButtonStyle: "danger",
+                                                   ajaxParam: () => ({
+                                                       url: "/api/" + dataSpec.machineName,
+                                                       type: "DELETE",
+                                                       data: {ids}
+                                                   })
+                                               },
+                                               E("p", {}, "Are you sure you want to delete all ", dataSpec.humanNamePluralInSentence, " currently shown on screen? This will delete ", countDescription, ". "));
+                    ReactDOM.render(count ? confirmDeleteModal : cannotDeleteNothingDialog, getModalWrapper());
+                };
+                let deleteIcon = E("span",{className: "glyphicon glyphicon-trash", "aria-hidden": "true"});
+                return E("th", {className: 'text-right'},
+                         E("button",{
+                             type: "button",
+                             className: "btn btn-danger btn-xs",
+                             onClick: onDeleteAllClick,
+                             title: "Click to delete all " + dataSpec.humanNamePluralInSentence + " currently shown."
+                         },deleteIcon,React_createElement("span",{
+                             className: "presentation-text",
+                             "data-text": " Remove These"
+                         }))
+                        );
+            })();
+
+            let headers = __map(((dataSpec.categoryColumn === null ?
+                                  [] :
+                                  [displayColumnName(dataSpec.categoryColumn[2])]))
+                                .concat(__map(dataSpec.columns, (v) => displayColumnName(v[2]))),
+                                (label,idx) =>
+                                E("th",{key: idx},label));
+            return E("div",{className: "table-responsive"},
+                     E("table",{className: "table"},
+                       E("thead",{},
+                         E("tr",{},
+                           headers,identIsAdmin ? editDeleteButtonsCell : null)),rows));
         }
-    },{
-        render: function() {
-            return false;
-        }
-    },_.invert({
-        EntityTable: "displayName"
-    })));
+    }
+    EntityTable.propTypes = {
+        conn: React_PropTypes.object.isRequired,
+        entityEditor: React_PropTypes.any.isRequired,
+        auxiliary: React_PropTypes.object,
+        customFilter: React_PropTypes.func
+    };
 
     // The Modal dialog that takes control of input and needs to be
     // dealt with before the rest of the page is functional.
@@ -396,6 +392,8 @@ $(function() {
         buttons: React_PropTypes.node,
         children: React_PropTypes.node.isRequired
     };
+
+    // I have not refactored the code below yet! They do not use ES6!
 
     var getModalWrapper = function() {
         return ($("#modal-wrapper")).get(0);
@@ -1199,9 +1197,9 @@ $(function() {
                     onClick: onAddButtonClick
                 },"Add New"),React_createElement("button",{
                     type: "button",
-                    className: "btn btn-default",
+                    className: "btn btn-danger",
                     onClick: onRemoveAllButtonClick
-                },"Remove All (Even If Not Shown)")) :
+                },"Remove ", E("strong", {style: {textTransform: 'uppercase'}}, "Everything"))) :
                 null),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: this.state.conn,
                 entityEditor: editor,
@@ -1756,7 +1754,7 @@ $(function() {
                             },((sub.tag === "SubmissionNotOpen") ?
                                 React_createElement("button",{
                                     type: "button",
-                                    className: "btn btn-danger btn-xs",
+                                    className: "btn btn-warning btn-xs",
                                     onClick: onUnlockClick,
                                     title: "Click to unlock submission."
                                 },lockicon,React_createElement("span",{
@@ -1822,7 +1820,7 @@ $(function() {
                                 "data-text": " Unlock These"
                             }))," ",React_createElement("button",{
                                 type: "button",
-                                className: "btn btn-danger btn-xs",
+                                className: "btn btn-warning btn-xs",
                                 onClick: onLockAllClick,
                                 title: "Click to lock submission for all."
                             },lockicon,React_createElement("span",{
