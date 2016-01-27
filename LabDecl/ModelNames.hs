@@ -31,6 +31,7 @@ eventNames = [
     'listStudentsByLevel,
     'searchStudentsByName,
     'getDeclarationText,
+    'resetDatabase,
     'addCca,
     'addSubject,
     'addTeacher,

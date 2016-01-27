@@ -95,6 +95,7 @@ $(mkEmbeddedStatic False "eStatic" [embedDir "static"])
 -- marshalling and then invoke the events in LabDecl.AcidicModels.
 -- The exclamation mark means overlap checking is disabled.
 $(mkYesod "LabDeclarationApp" [parseRoutes|
+/api                      EverythingR    DELETE
 /api/ccas                 CcasR          GET POST DELETE
 /api/ccas/csv             ManyCcasR      POST
 !/api/ccas/#CcaId         CcaR           GET PUT DELETE
@@ -139,6 +140,7 @@ instance Yesod LabDeclarationApp where
   approot = ApprootMaster getApproot
 
   -- | The privilege table.
+  isAuthorized EverythingR           _ = requirePrivilege PrivAdmin
   isAuthorized CcasR                 w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized ManyCcasR             _ = requirePrivilege PrivAdmin
   isAuthorized (CcaR _)              w = requirePrivilege (if w then PrivAdmin else PrivNone)
@@ -489,6 +491,10 @@ getCcasR     = acidQueryHandler ListCcas
 getSubjectsR = acidQueryHandler ListSubjects
 getTeachersR = acidQueryHandler ListTeachers
 
+-- | Reset everything.
+deleteEverythingR :: Handler Value
+deleteEverythingR = acidUpdateHandler ResetDatabase
+
 -- | Add-thing handlers. Too lazy to make it generic and write HasForm class and instances.
 postCcasR     :: Handler Value
 postSubjectsR :: Handler Value
@@ -527,7 +533,7 @@ deleteCcaR :: CcaId -> Handler Value
 deleteCcaR = acidUpdateHandler . RemoveCca
 
 deleteCcasR :: Handler Value
-deleteCcasR = acidFormUpdateHandler (const RemoveCcas) (iopt rawIdsField "ids")
+deleteCcasR = acidFormUpdateHandler (const RemoveCcas) (ireq rawIdsField "ids")
 
 putSubjectR :: SubjectId -> Handler Value
 putSubjectR = acidFormUpdateHandler ReplaceSubject . subjectForm
@@ -536,7 +542,7 @@ deleteSubjectR :: SubjectId -> Handler Value
 deleteSubjectR = acidUpdateHandler . RemoveSubject
 
 deleteSubjectsR :: Handler Value
-deleteSubjectsR = acidFormUpdateHandler (const RemoveSubjects) (iopt rawIdsField "ids")
+deleteSubjectsR = acidFormUpdateHandler (const RemoveSubjects) (ireq rawIdsField "ids")
 
 getTestDecodeR :: Handler Value
 getTestDecodeR = do -- TODO use parseSubjectCodeFriendly
@@ -554,7 +560,7 @@ deleteTeacherR :: TeacherId -> Handler Value
 deleteTeacherR = acidUpdateHandler . RemoveTeacher
 
 deleteTeachersR :: Handler Value
-deleteTeachersR = acidFormUpdateHandler (const RemoveTeachers) (iopt rawIdsField "ids")
+deleteTeachersR = acidFormUpdateHandler (const RemoveTeachers) (ireq rawIdsField "ids")
 
 getClassesR :: Handler TypedContent
 getClassesR = acidQueryHandler PublicListClasses
@@ -630,7 +636,7 @@ deleteStudentR :: StudentId -> Handler Value
 deleteStudentR = acidUpdateHandler . RemoveStudent
 
 deleteStudentsR :: Handler Value
-deleteStudentsR = acidFormUpdateHandler (const RemoveStudents) (iopt rawIdsField "ids")
+deleteStudentsR = acidFormUpdateHandler (const RemoveStudents) (ireq rawIdsField "ids")
 
 postUnlockSubmissionR :: StudentId -> Handler Value
 postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionOpen

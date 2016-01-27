@@ -1172,19 +1172,6 @@ $(function() {
                     auxiliary: that.props.auxiliary
                 }),getModalWrapper());
             };
-            var onRemoveAllButtonClick = function() {
-                return ReactDOM.render(React_createElement(AjaxFailableActionModal,{
-                    title: ("Deleting All " + hnamepl),
-                    actionButtonLabel: "Yes, Delete All",
-                    actionButtonStyle: "danger",
-                    ajaxParam: function() {
-                        return {
-                            url: ("/api/" + mname),
-                            type: "DELETE"
-                        };
-                    }
-                },React_createElement("p",{},"Are you sure you want to delete all ",hnamepl," currently stored in the database? ")),getModalWrapper());
-            };
             return React_createElement("div",{},(identIsAdmin ?
                 React_createElement("div",{
                     className: "pull-right btn-group",
@@ -1200,11 +1187,7 @@ $(function() {
                     type: "button",
                     className: "btn btn-default",
                     onClick: onAddButtonClick
-                },"Add New"),React_createElement("button",{
-                    type: "button",
-                    className: "btn btn-danger",
-                    onClick: onRemoveAllButtonClick
-                },"Remove ", E("strong", {style: {textTransform: 'uppercase'}}, "Everything"))) :
+                },"Add New")) :
                 null),React_createElement("h2",{},("View " + hnamepl)),this.props.children,React_createElement(EntityTable,{
                 conn: this.state.conn,
                 entityEditor: editor,

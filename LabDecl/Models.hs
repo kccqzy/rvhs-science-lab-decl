@@ -156,6 +156,10 @@ unsafeRemoveEntity :: forall a i. (HasPrimaryKey a i) => i -> IUpdate
 unsafeRemoveEntity i = dbField'._2 %= deleteIx i
   where dbField' = dbField :: Lens' Database (IxSetCtr a)
 
+-- | Resets the entire database. Very unsafe.
+resetDatabase :: IUpdate
+resetDatabase = put def
+
 -- | Convert a set of subjects to a mapping between the subject code
 -- and subject.
 subjectsToMap :: Set Subject -> Map T.Text Subject
@@ -321,14 +325,14 @@ removeSubject = removeEntity
 removeTeacher = removeEntity
 removeStudent = removeEntity
 
-removeCcas     :: Maybe [CcaId]     -> IUpdate
-removeSubjects :: Maybe [SubjectId] -> IUpdate
-removeTeachers :: Maybe [TeacherId] -> IUpdate
-removeStudents :: Maybe [StudentId] -> IUpdate
-removeCcas     = maybe (removeAllEntities (Proxy :: Proxy Cca))     (mapM_ removeCca)
-removeSubjects = maybe (removeAllEntities (Proxy :: Proxy Subject)) (mapM_ removeSubject)
-removeTeachers = maybe (removeAllEntities (Proxy :: Proxy Teacher)) (mapM_ removeTeacher)
-removeStudents = maybe (removeAllEntities (Proxy :: Proxy Student)) (mapM_ removeStudent)
+removeCcas     :: [CcaId]     -> IUpdate
+removeSubjects :: [SubjectId] -> IUpdate
+removeTeachers :: [TeacherId] -> IUpdate
+removeStudents :: [StudentId] -> IUpdate
+removeCcas     = mapM_ removeCca
+removeSubjects = mapM_ removeSubject
+removeTeachers = mapM_ removeTeacher
+removeStudents = mapM_ removeStudent
 
 replaceStudent :: Bool -> Student -> IUpdate
 replaceStudent force newStudent = do
