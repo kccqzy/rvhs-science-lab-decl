@@ -126,6 +126,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /admin/subjects           AdminSubjectsR GET
 /admin/teachers           AdminTeachersR GET
 /admin/students           AdminStudentsR GET
+/admin/special            AdminSpecialR  GET
 /admin/logout             AdminLogoutR   GET
 /                         HomepageR      GET
 /robots.txt               RobotsR        GET
@@ -171,6 +172,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized AdminSubjectsR        _ = requirePrivilege PrivTeacher
   isAuthorized AdminTeachersR        _ = requirePrivilege PrivTeacher
   isAuthorized AdminStudentsR        _ = requirePrivilege PrivTeacher
+  isAuthorized AdminSpecialR         _ = requirePrivilege PrivAdmin
   isAuthorized AdminLogoutR          _ = requirePrivilege PrivNone
   isAuthorized HomepageR             _ = requirePrivilege PrivNone
   isAuthorized RobotsR               _ = requirePrivilege PrivNone
@@ -834,3 +836,6 @@ getAdminSubjectsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Co
 
 getAdminStudentsR :: Handler Html
 getAdminStudentsR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Manage Students"
+
+getAdminSpecialR :: Handler Html
+getAdminSpecialR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console :: Special"

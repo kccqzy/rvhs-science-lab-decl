@@ -1133,6 +1133,39 @@ $(function() {
         AdminHomeR: "displayName"
     })));
 
+    class AdminSpecialR extends React_Component {
+        constructor(props) {
+            super(props);
+        }
+
+        render() {
+            let onDeleteAllClick = () => {
+                ReactDOM.render(E(AjaxFailableActionModal,
+                                  {
+                                      title: "Reset The Entire Database",
+                                      actionButtonLabel: "Yes, Reset The Database",
+                                      actionButtonStyle: "danger",
+                                      ajaxParam: () => ({
+                                          url: "/api",
+                                          type: "DELETE"
+                                      })
+                                  },
+                                  E("p", {}, "Are you sure you want to reset the entire database? This operation is highly destructive.")), getModalWrapper());
+            };
+            return E("div", {className: "row"},
+                     E("div", {className: "col-sm-11 col-md-8 col-lg-7"},
+                       E("h2", {}, "System Tools"),
+                       E("p", {}, "The special tools on this page are useful at the beginning or end of student info collection."),
+                       E("h3", {}, "Resetting Database"),
+                       E("p", {}, "Use the button below to delete ",
+                         E("strong", {style: {textTransform: 'uppercase'}}, "everything"),
+                         " from the database and reset all settings, except that it does not remove the current admin user. This is because deleting the current admin user would have prevented you from logging in again."),
+                       E("p", {},
+                         E("button", {type: "button", className: "btn btn-danger", role: "button", onClick: onDeleteAllClick},
+                           "Delete ", E("strong", {style: {textTransform: 'uppercase'}}, "everything")))));
+        }
+    }
+
     var EntityPage = React_createClass(_.defaults({
         propTypes: {
             customButtons: React_PropTypes.node,
@@ -1819,76 +1852,58 @@ $(function() {
                     ]
                 ]
             }
+        },
+
+        "/admin/special": {
+            pageName: "System Tools",
+            onlyAdmin: true,
+            component: AdminSpecialR,
+            dataSpec: null
         }
+
     };
 
-    var Page = React_createClass(_.defaults({
-        render: function() {
-            var pathname = window.location.pathname;
-            var tabs = __map(pageSpec,function(page,route) {
-                var tab = React_createElement("li",{
-                    key: route,
-                    role: "presentation",
-                    className: ((route === pathname) ?
-                        "active" :
-                        "")
-                },React_createElement("a",{
-                    href: ((route === pathname) ?
-                        "#" :
-                        route)
-                },(page).pageName));
-                return ((page).onlyAdmin ?
-                    (identIsAdmin ?
-                        tab :
-                        null) :
-                    tab);
+    class Page extends React_Component {
+        constructor(props) {
+            super(props);
+            if (isDevelopment) this.displayName = 'Page';
+        }
+
+        render() {
+            let pathname = window.location.pathname;
+            let tabs = __map(pageSpec, (page, route) => {
+                let tab = E("li",{key: route, role: "presentation", className: route === pathname ? "active" : ""},
+                            E("a",{href: route === pathname ? "#" : route},
+                              page.pageName));
+                return (!page.onlyAdmin || identIsAdmin) ? tab : null;
             });
-            return React_createElement("div",{
-                id: "content-wrapper"
-            },React_createElement("div",{
-                id: "popover-wrapper"
-            }),React_createElement("div",{
-                id: "modal-wrapper"
-            }),React_createElement("div",{
-                className: "container"
-            },React_createElement("div",{
-                className: "page-header"
-            },React_createElement("h1",{},React_createElement("img",{
-                src: "/static/res/rv.svg",
-                style: {
-                    height: "1em",
-                    position: "relative",
-                    top: "-0.2em",
-                    margin: "0 0.3em 0 0"
-                }
-            }),"RVHS Science Lab Undertaking — For Teachers")),React_createElement("p",{},(("You are logged in as " + identUser) + ". "),(identIsAdmin ?
-                "You are an administrator. " :
-                "You are not an administrator, and many features and pages have been hidden."),React_createElement("a",{
-                href: "/auth/logout"
-            },"Click here to logout. ")),React_createElement("div",{
-                role: "tabpanel"
-            },React_createElement("ul",{
-                className: "nav nav-tabs"
-            },tabs)),React_createElement("div",{
-                id: "main-content"
-            })));
-        },
-        componentDidMount: function() {
-            var pathname = window.location.pathname;
-            return ((typeof(window.EventSource) === "undefined") ?
-                ReactDOM.render(React_createElement(Modal,{
-                    canClose: true,
-                    title: "Browser Unsupported"
-                },React_createElement("p",{},"Your browser is unsupported. Although you may still be able to use this site, it is ", React_createElement("b",{},"highly recommended")," that you use a different browser, such as Google Chrome 9 or higher, Mozilla Firefox 6 or higher, or Apple Safari 5 or higher. Internet Explorer is known to behave inconsistently and therefore should not be used.")),getModalWrapper()) :
-                ReactDOM.render(React_createElement((pageSpec[pathname]).component,{}),($("#main-content")).get(0)));
+            return E("div", {id: "content-wrapper"},
+                     E("div", {id: "popover-wrapper"}),
+                     E("div", {id: "modal-wrapper"}),
+                     E("div", {className: "container"},
+                       E("div", {className: "page-header"},
+                         E("h1", {}, E("img", {src: "/static/res/rv.svg", style: {height: "1em", position: "relative", top: "-0.2em", margin: "0 0.3em 0 0"}}),
+                           "RVHS Science Lab Undertaking — For Teachers")),
+                       E("p", {}, "You are logged in as ", identUser, ". ",
+                         identIsAdmin ? "You are an administrator. " : "You are not an administrator, and many features and pages have been hidden.",
+                         E("a", {href: "/auth/logout"},
+                           "Click here to logout. ")),
+                       E("div", {role: "tabpanel"},
+                         E("ul", {className: "nav nav-tabs"}, tabs)),
+                       E("div", {id: "main-content"}, E(pageSpec[pathname].component, {}))));
         }
-    },{
-        render: function() {
-            return false;
+
+        componentDidMount() {
+            if (!window.EventSource) {
+                ReactDOM.render(E(Modal, {canClose: true, title: "Browser Unsupported"},
+                                  E("p", {},
+                                    "Your browser is unsupported. Although you may still be able to use this site, it is ",
+                                    E("b",{},"highly recommended"),
+                                    " that you use a different browser, such as Google Chrome 9 or higher, Mozilla Firefox 6 or higher, or Apple Safari 5 or higher. Internet Explorer is known to behave inconsistently and therefore should not be used.")),
+                                getModalWrapper());
+            }
         }
-    },_.invert({
-        Page: "displayName"
-    })));
+    }
 
     return ReactDOM.render(React_createElement(Page,{}),document.getElementById('body'));
 });
