@@ -791,7 +791,7 @@ generateAdminPages pageTitle = do
     toWidgetHead $ [shamlet|<meta name=viewport content=width=1200>|]
     addScript $ StaticR underscore_js
     if dev
-      then toWidget $(juliusFileReload "static/admin.min.js")
+      then toWidget $(juliusFileReload "templates/admin.dev.js")
       else addScript $ StaticR admin_min_js
 
 getAdminLogoutR :: Handler Html

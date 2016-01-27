@@ -2,6 +2,11 @@
 "use strict";
 ((window, document, React, ReactDOM, $, _) => {
 $(function() {
+
+    // Development or production?
+    let isDevelopment = window.CURRENT_BUILD_TYPE === undefined || window.CURRENT_BUILD_TYPE === "DEVELOPMENT";
+    let console_log = isDevelopment ? console.log.bind(console) : () => {};
+
     // Here are a few aliases to save typing and help with minification.
     let React_createElement = React.createElement;
     let E = React_createElement;
@@ -34,12 +39,12 @@ $(function() {
                 conn = new window.WebSocket(wsUrl);
                 conn.onmessage = callback;
                 conn.onerror = () => {
-                    console.log("APIConnectionWS: conn.onerror");
+                    console_log("APIConnectionWS: conn.onerror");
                     connect();
                 };
                 conn.onclose = (e) => {
-                    console.log("APIConnectionWS: conn.onclose");
-                    console.log(e);
+                    console_log("APIConnectionWS: conn.onclose");
+                    console_log(e);
                     connect();
                 };
             } else {
@@ -82,8 +87,8 @@ $(function() {
             // Fortunately, reestablishing connection is automatic.
             conn = new window.EventSource(url);
             conn.onmessage = callback;
-            conn.onerror = () => {console.log("APIConnectionSSE: " + pathname + ": conn.onerror");};
-            conn.onclose = () => {console.log("APIConnectionSSE: " + pathname + ": conn.onclose");};
+            conn.onerror = () => {console_log("APIConnectionSSE: " + pathname + ": conn.onerror");};
+            conn.onclose = () => {console_log("APIConnectionSSE: " + pathname + ": conn.onclose");};
         };
 
         let close = () => {
@@ -142,7 +147,7 @@ $(function() {
     class EntityRow extends React_Component {
         constructor(props) {
             super(props);
-            this.displayName = 'EntityRow';
+            if (isDevelopment) this.displayName = 'EntityRow';
         }
         render() {
             let dataSpec = pageSpec[window.location.pathname].dataSpec;
@@ -196,7 +201,7 @@ $(function() {
     class EntityCategory extends React_Component {
         constructor(props) {
             super(props);
-            this.displayName = 'EntityCategory';
+            if (isDevelopment) this.displayName = 'EntityCategory';
         }
         render() {
             return E("tbody", {},
@@ -217,7 +222,7 @@ $(function() {
     class EntityTable extends React_Component {
         constructor(props) {
             super(props);
-            this.displayName = 'EntityTable';
+            if (isDevelopment) this.displayName = 'EntityTable';
             this.state = {
                 tableData: {data: []}
             };
@@ -359,7 +364,7 @@ $(function() {
     class Modal extends React_Component {
         constructor(props) {
             super(props);
-            this.displayName = 'Modal';
+            if (isDevelopment) this.displayName = 'Modal';
         }
 
         componentDidMount() {
@@ -498,8 +503,8 @@ $(function() {
                     success: hideModal,
                     error: function(jqxhr) {
                         setSpinner(0);
-                        console.log("Ajax error.");
-                        console.log(jqxhr);
+                        console_log("Ajax error.");
+                        console_log(jqxhr);
                         return onError(jqxhr);
                     }
                 });
@@ -738,7 +743,7 @@ $(function() {
     class BatchUpload extends React_Component {
         constructor(props) {
             super(props);
-            this.displayName = 'BatchUpload';
+            if (isDevelopment) this.displayName = 'BatchUpload';
         }
         render() {
             let dataSpec = pageSpec[window.location.pathname].dataSpec;
@@ -1907,6 +1912,7 @@ $(function() {
 })(window, document, React, ReactDOM, $, _);
 
 
+
 // Local Variables:
-// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c admin.js > ../static/admin.min.js")) nil t)
+// eval: (add-hook (quote after-save-hook) (lambda nil (shell-command "es6c <(sed 's/window\\.CURRENT_BUILD_TYPE/\"PRODUCTION\"/g' admin.js) > ../static/admin.min.js") (shell-command "es6c <(sed 's/window\\.CURRENT_BUILD_TYPE/\"DEVELOPMENT\"/g' admin.js) > admin.dev.js") ) nil t)
 // End:
