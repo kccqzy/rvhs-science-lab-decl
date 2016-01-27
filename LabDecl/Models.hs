@@ -10,7 +10,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Error
 import Control.Lens
-import qualified Data.Foldable as F
 import Data.Default
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -160,6 +159,15 @@ unsafeRemoveEntity i = dbField'._2 %= deleteIx i
 resetDatabase :: IUpdate
 resetDatabase = put def
 
+-- | Resets the entire database, and adds back the specified user. If the
+-- specified user does not exist, the last step is skipped. This is useful when
+-- a non-operator is doing the operation.
+resetDatabaseExceptUser :: Email -> IUpdate
+resetDatabaseExceptUser email = do
+  currentTeacher <- liftQuery (lookupTeacherByEmail email)
+  resetDatabase
+  mapM_ unsafeAddEntity currentTeacher
+
 -- | Convert a set of subjects to a mapping between the subject code
 -- and subject.
 subjectsToMap :: Set Subject -> Map T.Text Subject
@@ -205,7 +213,7 @@ removeEntity i = do
 removeAllEntities :: forall a i. (HasDeleteConstraint a i) => Proxy a -> IUpdate
 removeAllEntities _ = do
   entities <- liftQuery listEntities'
-  F.mapM_ (removeEntity . (^. idField)) entities
+  mapM_ (removeEntity . (^. idField)) entities
   where listEntities' = listEntities :: IQuery (Set a)
 
 -- | Ensure an id exists in the database.
@@ -376,7 +384,7 @@ publicStudentDoSubmission (sid, nric, submission) = do
     guard . not $ (_SubmissionOpen `isn't` (student ^. studentSubmission))
     guard . not $ (_SubmissionCompleted `isn't` submission)
     guard $ Just Nothing == submission ^? ssFinalDeclarationFilename
-    guard $ F.all (`Set.member` validCcas) (submission ^. ssCca)
+    guard $ all (`Set.member` validCcas) (submission ^. ssCca)
     guard $ student ^. studentNric `nricMatch` nric
     return $ student & studentSubmission .~ submission
   replaceEntity True changedStudent

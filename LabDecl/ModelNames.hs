@@ -32,6 +32,7 @@ eventNames = [
     'searchStudentsByName,
     'getDeclarationText,
     'resetDatabase,
+    'resetDatabaseExceptUser,
     'addCca,
     'addSubject,
     'addTeacher,

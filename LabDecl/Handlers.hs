@@ -492,7 +492,11 @@ getTeachersR = acidQueryHandler ListTeachers
 
 -- | Reset everything.
 deleteEverythingR :: Handler Value
-deleteEverythingR = acidUpdateHandler ResetDatabase
+deleteEverythingR = do
+  priv <- getPrivilege
+  case priv of
+    Nothing -> acidUpdateHandler ResetDatabase -- This should only happen in development mode.
+    Just (email, _) -> acidUpdateHandler $ ResetDatabaseExceptUser (Email email)
 
 -- | Add-thing handlers. Too lazy to make it generic and write HasForm class and instances.
 postCcasR     :: Handler Value
