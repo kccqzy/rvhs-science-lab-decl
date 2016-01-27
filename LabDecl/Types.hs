@@ -25,6 +25,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+import qualified Data.HashMap.Strict as HashMap
 import Data.Default
 import Data.Typeable (Typeable)
 import Data.Data (Data)
@@ -235,7 +236,7 @@ instance Default Database where
 -- type. The typeclass also ensures there exists a lens from the
 -- record to its ID, and there exists a way to convert an integer to
 -- an ID.
-class (FromJSON a, ToJSON a, Ord a, Indexable a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
+class (ToJSON a, Ord a, Indexable a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
   idField :: Lens' a i
   idConstructor :: Int -> i
   idDestructor :: i -> Int
@@ -270,11 +271,25 @@ $(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Ema
 $(deriveSafeCopy 1 'extension ''Database)
 $(deriveSafeCopy 1 'extension ''StudentSubmission)
 
--- | ToJSON and FromJSON instances for use when returning structured
--- data.
-$(liftM concat . mapM (deriveJSON defaultOptions {
-  fieldLabelModifier = jsonLabel
-  }) $ [''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student])
+-- | ToJSON instances for use when returning structured data.
+instance ToJSON Cca where
+  toJSON = $(mkToJSON jsonDeriveOptions ''Cca)
+instance ToJSON Subject where
+  toJSON = $(mkToJSON jsonDeriveOptions ''Subject)
+instance ToJSON Teacher where
+  toJSON = $(mkToJSON jsonDeriveOptions ''Teacher)
+instance ToJSON StudentSubmission where
+  toJSON = $(mkToJSON jsonDeriveOptions ''StudentSubmission)
+instance ToJSON Student where
+  toJSON = removeAnalyticsFromStudent . $(mkToJSON jsonDeriveOptions ''Student)
+    where removeAnalyticsFromStudent val =
+            case val of
+              Object o -> Object (HashMap.adjust removeAnalyticsFromStudentSubmission "submission" o)
+              _ -> error "Unexpected JSON serialisation for Student"
+          removeAnalyticsFromStudentSubmission val =
+            case val of
+              Object o -> Object (HashMap.delete "analytics" o)
+              _ -> error "Unexpected JSON serialisation for StudentSubmission"
 
 class ToHTTPStatus a where
   toHttpStatus :: a -> HTTP.Status

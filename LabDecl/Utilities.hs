@@ -6,6 +6,7 @@ import Control.Error
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
+import qualified Data.Aeson.TH as JSON
 import Data.Char
 import Data.List
 import Data.Set (Set)
@@ -52,5 +53,7 @@ textIndex withShort = filter (not . T.null) . nub . concatMap (if withShort then
         genShort p = [T.take 2 p, T.drop (T.length p - 2) p]
         gen = liftM2 (++) gen3gram genShort
 
-jsonLabel :: String -> String
-jsonLabel = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
+jsonDeriveOptions :: JSON.Options
+jsonDeriveOptions = JSON.defaultOptions {
+  JSON.fieldLabelModifier = liftM3 maybe id (((tail . camelCaseToUnderScore) .) . flip drop) (findIndex isUpper)
+  }

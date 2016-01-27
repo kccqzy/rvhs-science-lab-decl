@@ -57,9 +57,7 @@ data GAEFile = GAEFile {
 
 -- | ToJSON and FromJSON instances for use when returning structured
 -- data.
-$(liftM concat . mapM (deriveJSON defaultOptions {
-  fieldLabelModifier = jsonLabel
-  }) $ [''GAEMail, ''GAEFile])
+$(liftM concat . mapM (deriveToJSON jsonDeriveOptions) $ [''GAEMail, ''GAEFile])
 
 sendGae :: JSON.ToJSON a => String -> Bool -> HTTP.Manager -> a -> IO ()
 sendGae endpoint isDevelopment manager payload = do
