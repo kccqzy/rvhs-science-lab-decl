@@ -184,6 +184,10 @@ errSubjectLevelNoParse s = [stext| Cannot understand “#{s}” as a
   list of levels. Please use a comma-separated list of whole numbers.
   |]
 
+errRestoreFromCheckpointFailed = [stext| An error occurred while trying to
+  restore using the checkpoint file. The file may be corrupt, or a network
+  connection issue caused the file to be sent incorrectly.  |]
+
 errGenericObjectNoProperty object property = [stext| The
 #{T.pack object} has no #{T.pack property}. |]
 -- T.pack specified to resolve ambiguous types.

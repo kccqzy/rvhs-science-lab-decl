@@ -63,6 +63,7 @@ import LabDecl.SubjectCodes
 import LabDecl.PushNotifications
 import LabDecl.AsyncQueue
 import LabDecl.PDFServices
+import qualified LabDecl.RNCryptor as RNCryptor
 
 operatorEmail :: T.Text
 operatorEmail = "qzy@qzy.io"
@@ -121,6 +122,7 @@ $(mkYesod "LabDeclarationApp" [parseRoutes|
 /api/decltext             DeclTextR      GET POST
 /api/canShutdown          CanShutdownR   GET
 /api/shutdown             ShutdownR      POST
+/api/checkpoint           CheckpointR    GET POST
 /admin                    AdminHomeR     GET
 /admin/ccas               AdminCcasR     GET
 /admin/subjects           AdminSubjectsR GET
@@ -167,6 +169,7 @@ instance Yesod LabDeclarationApp where
   isAuthorized DeclTextR             w = requirePrivilege (if w then PrivAdmin else PrivNone)
   isAuthorized CanShutdownR          _ = requirePrivilege PrivOperator
   isAuthorized ShutdownR             _ = requirePrivilege PrivOperator
+  isAuthorized CheckpointR           _ = requirePrivilege PrivAdmin
   isAuthorized AdminHomeR            _ = requirePrivilege PrivTeacher
   isAuthorized AdminCcasR            _ = requirePrivilege PrivTeacher
   isAuthorized AdminSubjectsR        _ = requirePrivilege PrivTeacher
@@ -747,6 +750,33 @@ postCSPReportR = do
         task = sendMail dev manager reportMail
         }
       sendResponseStatus HTTP.status204 ()
+
+-- | The checkpoint password prevents people from tampering with the downloaded
+-- file. It is only intended to protect against unintentional modifications
+-- (acting as an overkill version of CRC) and those who do not have access to
+-- the source code.
+checkpointPassword :: RNCryptor.Credentials
+checkpointPassword = RNCryptor.Password "o2Xg-WETM-cqKw-ppCJ-w6F2-Ru6n-SbW1-c2Iv"
+
+getCheckpointR :: Handler (ContentType, Content)
+getCheckpointR = do
+  addHeader "Cache-Control" "no-store, no-cache, must-revalidate"
+  acid <- getAcid <$> ask
+  unencrypted <- liftIO $ Acid.query acid CreateDatabaseCheckpoint
+  encrypted <- liftIO $ RNCryptor.encrypt checkpointPassword unencrypted
+  case encrypted of
+    Left _ -> sendResponseStatus HTTP.status503 ()
+    Right e -> do
+      addHeader "Content-Disposition" "attachment; filename=databasecheckpoint.db"
+      return ("application/octet-stream", toContent e)
+
+postCheckpointR :: Handler Value
+postCheckpointR = do
+  fileinfo <- runInputPost (ireq fileField "checkpointfile")
+  encrypted <- fileSource fileinfo $$ sinkLbs
+  case RNCryptor.decrypt checkpointPassword (CL.toStrict encrypted) of
+    Nothing -> invalidArgs [TL.toStrict errRestoreFromCheckpointFailed]
+    Just e -> acidUpdateHandler $ RestoreDatabaseFromCheckpoint e
 
 -- |
 -- = HTML handlers

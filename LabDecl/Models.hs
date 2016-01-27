@@ -11,6 +11,7 @@ import Control.Monad.State
 import Control.Error
 import Control.Lens
 import Data.Default
+import qualified Data.ByteString.Char8 as C
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Vector (Vector)
@@ -22,6 +23,8 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
 import Data.Typeable (Typeable, typeOf)
+import qualified Data.SafeCopy as SafeCopy
+import qualified Data.Serialize as Serialize
 import qualified Data.Acid as Acid
 import Text.Pandoc.Readers.Markdown
 
@@ -112,6 +115,10 @@ searchStudentsByName name = searchEntities [(@* textIndex False name)]
 -- | Simply getting the current declaration text.
 getDeclarationText :: IQuery (Maybe T.Text)
 getDeclarationText = (Just . (^. declarationText)) <$> ask
+
+-- | Create a backup of the database.
+createDatabaseCheckpoint :: IQuery C.ByteString
+createDatabaseCheckpoint = (Serialize.runPut . SafeCopy.safePut) <$> ask
 
 -- |
 -- = Updates
@@ -416,3 +423,7 @@ setDeclarationText text =
   case readMarkdown def . T.unpack $ text of
     Left _ -> lift (Left errMarkdownParseFailed)
     Right _ -> declarationText .= text
+
+-- | Restore the database from a checkpoint.
+restoreDatabaseFromCheckpoint :: C.ByteString -> IUpdate
+restoreDatabaseFromCheckpoint = (lift . note errRestoreFromCheckpointFailed . hush . Serialize.runGet SafeCopy.safeGet) >=> put

@@ -31,6 +31,7 @@ eventNames = [
     'listStudentsByLevel,
     'searchStudentsByName,
     'getDeclarationText,
+    'createDatabaseCheckpoint,
     'resetDatabase,
     'resetDatabaseExceptUser,
     'addCca,
@@ -60,5 +61,6 @@ eventNames = [
     'publicStudentSubmissionPdfRendered,
     'teacherChangeSubmissionStatus,
     'teacherChangeManySubmissionStatus,
-    'setDeclarationText
+    'setDeclarationText,
+    'restoreDatabaseFromCheckpoint
     ]

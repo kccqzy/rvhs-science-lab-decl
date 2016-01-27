@@ -1133,25 +1133,65 @@ $(function() {
         AdminHomeR: "displayName"
     })));
 
+    class RestoreCheckpointModal extends React_Component {
+        constructor(props) {
+            super(props);
+            if (isDevelopment) this.displayName = 'RestoreCheckpointModal';
+        }
+
+        render() {
+            let ajaxParam = () => ({
+                url: "/api/checkpoint",
+                type: "POST",
+                data: new window.FormData(this.refs.uploaderForm),
+                contentType: false,
+                processData: false
+            });
+            return E(AjaxFailableActionModal,
+                     {
+                         title: "Restore Database From Checkpoint",
+                         actionButtonLabel: "Replace & Restore",
+                         actionButtonStyle: "primary",
+                         ajaxParam
+                     },
+                     E("form", {id: "uploaderForm", ref: "uploaderForm", role: "form"},
+                       E("p", {className: 'help-block'},
+                         "Are you sure you want to replace the entire contents of the database with that in the checkpoint file?",
+                         "You may wish to create a new database checkpoint first."),
+                       E("div", {className: "form-group"},
+                         E("label", {htmlFor: "checkpointfile"},"Checkpoint File"),
+                         E("input", {type: "file", className: "form-control", name: "checkpointfile", accept: ".db", required: true}))
+                      ));
+        }
+    }
+
     class AdminSpecialR extends React_Component {
         constructor(props) {
             super(props);
         }
 
         render() {
+
+            let deleteAllModal = () => E(AjaxFailableActionModal,
+                                         {
+                                             title: "Reset The Entire Database",
+                                             actionButtonLabel: "Yes, Reset The Database",
+                                             actionButtonStyle: "danger",
+                                             ajaxParam: () => ({
+                                                 url: "/api",
+                                                 type: "DELETE"
+                                             })
+                                         },
+                                         E("p", {}, "Are you sure you want to reset the entire database? This operation is highly destructive. You may wish to create a database checkpoint first."));
+
             let onDeleteAllClick = () => {
-                ReactDOM.render(E(AjaxFailableActionModal,
-                                  {
-                                      title: "Reset The Entire Database",
-                                      actionButtonLabel: "Yes, Reset The Database",
-                                      actionButtonStyle: "danger",
-                                      ajaxParam: () => ({
-                                          url: "/api",
-                                          type: "DELETE"
-                                      })
-                                  },
-                                  E("p", {}, "Are you sure you want to reset the entire database? This operation is highly destructive.")), getModalWrapper());
+                ReactDOM.render(E(deleteAllModal, {}), getModalWrapper());
             };
+
+            let onRestoreClick = () => {
+                ReactDOM.render(E(RestoreCheckpointModal, {}), getModalWrapper());
+            };
+
             return E("div", {className: "row"},
                      E("div", {className: "col-sm-11 col-md-8 col-lg-7"},
                        E("h2", {}, "System Tools"),
@@ -1162,7 +1202,13 @@ $(function() {
                          " from the database and reset all settings, except that it does not remove the current admin user. This is because deleting the current admin user would have prevented you from logging in again."),
                        E("p", {},
                          E("button", {type: "button", className: "btn btn-danger", role: "button", onClick: onDeleteAllClick},
-                           "Delete ", E("strong", {style: {textTransform: 'uppercase'}}, "everything")))));
+                           "Delete ", E("strong", {style: {textTransform: 'uppercase'}}, "everything"))),
+                       E("h3", {}, "Database Checkpoint & Restore"),
+                       E("p", {}, "You can use the checkpoint button below to create a snapshot of the database as a single compressed file. You can then later restore using this file. This mechanism can be used either as a backup or as a version control mechanism."),
+                       E("p", {}, "The database checkpoint file cannot be opened by other applications."),
+                       E("div", {className: "btn-group", role: "group", "aria-label": "Checkpoint Buttons"},
+                         E("a", {href: "/api/checkpoint", className: "btn btn-default", role: "button"}, "Create Checkpoint"),
+                         E("button", {type: "button", className: "btn btn-default", role: "button", onClick: onRestoreClick}, "Restore from Checkpoint"))));
         }
     }
 
