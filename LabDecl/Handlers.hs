@@ -183,6 +183,7 @@ instance Yesod LabDeclarationApp where
 
   -- | Use JSON for InvalidArgs error, which happends during form submission.
   errorHandler (InvalidArgs ia) = return . toTypedContent $ object [ "meta" .= object [ "code" .= (400 :: Int), "details" .= ia ] ]
+  errorHandler (PermissionDenied t) = toTypedContent <$> staticAdminPage "Permission Denied" [shamlet|<p>#{t}<br><a href=/auth/logout>Click here to logout.|]
   errorHandler other = defaultErrorHandler other
 
   -- | Always upload to memory.
@@ -200,6 +201,9 @@ instance YesodAuth LabDeclarationApp where
   getAuthId = return . Just . credsIdent
   maybeAuthId = lookupSession "_ID"
   onLogin = return ()
+  onLogout = do
+    deleteSession "user"
+    deleteSession "priv"
 
 instance RenderMessage LabDeclarationApp FormMessage where
   renderMessage _ _ = defaultFormMessage
@@ -803,15 +807,18 @@ generateAdminPages pageTitle = do
       then toWidget $(juliusFileReload "templates/admin.dev.js")
       else addScript $ StaticR admin_min_js
 
-getAdminLogoutR :: Handler Html
-getAdminLogoutR = do
+staticAdminPage :: Html -> Html -> Handler Html
+staticAdminPage title message = do
   dev <- isDevelopment <$> ask
   defaultLayout $ do
-    setTitle "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful"
+    setTitle title
     baseSite dev
     if dev
-      then toWidget $(hamletFileReload "templates/didlogout.hamlet")
-      else toWidget $(hamletFile "templates/didlogout.hamlet")
+      then toWidget $(hamletFileReload "templates/staticadmin.hamlet")
+      else toWidget $(hamletFile "templates/staticadmin.hamlet")
+
+getAdminLogoutR :: Handler Html
+getAdminLogoutR = staticAdminPage "RVHS Science Lab Undertaking :: Admin Console :: Logout Successful" "You have successfully logged out. You may close this tab now."
 
 getAdminHomeR :: Handler Html
 getAdminHomeR = generateAdminPages "RVHS Science Lab Undertaking :: Admin Console"
