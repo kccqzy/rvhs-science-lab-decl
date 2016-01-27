@@ -16,6 +16,7 @@ import Data.Monoid
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.ByteString.Base64 as C64
+import qualified Data.ByteString.Builder as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.IxSet as IxSet
@@ -116,6 +117,19 @@ $(makeLenses ''Teacher)
 instance Indexable Teacher where
   empty = ixSet $ $(mapQ 'ixLitField [ 'teacherId, 'teacherEmail, 'teacherWitnessName ])
 
+-- | The old student submission status.
+data StudentSubmissionV0 = SubmissionNotOpenV0
+                         | SubmissionOpenV0
+                         | SubmissionCompletedV0 {
+                           _ssPhoneV0 :: Phone,
+                           _ssEmailV0 :: Email,
+                           _ssCcaV0 :: Set CcaId,
+                           _ssInfoHasErrorV0 :: Bool,
+                           _ssFinalDeclarationFilenameV0 :: Maybe T.Text,
+                           _ssDateV0 :: Day,
+                           _ssUserAgentV0 :: T.Text
+                           }
+
 -- | The student submission status. Note that ^? should be used
 -- instead of ^. to access the fields because they may not exist,
 -- otherwise the value must form a Monoid. Or use
@@ -126,14 +140,21 @@ data StudentSubmission = SubmissionNotOpen
                          _ssPhone :: Phone,
                          _ssEmail :: Email,
                          _ssCca :: Set CcaId,
-                         _ssInfoHasError :: Bool,
                          _ssFinalDeclarationFilename :: Maybe T.Text,
                          _ssDate :: Day,
-                         _ssUserAgent :: T.Text
+                         _ssAnalytics :: ByteString64 -- This is a JSON payload.
                          }
                        deriving (Show, Eq, Ord, Data, Typeable, Generic)
 $(makeLenses ''StudentSubmission)
 $(makePrisms ''StudentSubmission)
+
+instance Migrate StudentSubmission where
+  type MigrateFrom StudentSubmission = StudentSubmissionV0
+  migrate SubmissionNotOpenV0 = SubmissionNotOpen
+  migrate SubmissionOpenV0 = SubmissionOpen
+  migrate (SubmissionCompletedV0 p e c _ f d ua) = SubmissionCompleted p e c f d analytics
+    where jsonObj = object ["userAgent" .= ua]
+          analytics = ByteString64 . CL.toStrict . B.toLazyByteString . fromEncoding . toEncoding $ jsonObj
 
 -- | The student table.
 data Student = Student {
@@ -214,7 +235,7 @@ instance Default Database where
 -- type. The typeclass also ensures there exists a lens from the
 -- record to its ID, and there exists a way to convert an integer to
 -- an ID.
-class (FromJSON a, ToJSON a, Indexable a, Ord a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
+class (FromJSON a, ToJSON a, Ord a, Indexable a, Typeable a, Typeable i) => HasPrimaryKey a i | a -> i, i -> a where
   idField :: Lens' a i
   idConstructor :: Int -> i
   idDestructor :: i -> Int
@@ -245,8 +266,9 @@ instance HasPrimaryKey Student StudentId where
   dbField = studentDb
 
 -- | SafeCopy instances for use with Acid.
-$(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''StudentSubmission, ''Student, ''DatabaseV0])
+$(liftM concat . mapM (deriveSafeCopy 0 'base) $ [''ByteString64, ''Phone, ''Email, ''Nric, ''Class, ''CcaId, ''SubjectId, ''TeacherId, ''StudentId, ''Cca, ''Subject, ''Teacher, ''StudentSubmissionV0, ''Student, ''DatabaseV0])
 $(deriveSafeCopy 1 'extension ''Database)
+$(deriveSafeCopy 1 'extension ''StudentSubmission)
 
 -- | ToJSON and FromJSON instances for use when returning structured
 -- data.

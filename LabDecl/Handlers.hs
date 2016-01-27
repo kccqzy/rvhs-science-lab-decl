@@ -414,10 +414,9 @@ studentSubmitForm sid = unMFormInput $ do
   cca2 <- miopt ccaIdField "cca2"
   cca3 <- miopt ccaIdField "cca3"
   let cca = Set.fromList $ catMaybes [cca1, cca2, cca3]
-  hasError <- mireq checkBoxField "haserror"
   today <- mireq todayField "today"
-  ua <- mireq textField "ua"
-  return (sid, nric, SubmissionCompleted phone email cca hasError Nothing today ua)
+  ua <- mireq compressedDataField "ua"
+  return (sid, nric, SubmissionCompleted phone email cca Nothing today ua)
 
 studentSubmitPngForm :: FormInput Handler CL.ByteString
 studentSubmitPngForm = ireq pngField "sig"

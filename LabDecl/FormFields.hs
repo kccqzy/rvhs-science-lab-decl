@@ -64,6 +64,11 @@ pngField = checkMMap fw bw textField
   where bw = T.decodeUtf8 . CL.toStrict . CL.append "data:image/png;base64," . CL64.encode
         fw = return . parsePngData . T.encodeUtf8
 
+compressedDataField :: (RenderMessage site FormMessage) => Field (HandlerT site IO) ByteString64
+compressedDataField = checkMMap fw bw textField
+  where bw = undefined -- XXX
+        fw = liftIO . parseBase64ZlibData . T.encodeUtf8
+
 -- This does not check existence of ids. Only used for directly
 -- manipulating the referenced entities, not for creating foreign
 -- references.

@@ -965,22 +965,7 @@ if (typeof Object.assign != 'function') {
             let onSubmitClick = (signaturePng) => {
               console_log('Page 5: submit click');
 
-              // Assemble the inputs in the way browser would serialize it.
-              // Example "nric=564Z&email=a%2Ba%40a&phone=%2B65+1234+5678&cca1=128&cca2=168&cca3=&sig=data%3Aimage%2Fpng%3Bbase64%snip%3D&ua=Mozilla%2F5.0+(iPhone%3B+CPU+iPhone+OS+10_11_2+like+Mac+OS+X)+AppleWebKit%2F600.1.4+(KHTML%2C+like+Gecko)+Version%2F8.0+Mobile%2F12B411+Safari%2F600.1.4"
-              let submitPayload = {
-                nric: this.state.currentStudentNric,
-                email: this.state.currentStudentEmail,
-                phone: this.state.currentStudentPhone,
-                cca1: this.state.currentStudentCca1,
-                cca2: this.state.currentStudentCca2,
-                cca3: this.state.currentStudentCca3,
-                sig: signaturePng,
-                ua: window.navigator.userAgent
-              };
-              let serializedData = Immutable.fromJS(submitPayload).map((v, k) => k + '=' + window.encodeURIComponent(v).replace('%20', '+')).toList().join('&');
-              console_log(serializedData);
-
-              let secretPayload = JSON.stringify({
+              let analyticsPayload = JSON.stringify({
                 recordedEvents: this.state.recordedEvents,
                 userAgent: window.navigator.userAgent,
                 mediaWidth: Math.max(document.documentElement.clientWidth, window.innerWidth || 0),
@@ -991,9 +976,23 @@ if (typeof Object.assign != 'function') {
                 pageLoadTime,
                 pageSubmitTime: Date.now(),
                 performanceNow: window.performance && window.performance.now ? window.performance.now() : null});
-              console_log(secretPayload);
-              let secretPayloadCompressed = base64js.fromByteArray(pako.deflate(secretPayload));
-              console_log(secretPayloadCompressed);
+              console_log(analyticsPayload);
+              let analyticsPayloadCompressed = base64js.fromByteArray(pako.deflate(analyticsPayload));
+              console_log(analyticsPayloadCompressed);
+
+              // Assemble the inputs in the way browser would serialize it.
+              let submitPayload = {
+                nric: this.state.currentStudentNric,
+                email: this.state.currentStudentEmail,
+                phone: this.state.currentStudentPhone,
+                cca1: this.state.currentStudentCca1,
+                cca2: this.state.currentStudentCca2,
+                cca3: this.state.currentStudentCca3,
+                sig: signaturePng,
+                ua: analyticsPayloadCompressed
+              };
+              let serializedData = Immutable.fromJS(submitPayload).map((v, k) => k + '=' + window.encodeURIComponent(v).replace('%20', '+')).toList().join('&');
+              console_log(serializedData);
 
               // TODO: If the second network connection fails, clicking the
               // button again will cause the first to fail.

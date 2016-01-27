@@ -3,7 +3,9 @@ module LabDecl.FieldParsers where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Trans
 import Control.Error
+import Control.Concurrent.Async
 import qualified Data.Char as Char
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
@@ -12,6 +14,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Attoparsec.ByteString.Char8 as PC
 import qualified Codec.Picture.Png as Png
+import qualified Codec.Compression.Zlib as Zlib
 
 import LabDecl.Types
 
@@ -75,12 +78,22 @@ nricParser = do
 parseNric :: C.ByteString -> Either T.Text Nric
 parseNric = ((note "wrong nric format" . hush) . ) . PC.parseOnly $ nricParser
 
+-- Note that after it tests decoding, it returns the original bytestring instead
+-- of a parsed picture.
 parsePngData :: C.ByteString -> Either T.Text CL.ByteString
 parsePngData bs = note "invalid image data" . hush $ do
   data64 <- PC.parseOnly (PC.string "data:image/png;base64," *> PC.takeByteString) bs
   d <- C64.decode data64
   void $ Png.decodePng d
   return $ CL.fromStrict d
+
+parseBase64ZlibData :: C.ByteString -> IO (Either T.Text ByteString64)
+parseBase64ZlibData bs = fmap (note "cannot process ua") . runMaybeT $ do
+  decoded <- hoistMaybe . hush $ C64.decode bs
+  task <- liftIO . async . return . CL.toStrict . Zlib.decompress . CL.fromStrict $ decoded -- this conversion to strict is to force decompression to finish
+  resultOrException <- liftIO $ waitCatch task
+  result <- hoistMaybe $ hush resultOrException
+  return . ByteString64 $ result
 
 parseIntList :: (HasPrimaryKey a i) => C.ByteString -> Either T.Text [i]
 parseIntList = ((note "wrong id list" . hush) . ) . PC.parseOnly $
