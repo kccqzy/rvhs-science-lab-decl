@@ -1,9 +1,16 @@
 #!/bin/bash
 
-echo "Type 'Deploy to production' to continue"
-
+echo "Type 'Checkpoint downloaded' to continue"
 read -r line
-[ "$line" != "Deploy to production" ] && exit 1
+[ "$line" != "Checkpoint downloaded" ] && exit 1
+
+echo "Type '/api/shutdown POSTed' to continue"
+read -r line
+[ "$line" != "/api/shutdown POSTed" ] && exit 1
+
+echo "Type 'Deploy to production NOW' to continue"
+read -r line
+[ "$line" != "Deploy to production NOW" ] && exit 1
 
 set -e
 set -x
