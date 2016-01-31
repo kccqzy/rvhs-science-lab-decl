@@ -651,16 +651,16 @@ deleteStudentsR :: Handler Value
 deleteStudentsR = acidFormUpdateHandler (const RemoveStudents) (ireq rawIdsField "ids")
 
 postUnlockSubmissionR :: StudentId -> Handler Value
-postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionOpen
+postUnlockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus True SubmissionOpen
 
 postLockSubmissionR :: StudentId -> Handler Value
-postLockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus SubmissionNotOpen
+postLockSubmissionR = acidUpdateHandler . TeacherChangeSubmissionStatus True SubmissionNotOpen
 
 postLockManySubmissionsR :: Handler Value
-postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionNotOpen)) (ireq rawIdsField "ids")
+postLockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus False SubmissionNotOpen)) (ireq rawIdsField "ids")
 
 postUnlockManySubmissionsR :: Handler Value
-postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus SubmissionOpen)) (ireq rawIdsField "ids")
+postUnlockManySubmissionsR = acidFormUpdateHandler (const (TeacherChangeManySubmissionStatus False SubmissionOpen)) (ireq rawIdsField "ids")
 
 
 postManyHandler :: forall a i le re ae ase.

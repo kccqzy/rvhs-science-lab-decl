@@ -407,15 +407,17 @@ publicStudentSubmissionPdfRendered sid filename = do
   replaceEntity True changedStudent
 
 
-teacherChangeSubmissionStatus :: StudentSubmission -> StudentId -> IUpdate
-teacherChangeSubmissionStatus newStatus sid = do
+teacherChangeSubmissionStatus :: Bool -> StudentSubmission -> StudentId -> IUpdate
+teacherChangeSubmissionStatus ignoreWhenSubmissionExists newStatus sid = do
   maybeStudent <- liftQuery $ lookupStudentById sid
   student <- lift . note (errEntityNotExist (undefined :: Student)) $ maybeStudent
+  let shouldContinue = ignoreWhenSubmissionExists || _SubmissionCompleted `isn't` (student ^. studentSubmission)
   let newStudent = student & studentSubmission .~ newStatus
-  replaceEntity True newStudent
+  when shouldContinue $ do
+    replaceEntity True newStudent
 
-teacherChangeManySubmissionStatus :: StudentSubmission -> [StudentId] -> IUpdate
-teacherChangeManySubmissionStatus newStatus = mapM_ (teacherChangeSubmissionStatus newStatus)
+teacherChangeManySubmissionStatus :: Bool -> StudentSubmission -> [StudentId] -> IUpdate
+teacherChangeManySubmissionStatus ignoreWhenSubmissionExists newStatus = mapM_ (teacherChangeSubmissionStatus ignoreWhenSubmissionExists newStatus)
 
 -- | Setting the declaration text.
 setDeclarationText :: T.Text -> IUpdate
